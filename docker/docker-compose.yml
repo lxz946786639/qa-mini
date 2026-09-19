@@ -1,0 +1,28 @@
+# QA Mini — docker compose 部署
+# 用法（在本目录执行）:
+#   docker compose up -d --build
+# 首次启动自动: 生成 config.json、创建 data/qa-mini.db、建「默认会话」。
+# 端口: 宿主机端口自行选择（下方 "8790:8787" 左侧即宿主机端口）。
+services:
+  qa-mini:
+    build:
+      context: ..                # 项目根（server.js / lib / public）
+      dockerfile: docker/Dockerfile
+    image: qa-mini:latest
+    container_name: qa-mini
+    restart: unless-stopped
+    ports:
+      - "8790:8787"              # ← 宿主机端口:容器端口（按环境改左侧）
+    volumes:
+      # 注意: 本文件位于 docker/ 子目录，相对路径以本文件所在目录为基准
+      - ../data:/app/data        # 会话数据库与运行时配置持久化（项目根下 data/）
+    environment:
+      - NODE_NO_WARNINGS=1
+      # 可选: 覆盖协议配置路径（默认容器内 /app/config.json 自动生成）
+      # - QA_MINI_CONFIG=/app/data/config.json
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

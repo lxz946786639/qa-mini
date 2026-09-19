@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QA Mini · 语音问答展示</title>
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem("qa-mini-theme");
+      if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+
+  <aside id="sidebar">
+    <div class="side-head">
+      <span class="side-title">会话列表</span>
+      <span class="side-head-actions">
+        <button id="btn-new-session" class="btn primary side-new" title="新建会话（独立 token / 会话ID / 协议）">＋</button>
+        <button id="btn-close-sidebar" class="side-close" title="关闭会话列表">✕</button>
+      </span>
+    </div>
+    <div id="session-list"></div>
+    <div class="side-foot">
+      <span id="conn-state" class="conn off">连接中…</span>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <header>
+      <button id="btn-toggle-sidebar" title="收起 / 展开会话列表" aria-label="收起或展开会话列表">☰</button>
+      <div class="title">
+        <span class="logo">🐝</span>
+        <span class="name">QA Mini</span>
+        <span class="sub">asr-tool 语音问答 · 流式展示</span>
+      </div>
+      <div class="header-right">
+        <span id="active-count" class="active-pill hidden"></span>
+        <button id="btn-theme" class="theme-btn" title="切换浅色 / 深色主题">☀️</button>
+        <div class="font-ctl" title="问答字号（默认 / 大 / 自定义）">
+          <select id="font-mode">
+            <option value="default">字号：默认</option>
+            <option value="large">字号：大</option>
+            <option value="custom">字号：自定义</option>
+          </select>
+          <input id="font-px" type="number" min="12" max="28" step="1" value="15" title="自定义字号（12–28px）">
+        </div>
+        <button id="btn-session" class="btn" title="当前会话：token / 会话ID / asr-tool 对接">会话设置</button>
+        <button id="btn-settings" class="btn" title="协议配置">⚙ 设置</button>
+      </div>
+    </header>
+
+    <main id="chat">
+      <div id="empty-hint" class="empty-hint">
+        <div class="hint-big">🎤 💬</div>
+        <p>本会话暂无问答。</p>
+        <p>在下方输入问题，或用 <b>asr-tool 推送模式</b>把语音识别结果推送到
+           <code>POST /api/push</code>（请求体带本会话的 token 与 session_id），
+           答案会在这里实时流式显示。</p>
+      </div>
+    </main>
+
+    <footer>
+      <div class="composer">
+        <textarea id="question" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行" autofocus></textarea>
+        <div class="composer-bar">
+          <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
+          <div class="composer-actions">
+            <button id="btn-cancel" class="btn danger" disabled>停止</button>
+            <button id="btn-send" class="btn primary">发送</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- 当前会话设置 -->
+<aside id="session-drawer" class="drawer hidden">
+  <div class="drawer-head">
+    <h2>会话设置</h2>
+    <button id="btn-close-session-drawer" class="btn">✕</button>
+  </div>
+  <div class="drawer-body">
+    <label>会话名称</label>
+    <input id="sd-name" type="text" spellcheck="false">
+    <label>问答协议</label>
+    <select id="sd-protocol">
+      <option value="ragflow">ragflow · RAGFlow 聊天助手</option>
+      <option value="openai">openai · OpenAI 兼容</option>
+      <option value="dify">dify · Dify Chatflow</option>
+      <option value="generic">generic · 第三方通用</option>
+    </select>
+    <label class="chk"><input id="sd-continue" type="checkbox"> 提问续接本会话（语音追问带上下文）</label>
+
+    <label>会话 ID <small>（asr-tool 推送请求体需同时携带）</small></label>
+    <div class="id-row">
+      <input id="sd-session-id" type="text" readonly class="mono">
+      <button id="sd-copy-sid" class="btn" type="button">复制</button>
+    </div>
+
+    <label>推送 token</label>
+    <div class="id-row">
+      <input id="sd-token" type="password" readonly class="mono">
+      <button id="sd-copy-token" class="btn" type="button">复制</button>
+      <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 asr-tool 的 body">重生成</button>
+    </div>
+
+    <label>asr-tool 配置片段（config.toml · 推送模式，可直接粘贴）</label>
+    <textarea id="sd-snippet" rows="6" readonly class="mono"></textarea>
+    <div class="id-row"><button id="sd-copy-snippet" class="btn" type="button">复制片段</button></div>
+    <label>body 值（asr-tool 设置页「第三方接口 body」直接粘贴）</label>
+    <textarea id="sd-snippet-body" rows="2" readonly class="mono"></textarea>
+    <div class="id-row"><button id="sd-copy-body" class="btn" type="button">复制 body</button></div>
+
+    <div class="drawer-inline-actions">
+      <button id="sd-reset" class="btn" type="button" title="清空该会话的后端对话上下文（等同 asr-tool「清空」），已显示记录保留">重置会话（清空后端上下文）</button>
+    </div>
+  </div>
+  <div class="drawer-actions">
+    <span id="sd-save-state" class="save-state"></span>
+    <button id="sd-delete" class="btn danger">删除会话</button>
+    <button id="sd-save" class="btn primary">保存</button>
+  </div>
+</aside>
+
+<!-- 协议配置（全局，所有会话共用） -->
+<aside id="settings" class="drawer hidden">
+  <div class="drawer-head">
+    <h2>协议配置</h2>
+    <button id="btn-close-settings" class="btn">✕</button>
+  </div>
+  <div class="cfg-tabs" role="tablist">
+    <button class="cfg-tab active" data-cfgtab="openai" type="button">OpenAI</button>
+    <button class="cfg-tab" data-cfgtab="dify" type="button">Dify</button>
+    <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
+    <button class="cfg-tab" data-cfgtab="ragflow" type="button">RAGFlow</button>
+  </div>
+  <div class="drawer-body">
+    <section class="cfg-panel" data-cfgtab="openai">
+      <h3>OpenAI 兼容</h3>
+      <label>接口地址（chat completions 完整地址）</label>
+      <input id="cfg-openai-url" type="text" spellcheck="false">
+      <label>API Key</label>
+      <input id="cfg-openai-api_key" type="password" spellcheck="false">
+      <label>模型（可空）</label>
+      <input id="cfg-openai-model" type="text" spellcheck="false">
+    </section>
+    <section class="cfg-panel hidden" data-cfgtab="dify">
+      <h3>Dify Chatflow</h3>
+      <label>接口基址（如 http://host/v1）</label>
+      <input id="cfg-dify-url" type="text" spellcheck="false">
+      <label>API Key（app-xxx，必填）</label>
+      <input id="cfg-dify-api_key" type="password" spellcheck="false">
+      <label>user 标识</label>
+      <input id="cfg-dify-user" type="text" spellcheck="false">
+    </section>
+    <section class="cfg-panel hidden" data-cfgtab="generic">
+      <h3>第三方通用</h3>
+      <label>目标接口完整地址</label>
+      <input id="cfg-generic-url" type="text" spellcheck="false">
+      <label>API Key（可空）</label>
+      <input id="cfg-generic-api_key" type="password" spellcheck="false">
+      <label>请求体 JSON 模板 <small>（{question} / {context} 占位符）</small></label>
+      <textarea id="cfg-generic-body" rows="3" spellcheck="false"></textarea>
+    </section>
+    <section class="cfg-panel hidden" data-cfgtab="ragflow">
+      <h3>RAGFlow 聊天助手</h3>
+      <label>接口基址（如 http://host:9380/api/v1）</label>
+      <input id="cfg-ragflow-url" type="text" spellcheck="false">
+      <label>API Key（必填）</label>
+      <input id="cfg-ragflow-api_key" type="password" spellcheck="false">
+      <label>Chat ID（必填）</label>
+      <input id="cfg-ragflow-chat_id" type="text" spellcheck="false">
+    </section>
+  </div>
+  <div class="drawer-actions">
+    <span id="save-state" class="save-state"></span>
+    <button id="btn-save-config" class="btn primary">保存配置</button>
+  </div>
+</aside>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

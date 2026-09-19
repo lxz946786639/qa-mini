@@ -1,0 +1,17 @@
+# 运行时生成（含真实 key/token，禁止入库）
+config.json
+data/
+
+# 日志与临时
+*.log
+server.log
+*.db
+*.db-wal
+*.db-shm
+sessions.json.bak-*
+
+# 系统与编辑器
+node_modules/
+.DS_Store
+Thumbs.db
+*.tmp

@@ -1,0 +1,11 @@
+data/
+doc/
+tests/
+docker/
+*.log
+server.log
+*.db
+*.db-wal
+*.db-shm
+sessions.json.bak-*
+AGENTS.md

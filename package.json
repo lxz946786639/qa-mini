@@ -1,0 +1,12 @@
+{
+  "name": "qa-mini",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web 端语音问答展示：接收 asr-tool 推送的识别文本，调用 OpenAI 兼容 / Dify / 第三方通用 / RAGFlow 四种问答协议，浏览器实时流式展示",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run_tests.js"
+  },
+  "engines": { "node": ">=18" }
+}
