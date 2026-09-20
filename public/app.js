@@ -548,8 +548,8 @@ const ADMIN_PATH_RE = /^\/api\/(config|sessions(\/.*)?|session\/reset|admin\/acc
 function isViewerSessionsPath(method, p) {
   return method === "GET" && /^\/api\/sessions(\/[^/]+)?(\/.*)?$/.test(p);
 }
-function withAuth(method, p, body, headers) {
-  const isAdminCall = ADMIN_PATH_RE.test(p) && !isViewerSessionsPath(method, p);
+function withAuth(method, p, body, headers, forceAdmin) {
+  const isAdminCall = forceAdmin === true || (ADMIN_PATH_RE.test(p) && !isViewerSessionsPath(method, p));
   const h = Object.assign({ "Content-Type": "application/json" }, headers || {});
   let url = p;
   if (isAdminCall) {
@@ -561,8 +561,8 @@ function withAuth(method, p, body, headers) {
   }
   return { url, headers: h, isAdminCall };
 }
-async function api(method, p, body) {
-  const au = withAuth(method, p, body);
+async function api(method, p, body, opts) {
+  const au = withAuth(method, p, body, undefined, opts && opts.asAdmin);
   const resp = await fetch(au.url, {
     method,
     headers: au.headers,
@@ -666,12 +666,26 @@ function openSessionDrawer() {
   $("sd-protocol").value = s.protocol;
   $("sd-continue").checked = !!s.continue_session;
   $("sd-session-id").value = s.id;
-  $("sd-token").value = s.token;
+  $("sd-token").value = s.token || "";
   $("sd-snippet").value = asrSnippet(s);
   $("sd-snippet-body").value = asrBody(s);
   $("sd-save-state").textContent = "";
   $("sd-save-state").className = "save-state";
   $("session-drawer").classList.remove("hidden");
+  // 会话设置需要推送 token：查看级视图剥离 token（防非管理端获取），
+  // 本地摘要缺 token 时用管理视图补取一次详情
+  if (!s.token) {
+    api("GET", "/api/sessions/" + s.id, undefined, { asAdmin: true }).then((r) => {
+      const fresh = r.status === 200 && r.data && r.data.session;
+      if (fresh && fresh.token && curSession() === s) {
+        s.token = fresh.token;
+        sessions.set(s.id, s);
+        $("sd-token").value = fresh.token;
+        $("sd-snippet").value = asrSnippet(s);
+        $("sd-snippet-body").value = asrBody(s);
+      }
+    });
+  }
 }
 
 async function saveSessionDrawer() {
@@ -1195,7 +1209,7 @@ function bootApp() {
   connectEvents();
   // 管理端：SSE 广播不带 token，主动拉一次含 token 的会话列表（会话设置用）
   if (ADMIN_ROUTE && getAdminToken()) {
-    api("GET", "/api/sessions").then((r) => {
+    api("GET", "/api/sessions", undefined, { asAdmin: true }).then((r) => {
       if (r.status === 200 && r.data && Array.isArray(r.data.sessions)) {
         for (const s of r.data.sessions) if (s.token) sessions.set(s.id, s);
         renderSessionList();
