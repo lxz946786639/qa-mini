@@ -309,10 +309,8 @@ async function handlePush(req, res, urlObj) {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
   }
-  // 访问码模式下，asr-tool 需在请求体携带 access（访问 token）
-  if (!viewerOk(req, urlObj, typeof body.access === "string" ? body.access : "")) {
-    return sendJSON(res, 403, { ok: false, detail: "需要访问码（请求体 access 字段）" });
-  }
+  // 推送鉴权 = 会话推送 token 本身（48 位随机高熵凭证，持有即授权），
+  // 无需再叠加访问码：asr-tool 请求体已配好 token，访问码失效/换码不影响推送。
   const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) return sendJSON(res, 401, { ok: false, detail: "token 必填" });
   const session = manager.byToken(token);
@@ -630,7 +628,7 @@ const server = http.createServer(async (req, res) => {
       if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
       return await handleChat(req, res);
     }
-    if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj); // 访问检查在 handler 内（body.access）
+    if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj); // 凭据 = 会话推送 token（handler 内校验），与访问码无关
     if (req.method === "POST" && p === "/api/cancel") {
       if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
       return await handleCancel(req, res);

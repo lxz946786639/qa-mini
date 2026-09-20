@@ -939,8 +939,15 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(lg.status, 200);
     accessTok = lg.data.token;
     assert.strictEqual((await api("GET", "/api/sessions?access=" + accessTok)).status, 200);
-    const chat = await api("POST", "/api/chat?access=" + accessTok, { session_id: sThrowId, question: "sec" });
+    const admAll = (await adminFetch("GET", "/api/sessions", undefined, adminTok)).data.sessions;
+    const tgt = admAll[0];
+    assert.ok(tgt && typeof tgt.token === "string", "管理视图应含 token");
+    const chat = await api("POST", "/api/chat?access=" + accessTok, { session_id: tgt.id, question: "sec" });
     assert.notStrictEqual(chat.status, 403, "持访问 token 不应被 403: " + chat.status);
+    // push 只凭会话推送 token（无需访问码）
+    const pushOk = await api("POST", "/api/push", { token: tgt.token, text: "推送鉴权测试" });
+    assert.strictEqual(pushOk.status, 202, "有效 token 的 push 在访问码模式下应通过: " + pushOk.status);
+    assert.strictEqual((await api("POST", "/api/push", { token: "kaasr_bogus", text: "x" })).status, 401, "未知 token 应 401");
   });
   await test("security: 随机码 + 一键失效（已发 token 同步吊销）", async () => {
     const gen = await adminFetch("POST", "/api/admin/access-codes", {}, adminTok);
