@@ -146,15 +146,21 @@
 <!-- 协议配置（全局，所有会话共用） -->
 <aside id="settings" class="drawer hidden">
   <div class="drawer-head">
-    <h2>协议配置</h2>
+    <h2>⚙ 设置</h2>
     <button id="btn-close-settings" class="btn">✕</button>
   </div>
   <div class="cfg-tabs" role="tablist">
-    <button class="cfg-tab active" data-cfgtab="openai" type="button">OpenAI</button>
-    <button class="cfg-tab" data-cfgtab="dify" type="button">Dify</button>
-    <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
-    <button class="cfg-tab" data-cfgtab="ragflow" type="button">RAGFlow</button>
-    <button class="cfg-tab" data-cfgtab="security" type="button">🔒 安全</button>
+    <div class="cfg-group">
+      <span class="cfg-group-label">协议配置</span>
+      <button class="cfg-tab active" data-cfgtab="openai" type="button">OpenAI</button>
+      <button class="cfg-tab" data-cfgtab="dify" type="button">Dify</button>
+      <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
+      <button class="cfg-tab" data-cfgtab="ragflow" type="button">RAGFlow</button>
+    </div>
+    <div class="cfg-group">
+      <span class="cfg-group-label">安全配置</span>
+      <button class="cfg-tab" data-cfgtab="security" type="button">🔒 安全</button>
+    </div>
   </div>
   <div class="drawer-body">
     <section class="cfg-panel" data-cfgtab="openai">
