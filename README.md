@@ -181,7 +181,7 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   协议标签、时间戳；答案区 Markdown 流式渲染（代码块/加粗/斜体/链接/标题/列表/引用，
   先转义后渲染防 XSS）。已完成卡片右上角 🗑 可删除该条记录（各端同步，API：
   DELETE /api/sessions/:id/history/:qaId）。答案状态行显示生成时长
-  （「✔ 完成（732 字符 · 12.5s）」；生成中实时计时「生成中… 3.2s」）。
+  （「✔ 完成（689 字 · 12.5s）」，字数为中文字数；生成中实时计时「生成中… 3.2s」）。
 - 字号：头部「字号」下拉可选 默认（15px）/ 大（18px）/ 自定义（12–28px 数字输入），
   同时作用于问题与答案，选择本地记忆（localStorage）。
 - 主题：头部 ☀️/🌙 按钮切换 浅色/深色 主题，全部组件双主题配色，
@@ -210,7 +210,7 @@ npm test           # node tests/run_tests.js
 - `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
   SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**97 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**98 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。

@@ -149,6 +149,14 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
 
   console.log("\n[1] 协议客户端单测");
 
+  await test("qa_runner: countCJK 只统计中文字符", async () => {
+    const { countCJK } = require(path.join(ROOT, "lib/qa_runner"));
+    assert.strictEqual(countCJK("你好abc123，。 "), 2);
+    assert.strictEqual(countCJK("广西华锡集团"), 6);
+    assert.strictEqual(countCJK(""), 0);
+    assert.strictEqual(countCJK("a b c"), 0);
+  });
+
   // ---------- openai ----------
   const openaiCfg = { url: "http://127.0.0.1:" + PORTS.openai + "/v1/chat/completions", api_key: "k1", model: "m1" };
   await test("openai: 正常 delta 流（keepalive/[DONE]/鉴权/model）", async () => {
@@ -549,7 +557,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(rec.protocol, "ragflow");
     assert.strictEqual(rec.session_id, defId);
     assert.strictEqual(rec.answer, "你好，我是助手。" + REF_FOOTER);
-    assert.ok(rec.detail.includes("完成（"));
+    // 答案 = 「你好，我是助手。」+ REF_FOOTER → 中文 12 字（不含标点/字母/数字）
+    assert.strictEqual(rec.detail, "完成（12 字）");
   });
   await test("push: 二次推送续接会话（不再建会话）", async () => {
     const before = MOCKS.ragflow.sessionsCalls;
