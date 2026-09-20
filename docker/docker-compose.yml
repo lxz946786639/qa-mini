@@ -18,8 +18,8 @@ services:
       - ../data:/app/data        # 会话数据库与运行时配置持久化（项目根下 data/）
     environment:
       - NODE_NO_WARNINGS=1
-      # 可选: 覆盖协议配置路径（默认容器内 /app/config.json 自动生成）
-      # - QA_MINI_CONFIG=/app/data/config.json
+      # 配置落数据卷：容器重建/镜像升级不丢配置（与 qa-mini.db 同卷，备份 data/ 即全量）
+      - QA_MINI_CONFIG=/app/data/config.json
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
       interval: 30s
