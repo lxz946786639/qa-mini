@@ -199,12 +199,16 @@
         <input type="checkbox" id="cfg-sec-anonymous">
         开放匿名访问（关闭后打开应用需 6 位访问码）
       </label>
-      <h4>访问码（默认有效 8 小时；一键失效）</h4>
+      <h4>访问码（可多个，各自独立有效时长）</h4>
       <div id="sec-codes" class="sec-codes"></div>
       <div class="sec-code-row">
         <input id="sec-code-custom" type="text" inputmode="numeric" maxlength="6" placeholder="自定义 6 位码（可空=随机）">
-        <input id="sec-code-hours" type="number" min="0.5" max="720" step="0.5" value="8" title="有效时长（小时）">
-        <button id="btn-gen-code" class="btn">生成访问码</button>
+        <input id="sec-code-hours" type="number" min="0.5" max="720" step="0.5" value="8" title="有效时长（小时，每个码单独生效）">
+        <input id="sec-code-count" type="number" min="1" max="10" step="1" value="1" title="随机生成数量（1-10；自定义码固定 1 个）">
+        <button id="btn-gen-code" class="btn">生成</button>
+      </div>
+      <div class="sec-code-row">
+        <button id="btn-clean-codes" class="btn">清理已过期</button>
       </div>
       <h4>管理密码</h4>
       <label>新管理密码（留空保持不变；4-64 位）</label>

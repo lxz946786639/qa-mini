@@ -134,8 +134,10 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 | GET | `/api/status` | 公开状态：`{ok, allow_anonymous, admin_set}`（无敏感信息） |
 | POST | `/api/admin/login` | 管理登录 `{password}` → 管理 token（未设密码时输入即初始化；12h） |
 | POST | `/api/access/login` | 访问码登录 `{code}` → 访问 token（24h，≤码有效期） |
-| POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?}`（6 位，默认 8h） |
+| POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?, count?}`（6 位；可多个，每个码独立时长，默认 8h；批量随机 1-10 个） |
+| POST | `/api/admin/access-codes/:code/renew` | 该访问码延期 `{hours?}`（默认 +8h） |
 | DELETE | `/api/admin/access-codes/:code` | 访问码一键失效（已发 token 同步吊销） |
+| DELETE | `/api/admin/access-codes/expired` | 清理全部已过期码 |
 
 ## 配置（config.json · 协议级）
 
@@ -165,7 +167,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 
 - **访问控制**：右上角「会话设置 / ⚙ 设置」默认隐藏；URL 加 `/admin` + 管理密码
   登录后显示（管理密码首次输入即初始化，之后可在设置中修改）。设置 → 安全 可关闭
-  匿名访问，关闭后打开应用需 6 位访问码（可自定义/随机、默认 8 小时有效、一键失效）。
+  匿名访问，关闭后打开应用需 6 位访问码：**可生成多个，每个码独立有效时长**（默认 8h，
+  可自定义/随机、批量 1-10 个、单个延期、一键失效、清理过期）。
   权限模型与端点表见 doc/01 §3.4，字段说明见 doc/02 §7。
 - 左侧：会话列表（＋新建 / 点击切换），显示协议徽标、最近时间与最近问题；
   头部 ☰ 可收起/展开（宽桌面状态本地记忆）。响应式：平板/窄屏（≤1024px）自动收起、
@@ -204,7 +207,7 @@ npm test           # node tests/run_tests.js
 - `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
   SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**93 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**96 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。

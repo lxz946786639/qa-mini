@@ -460,7 +460,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v5"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v6"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -931,6 +931,44 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/123456", undefined, adminTok)).status, 200);
     assert.strictEqual((await api("POST", "/api/access/login", { code: "123456" })).status, 401);
     assert.strictEqual((await api("GET", "/api/sessions?access=" + accessTok)).status, 403, "失效后旧 token 应 403");
+  });
+  let batchCodes = [];
+  await test("security: 批量生成多个访问码（各自独立时长）", async () => {
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { hours: 2, count: 3 }, adminTok);
+    assert.strictEqual(gen.status, 201);
+    assert.strictEqual(gen.data.entries.length, 3);
+    batchCodes = gen.data.entries.map((x) => x.code);
+    assert.ok(new Set(batchCodes).size === 3, "批量码应互不相同: " + batchCodes.join(","));
+    assert.ok(batchCodes.every((c) => /^\d{6}$/.test(c)));
+    // 每个码各自登录通过
+    for (const c of batchCodes) {
+      assert.strictEqual((await api("POST", "/api/access/login", { code: c })).status, 200, "码 " + c + " 应可登录");
+    }
+  });
+  await test("security: 单个访问码延期（renew）", async () => {
+    const before = (await adminFetch("GET", "/api/config", undefined, adminTok)).data.security.access_codes.find((c) => c.code === batchCodes[0]);
+    const r = await adminFetch("POST", "/api/admin/access-codes/" + batchCodes[0] + "/renew", { hours: 12 }, adminTok);
+    assert.strictEqual(r.status, 200);
+    const after = r.data.entry;
+    assert.ok(Date.parse(after.expires_at) > Date.parse(before.expires_at) + 11 * 3600e3, "延期后到期时间应明显后移");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/access-codes/000000/renew", { hours: 1 }, adminTok)).status, 404, "不存在的码 404");
+  });
+  await test("security: 清理全部过期码（expired）", async () => {
+    const put = await adminFetch("PUT", "/api/config", {
+      security: { access_codes: (await adminFetch("GET", "/api/config", undefined, adminTok)).data.security.access_codes.concat([
+        { code: "111111", expires_at: "2020-01-01T00:00:00.000Z", created_at: "2020-01-01T00:00:00.000Z" },
+        { code: "222222", expires_at: "2020-02-02T00:00:00.000Z", created_at: "2020-02-02T00:00:00.000Z" }
+      ]) }
+    }, adminTok);
+    assert.strictEqual(put.status, 200);
+    const r = await adminFetch("DELETE", "/api/admin/access-codes/expired", undefined, adminTok);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.data.removed, 2);
+    const cfg = (await adminFetch("GET", "/api/config", undefined, adminTok)).data.security.access_codes;
+    assert.ok(!cfg.some((c) => c.code === "111111" || c.code === "222222"), "过期码应被清理");
+    assert.ok(cfg.some((c) => c.code === batchCodes[0]), "未过期码保留");
+    // 收尾：清掉本测试段生成的码
+    for (const c of batchCodes) await adminFetch("DELETE", "/api/admin/access-codes/" + c, undefined, adminTok);
   });
   await test("security: 过期码 401；恢复匿名", async () => {
     const put = await adminFetch("PUT", "/api/config", {

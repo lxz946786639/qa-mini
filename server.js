@@ -481,33 +481,78 @@ async function handleAccessLogin(req, res) {
 }
 
 // ---- /api/admin/access-codes：生成访问码（管理）----
-async function handleAddAccessCode(req, res) {
-  let body;
-  try { body = await parseJSONBody(req); }
-  catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
-  let code = "";
-  if (typeof body.code === "string" && body.code.trim() !== "") {
-    code = body.code.trim();
-    if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "自定义访问码必须为 6 位数字" });
-  } else {
-    do { code = String(100000 + Math.floor(Math.random() * 900000)); } while (accessCodeList().some((c) => c.code === code));
-  }
-  if (accessCodeList().some((c) => c.code === code)) {
-    return sendJSON(res, 409, { ok: false, detail: "该访问码已存在（未过期）" });
-  }
-  let hours = typeof body.hours === "number" ? body.hours : DEFAULT_CODE_HOURS;
+// body {code?, hours?, count?}：count 1-10 批量随机；code 指定时 count 忽略（单个）
+function clampCodeHours(h) {
+  let hours = typeof h === "number" && isFinite(h) ? h : DEFAULT_CODE_HOURS;
   if (!(hours > 0)) hours = DEFAULT_CODE_HOURS;
-  hours = Math.min(hours, 720); // 上限 30 天
-  const entry = {
+  return Math.min(hours, 720); // 上限 30 天
+}
+function makeCodeEntry(code, hours) {
+  return {
     code,
     created_at: new Date().toISOString(),
     expires_at: new Date(Date.now() + hours * 3600e3).toISOString()
   };
+}
+async function handleAddAccessCode(req, res) {
+  let body;
+  try { body = await parseJSONBody(req); }
+  catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
+  const hours = clampCodeHours(body.hours);
+  const list = accessCodeList();
+  const entries = [];
+  if (typeof body.code === "string" && body.code.trim() !== "") {
+    const code = body.code.trim();
+    if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "自定义访问码必须为 6 位数字" });
+    if (list.some((c) => c.code === code)) return sendJSON(res, 409, { ok: false, detail: "该访问码已存在（未过期）" });
+    entries.push(makeCodeEntry(code, hours));
+  } else {
+    let count = typeof body.count === "number" ? Math.floor(body.count) : 1;
+    count = Math.max(1, Math.min(count, 10));
+    const taken = new Set(list.map((c) => c.code));
+    while (entries.length < count) {
+      const code = String(100000 + Math.floor(Math.random() * 900000));
+      if (taken.has(code)) continue;
+      taken.add(code);
+      entries.push(makeCodeEntry(code, hours));
+    }
+  }
   config.security = Object.assign({}, secCfg(), {
-    access_codes: accessCodeList().concat([entry])
+    access_codes: list.concat(entries)
   });
   saveSecurity();
-  return sendJSON(res, 201, { ok: true, entry });
+  return sendJSON(res, 201, { ok: true, entries, entry: entries[0] });
+}
+
+// ---- /api/admin/access-codes/:code/renew：延期（管理）----
+// 新到期 = max(当前到期, 现在) + hours
+async function handleRenewAccessCode(req, res, code) {
+  let body = {};
+  try { body = await parseJSONBody(req); } catch { body = {}; }
+  const hours = clampCodeHours(body.hours);
+  const list = accessCodeList();
+  const c = list.find((x) => x.code === code);
+  if (!c) return sendJSON(res, 404, { ok: false, detail: "访问码不存在" });
+  const base = Math.max(Date.parse(c.expires_at), Date.now());
+  const entry = Object.assign({}, c, { expires_at: new Date(base + hours * 3600e3).toISOString() });
+  config.security = Object.assign({}, secCfg(), {
+    access_codes: list.map((x) => (x.code === code ? entry : x))
+  });
+  saveSecurity();
+  return sendJSON(res, 200, { ok: true, entry, detail: "已延期" });
+}
+
+// ---- /api/admin/access-codes/expired：清理全部过期码（管理）----
+function handleCleanupExpiredCodes(res) {
+  const now = Date.now();
+  const list = accessCodeList();
+  const next = list.filter((c) => Date.parse(c.expires_at) > now);
+  const removed = list.length - next.length;
+  if (removed > 0) {
+    config.security = Object.assign({}, secCfg(), { access_codes: next });
+    saveSecurity();
+  }
+  return sendJSON(res, 200, { ok: true, removed });
 }
 
 // ---- /api/admin/access-codes/:code：一键失效（管理）----
@@ -552,6 +597,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/admin/access-codes") {
       if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
       return await handleAddAccessCode(req, res);
+    }
+    if (req.method === "DELETE" && p === "/api/admin/access-codes/expired") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return handleCleanupExpiredCodes(res);
+    }
+    const mRenew = p.match(/^\/api\/admin\/access-codes\/([A-Za-z0-9]+)\/renew$/);
+    if (mRenew && req.method === "POST") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handleRenewAccessCode(req, res, mRenew[1]);
     }
     const mCode = p.match(/^\/api\/admin\/access-codes\/([A-Za-z0-9]+)$/);
     if (mCode && req.method === "DELETE") {

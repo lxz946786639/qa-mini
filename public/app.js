@@ -922,24 +922,55 @@ async function fillSettingsForm() {
   }
 }
 
-// 访问码列表（设置 → 安全）
+// 访问码列表（设置 → 安全）：状态徽标 + 剩余时长 + 复制/延期/失效
+function fmtRemaining(expiresAt) {
+  const ms = Date.parse(expiresAt) - Date.now();
+  if (!(ms > 0)) return { label: "已过期", cls: "off" };
+  const h = ms / 3600e3;
+  const label = h < 1
+    ? Math.max(1, Math.round(ms / 60e3)) + " 分钟"
+    : h < 100 ? h.toFixed(1) + " 小时" : Math.round(h / 24) + " 天";
+  return { label: "剩 " + label, cls: "on" };
+}
 function renderCodeList(codes) {
   const box = $("sec-codes");
   box.innerHTML = "";
   if (!codes.length) {
-    box.innerHTML = '<div class="sec-empty">暂无有效访问码</div>';
+    box.innerHTML = '<div class="sec-empty">暂无访问码（在下方生成，可多个、各自时长）</div>';
     return;
   }
   for (const c of codes) {
     const row = document.createElement("div");
     row.className = "sec-code-item";
-    const span = document.createElement("span");
-    span.className = "sec-code";
-    span.innerHTML = "<b>" + escapeHtml(c.code) + "</b> <small>· 至 " + escapeHtml(fmtTime(c.expires_at)) + "</small>";
-    const btn = document.createElement("button");
-    btn.className = "btn";
-    btn.textContent = "失效";
-    btn.addEventListener("click", async () => {
+    const left = document.createElement("span");
+    left.className = "sec-code";
+    const rem = fmtRemaining(c.expires_at);
+    left.innerHTML = "<b>" + escapeHtml(c.code) + "</b> "
+      + '<span class="code-state ' + rem.cls + '">' + rem.label + "</span> "
+      + "<small>至 " + escapeHtml(fmtTime(c.expires_at)) + "</small>";
+    const acts = document.createElement("span");
+    acts.className = "sec-code-acts";
+    const mk = (txt, title, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.textContent = txt;
+      b.title = title;
+      b.addEventListener("click", fn);
+      acts.appendChild(b);
+    };
+    mk("⧉", "复制访问码", () => copyText(c.code, "访问码已复制"));
+    if (rem.cls === "on") {
+      mk("+8h", "在到期时间上延期 8 小时", async () => {
+        const r = await api("POST", "/api/admin/access-codes/" + encodeURIComponent(c.code) + "/renew", { hours: 8 });
+        if (r.status === 200) {
+          showToast("已延期至 " + fmtTime(r.data.entry.expires_at));
+          refreshCodeList();
+        } else {
+          showToast((r.data && r.data.detail) || "延期失败", 2500);
+        }
+      });
+    }
+    mk("失效", "立即失效（并吊销已发凭证）", async () => {
       if (!window.confirm("将访问码 " + c.code + " 立即失效？")) return;
       const r = await api("DELETE", "/api/admin/access-codes/" + encodeURIComponent(c.code));
       if (r.status === 200) {
@@ -949,8 +980,8 @@ function renderCodeList(codes) {
         showToast((r.data && r.data.detail) || "失效失败", 2500);
       }
     });
-    row.appendChild(span);
-    row.appendChild(btn);
+    row.appendChild(left);
+    row.appendChild(acts);
     box.appendChild(row);
   }
 }
@@ -1017,6 +1048,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("admin-gate-form").addEventListener("submit", onAdminGateSubmit);
   $("access-gate-form").addEventListener("submit", onAccessGateSubmit);
   $("btn-gen-code").addEventListener("click", genAccessCode);
+  $("btn-clean-codes").addEventListener("click", async () => {
+    const r = await api("DELETE", "/api/admin/access-codes/expired");
+    if (r.status === 200) {
+      showToast(r.data.removed > 0 ? "已清理 " + r.data.removed + " 个过期码" : "没有过期码");
+      refreshCodeList();
+    } else {
+      showToast((r.data && r.data.detail) || "清理失败", 2500);
+    }
+  });
   if (!(await checkGates())) return; // 停在门禁页
   bootApp();
 });
@@ -1057,13 +1097,17 @@ function onAccessGateSubmit(e) {
 async function genAccessCode() {
   const custom = $("sec-code-custom").value.trim();
   const hours = parseFloat($("sec-code-hours").value);
-  const r = await api("POST", "/api/admin/access-codes", {
-    code: custom || undefined,
-    hours: isNaN(hours) ? undefined : hours
-  });
-  if (r.status === 201 && r.data && r.data.entry) {
-    showToast("已生成 " + r.data.entry.code + "（有效至 " + fmtTime(r.data.entry.expires_at) + "）", 3500);
+  const count = parseInt($("sec-code-count").value, 10);
+  const body = { code: custom || undefined, hours: isNaN(hours) ? undefined : hours };
+  if (!custom && !isNaN(count) && count > 1) body.count = count; // 批量随机（自定义码固定 1 个）
+  const r = await api("POST", "/api/admin/access-codes", body);
+  const es = r.data && r.data.entries;
+  if (r.status === 201 && Array.isArray(es) && es.length) {
+    showToast(es.length > 1
+      ? "已生成 " + es.length + " 个：" + es.map((x) => x.code).join("、") + "（各 " + (isNaN(hours) ? 8 : hours) + " 小时有效）"
+      : "已生成 " + es[0].code + "（有效至 " + fmtTime(es[0].expires_at) + "）", 4500);
     $("sec-code-custom").value = "";
+    $("sec-code-count").value = "1";
     refreshCodeList();
   } else {
     showToast((r.data && r.data.detail) || "生成失败", 3000);
