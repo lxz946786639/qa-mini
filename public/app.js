@@ -264,6 +264,22 @@ function applyFont() {
   try { localStorage.setItem("qa-mini-font", JSON.stringify(fontState)); } catch {}
 }
 
+// ---------- 内容宽度（窄 / 宽 / 铺满，本地持久化） ----------
+const WIDTH_MODES = ["narrow", "wide", "full"];
+let widthMode = "narrow";
+try {
+  const rw = localStorage.getItem("qa-mini-width");
+  if (rw && WIDTH_MODES.indexOf(rw) >= 0) widthMode = rw;
+} catch {}
+function applyWidthMode() {
+  const root = document.documentElement;
+  root.classList.remove("qa-w-narrow", "qa-w-wide", "qa-w-full");
+  root.classList.add("qa-w-" + widthMode);
+  const sel = $("width-mode");
+  if (sel) sel.value = widthMode;
+}
+applyWidthMode();
+
 function curSession() { return sessions.get(currentSid) || null; }
 
 function cardsOf(sid) {
@@ -1201,7 +1217,13 @@ function bootApp() {
     if (!e.matches) mobileSessOpen = false;
     applySidebar();
   });
-  $("font-mode").addEventListener("change", () => {
+  $("width-mode").addEventListener("change", () => {
+  widthMode = $("width-mode").value;
+  applyWidthMode();
+  try { localStorage.setItem("qa-mini-width", widthMode); } catch {}
+});
+
+$("font-mode").addEventListener("change", () => {
     fontState.mode = $("font-mode").value;
     applyFont();
   });

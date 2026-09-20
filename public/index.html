@@ -60,6 +60,13 @@
           </select>
           <input id="font-px" type="number" min="12" max="28" step="1" value="15" title="自定义字号（12–28px）">
         </div>
+        <div class="font-ctl" title="内容宽度（窄 / 宽 / 铺满）">
+          <select id="width-mode">
+            <option value="narrow">宽度：窄</option>
+            <option value="wide">宽度：宽</option>
+            <option value="full">宽度：铺满</option>
+          </select>
+        </div>
         <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / asr-tool 对接（/admin + 管理密码后可见）">会话设置</button>
         <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）">⚙ 设置</button>
       </div>

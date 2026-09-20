@@ -189,6 +189,13 @@ header {
 }
 .mini-stop:hover { color: var(--red); border-color: var(--red); }
 
+/* ---------- 内容宽度（窄 / 宽 / 铺满，本地持久化） ---------- */
+:root { --qa-maxw: 860px; }
+:root.qa-w-wide { --qa-maxw: 1180px; }
+:root.qa-w-full { --qa-maxw: 100%; }
+.qa-w-full main { padding-left: 16px; padding-right: 16px; }
+.qa-w-full footer { padding-left: 16px; padding-right: 16px; }
+
 /* ---------- 主区 ---------- */
 main {
   flex: 1 1 auto;
@@ -216,7 +223,7 @@ main {
 .to-latest:hover { transform: translateY(-2px); }
 :root[data-theme="light"] .to-latest { color: #fff; }
 .card {
-  max-width: 860px;
+  max-width: var(--qa-maxw);
   margin: 0 auto 16px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -430,7 +437,7 @@ footer {
   background: linear-gradient(transparent, var(--bg) 30%);
 }
 .composer {
-  max-width: 860px;
+  max-width: var(--qa-maxw);
   margin: 0 auto;
   border: 1px solid var(--border);
   border-radius: 12px;
