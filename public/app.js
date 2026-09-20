@@ -92,7 +92,7 @@ const sessions = new Map();            // id -> 会话摘要
 const sessionCards = new Map();        // sid -> Map<qaId, state>（当前视图卡片）
 const pendingLocals = [];              // 乐观卡片（仅当前会话）[{sid, state}]
 const lastActive = new Map();          // sid -> 最近一次 qa id
-const PROTOCOL_NAMES = { openai: "OpenAI 兼容", dify: "Dify Chatflow", generic: "第三方通用", ragflow: "RAGFlow" };
+const PROTOCOL_NAMES = { openai: "OpenAI 兼容", dify: "编排引擎", generic: "第三方通用", ragflow: "知识引擎" };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function $(id) { return document.getElementById(id); }
@@ -748,7 +748,7 @@ async function regenToken() {
 async function resetCurrentSession() {
   const s = curSession();
   if (!s) return;
-  if (!window.confirm("重置会话？将清空该会话的后端对话上下文（RAGFlow/Dify），已显示的问答记录保留。")) return;
+  if (!window.confirm("重置会话？将清空该会话的后端对话上下文（知识引擎/编排引擎），已显示的问答记录保留。")) return;
   const r = await api("POST", "/api/sessions/" + s.id + "/reset");
   showToast(r.data && r.data.ok ? "会话已重置" : "重置失败: " + ((r.data && r.data.detail) || ""), 2500);
 }

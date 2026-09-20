@@ -112,9 +112,9 @@
     <input id="sd-name" type="text" spellcheck="false">
     <label>问答协议</label>
     <select id="sd-protocol">
-      <option value="ragflow">ragflow · RAGFlow 聊天助手</option>
+      <option value="ragflow">知识引擎（聊天助手）</option>
       <option value="openai">openai · OpenAI 兼容</option>
-      <option value="dify">dify · Dify Chatflow</option>
+      <option value="dify">编排引擎（对话流）</option>
       <option value="generic">generic · 第三方通用</option>
     </select>
     <label class="chk"><input id="sd-continue" type="checkbox"> 提问续接本会话（语音追问带上下文）</label>
@@ -163,9 +163,9 @@
   <div class="cfg-tabs" role="tablist">
     <span class="cfg-group-label">协议配置</span>
     <button class="cfg-tab active" data-cfgtab="openai" type="button">OpenAI</button>
-    <button class="cfg-tab" data-cfgtab="dify" type="button">Dify</button>
+    <button class="cfg-tab" data-cfgtab="dify" type="button">编排引擎</button>
     <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
-    <button class="cfg-tab" data-cfgtab="ragflow" type="button">RAGFlow</button>
+    <button class="cfg-tab" data-cfgtab="ragflow" type="button">知识引擎</button>
     <span class="cfg-divider" aria-hidden="true"></span>
     <span class="cfg-group-label">安全配置</span>
     <button class="cfg-tab" data-cfgtab="security" type="button">🔒 安全</button>
@@ -181,7 +181,7 @@
       <input id="cfg-openai-model" type="text" spellcheck="false">
     </section>
     <section class="cfg-panel hidden" data-cfgtab="dify">
-      <h3>Dify Chatflow</h3>
+      <h3>编排引擎</h3>
       <label>接口基址（如 http://host/v1）</label>
       <input id="cfg-dify-url" type="text" spellcheck="false">
       <label>API Key（app-xxx，必填）</label>
@@ -199,7 +199,7 @@
       <textarea id="cfg-generic-body" rows="3" spellcheck="false"></textarea>
     </section>
     <section class="cfg-panel hidden" data-cfgtab="ragflow">
-      <h3>RAGFlow 聊天助手</h3>
+      <h3>知识引擎</h3>
       <label>接口基址（如 http://host:9380/api/v1）</label>
       <input id="cfg-ragflow-url" type="text" spellcheck="false">
       <label>API Key（必填）</label>

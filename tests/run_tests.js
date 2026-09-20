@@ -391,7 +391,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
   await test("ragflow: 未配置 chat_id 前置报错", async () => {
     const e = await firstError(streamRagflow({ url: ragflowCfg.url, api_key: "ragflow-key", chat_id: "" }, "hi", {}));
-    assert.ok(e.detail.includes("未配置 RAGFlow Chat ID"));
+    assert.ok(e.detail.includes("未配置知识引擎 Chat ID"));
   });
 
   // ---------- [2] 服务器 API（多会话） ----------
@@ -468,7 +468,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v15"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v16"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -655,7 +655,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     await api("PUT", "/api/config", { protocols: { ragflow: { chat_id: "" } } });
     const r = await api("POST", "/api/chat", { session_id: defId, question: "hi" });
     assert.strictEqual(r.status, 400);
-    assert.ok(r.data.detail.includes("未配置 RAGFlow Chat ID"));
+    assert.ok(r.data.detail.includes("未配置知识引擎 Chat ID"));
     await api("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C9" } } });
   });
   await test("chat: generic 非法模板 → 400 前置拦截", async () => {

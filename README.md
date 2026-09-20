@@ -107,6 +107,9 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 | `generic` | url（完整地址）/ api_key（可空）/ body（JSON 模板） | 模板中 `{question}`/`{context}` 占位符递归替换 + 顶层注入 question/context；最小模板 `{}` 即可 | 自动识别：SSE / 单 JSON 文档 / 纯文本；答案字段优先级 `choices[0].delta.content` → `choices[0].text` → `data.content/answer/text` → 顶层 `content/answer/text/output` |
 | `ragflow` | url（基址）/ api_key（必填）/ chat_id（必填） | 新路径 `POST {基址}/chat/completions`（404 回退一次旧路径 `/chats/{chat_id}/completions`）；无会话先 `POST /chats/{chat_id}/sessions` 建会话（RAGFlow ≤v0.24 必需） | 信封 `{code,message,data}`：`data==true` 结束；code≠0 流内报错；session_id 续接；思考区（start/end_to_think）跳过；delta/cumulative 自动识别（LCP 差分）；reference 文档名去重脚注「**参考来源**：…」 |
 
+界面显示名对外隐藏：`dify` → 「编排引擎」、`ragflow` → 「知识引擎」（协议 key、
+配置字段、API 参数均不变；错误提示同步使用隐藏名称）。
+
 通用规则（与 asr-tool 一致）：超时 10s 连接 / 60s 块间空闲（长答案不受总时长限制）；
 非 2xx → 状态码 + 响应体截断 200 字符；SSE 非法 JSON → 「SSE 解析失败」（已流出内容保留）；
 取消 → 保留部分答案「已取消」；空回答 → 「完成（空回答）」。
@@ -170,7 +173,7 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   匿名访问，关闭后打开应用需 6 位访问码：**可生成多个，每个码独立有效时长**（默认 8h，
   可自定义/随机、批量 1-10 个、单个延期、一键失效、清理过期）。
   权限模型与端点表见 doc/01 §3.4，字段说明见 doc/02 §7。
-- **⚙ 设置抽屉**：顶部单行分段标签——「协议配置」（OpenAI / Dify / 通用 / RAGFlow）
+- **⚙ 设置抽屉**：顶部单行分段标签——「协议配置」（OpenAI / 编排引擎 / 通用 / 知识引擎）
   与「安全配置」（🔒 安全），组间细线分隔；宽 880px、内容居中。底部「保存配置」
   只作用于协议页；安全页的匿名开关与管理密码修改**即时生效**（各自独立保存）。
   打开时显示**加载遮罩**直至配置拉取完成（保存按钮期间禁用），避免手快时
