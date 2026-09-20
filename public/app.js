@@ -238,10 +238,12 @@ function makeCard(sid, opts) {
     pending: !id,
     renderQueued: false,
     question: opts.question || "",
+    startedAtMs: Date.now(),
     _id: id
   };
   if (id) cardsOf(sid).set(id, state);
   if (!id || opts.running) state.stopBtn.classList.remove("hidden");
+  if (!id || opts.running) startTicker(state);
   state.stopBtn.addEventListener("click", () => {
     if (state._id) cancelQa(state._id);
   });
@@ -297,11 +299,25 @@ function scrollToBottom(force) {
   updateToLatestBtn();
 }
 
-function finalizeCard(sid, id, ok, detail) {
+// 生成中实时计时「生成中… Xs」（客户端时钟；最终时长以服务端 started/finished 计算）
+function startTicker(st) {
+  if (st.tick) return;
+  st.tick = setInterval(() => {
+    if (!st.statusEl.classList.contains("status-running")) { stopTicker(st); return; }
+    const s = (Date.now() - st.startedAtMs) / 1000;
+    st.statusTextEl.textContent = "生成中… " + (s < 10 ? s.toFixed(1) : Math.round(s)) + "s";
+  }, 250);
+}
+function stopTicker(st) {
+  if (st.tick) { clearInterval(st.tick); st.tick = null; }
+}
+
+function finalizeCard(sid, id, ok, detail, dur) {
   const st = cardsOf(sid).get(id);
   if (!st) return;
+  stopTicker(st);
   st.statusEl.className = "status " + (ok ? "status-ok" : "status-err");
-  st.statusTextEl.textContent = (ok ? "✔ " : "✘ ") + detail;
+  st.statusTextEl.textContent = (ok ? "✔ " : "✘ ") + detail + (dur != null ? " · " + dur + "s" : "");
   st.stopBtn.classList.add("hidden");
   st.delBtn.classList.remove("hidden");
   renderCard(st);
@@ -357,7 +373,10 @@ function renderSessionView(session, running) {
   const sid = session.id;
   // 只清除卡片，保留静态空态提示（innerHTML 清空会把 #empty-hint 销毁，导致空会话不再显示提示）
   chatEl.querySelectorAll(".card").forEach((el) => el.remove());
-  for (const m of sessionCards.values()) m.clear();
+  for (const m of sessionCards.values()) {
+    for (const st of m.values()) stopTicker(st); // 丢弃的卡片停止计时器
+    m.clear();
+  }
   const items = (session.history || []).slice().reverse();
   for (const it of items) {
     const st = makeCard(sid, {
@@ -366,7 +385,8 @@ function renderSessionView(session, running) {
     });
     st.raw = it.answer;
     st.statusEl.className = "status " + (it.ok ? "status-ok" : "status-err");
-    st.statusTextEl.textContent = (it.ok ? "✔ " : "✘ ") + it.detail;
+    st.statusTextEl.textContent = (it.ok ? "✔ " : "✘ ") + it.detail
+      + (it.duration_s != null ? " · " + it.duration_s + "s" : "");
     st.stopBtn.classList.add("hidden");
     st.delBtn.classList.remove("hidden");
     renderCard(st);
@@ -723,7 +743,7 @@ function connectEvents() {
       updateActiveCount();
       return;
     }
-    finalizeCard(d.session_id, d.id, d.ok, d.detail);
+    finalizeCard(d.session_id, d.id, d.ok, d.detail, d.duration_s);
   });
   es.addEventListener("record_removed", (e) => {
     const d = JSON.parse(e.data);

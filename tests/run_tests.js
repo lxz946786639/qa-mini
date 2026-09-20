@@ -460,7 +460,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v3"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v4"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -788,6 +788,15 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(items.every((h) => typeof h.session_id === "string"));
     const sids = new Set(items.map((h) => h.session_id));
     assert.ok(sids.size >= 3, "历史应来自多个会话: " + sids.size);
+  });
+  await test("history: 生成时长 duration_s（含 DB 加载的历史）", async () => {
+    const r = await api("GET", "/api/history");
+    const items = r.data.items;
+    assert.ok(items.every((h) => typeof h.duration_s === "number" && h.duration_s >= 0), "完成记录均应含 duration_s");
+    const sFull = await api("GET", "/api/sessions/" + defId);
+    const hist = sFull.data.session.history || [];
+    assert.ok(hist.length >= 1, "默认会话应有历史");
+    assert.ok(hist.every((h) => typeof h.duration_s === "number" && h.duration_s >= 0), "DB 加载的历史含 duration_s");
   });
 
   // ---------- 会话生命周期 ----------
