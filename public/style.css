@@ -130,6 +130,7 @@ body { -webkit-tap-highlight-color: transparent; }
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  position: relative; /* 「↓ 最新」浮钮定位基准 */
 }
 
 /* ---------- 头部 ---------- */
@@ -195,6 +196,25 @@ main {
   padding: 18px 0 30px;
   scroll-behavior: smooth;
 }
+
+/* 「↓ 最新」浮钮：用户上滑阅读时出现，点击平滑回底 */
+.to-latest {
+  position: absolute;
+  right: 26px;
+  bottom: 112px;
+  z-index: 30;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #0f1216;
+  font-size: 12.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  transition: transform 0.15s ease;
+}
+.to-latest:hover { transform: translateY(-2px); }
+:root[data-theme="light"] .to-latest { color: #fff; }
 .card {
   max-width: 860px;
   margin: 0 auto 16px;
@@ -626,6 +646,7 @@ input:focus, textarea:focus, select:focus {
   main { padding: 12px 0 24px; }
   .empty-hint { margin-top: 8vh; }
   .toast { bottom: 96px; max-width: 86vw; }
+  .to-latest { right: 14px; bottom: calc(122px + env(safe-area-inset-bottom)); }
 }
 
 

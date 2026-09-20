@@ -84,6 +84,7 @@ function renderMarkdown(src) {
 // ---------- 状态 ----------
 const chatEl = document.getElementById("chat");
 const emptyHint = document.getElementById("empty-hint");
+const btnToLatest = document.getElementById("btn-to-latest");
 let es = null;
 let toastTimer = null;
 let currentSid = null;                 // 当前查看/提问的会话
@@ -273,17 +274,26 @@ function renderCard(state) {
     const running = state.statusEl.classList.contains("status-running");
     const html = renderMarkdown(state.raw) + (running ? '<span class="cursor"></span>' : "");
     state.answerEl.innerHTML = html;
-    if (running) scrollToBottom(true);
+    if (running) { scrollToBottom(false); updateToLatestBtn(); }
   });
 }
 
-function nearBottom() {
-  const c = document.scrollingElement || document.documentElement;
-  return c.scrollTop + c.clientHeight >= c.scrollHeight - 120;
+// 滚动容器是 main#chat（非 window）：
+// - 流式输出中：仅当用户已贴近底部时自动跟随（不被打断上滑阅读），即时滚动不排队
+// - 切会话/新提问等 force 场景：平滑滚动到底部
+// - 用户上滑后显示「↓ 最新」浮钮，点击平滑回底
+function isNearBottom() {
+  return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 140;
+}
+
+function updateToLatestBtn() {
+  if (btnToLatest) btnToLatest.classList.toggle("hidden", isNearBottom());
 }
 
 function scrollToBottom(force) {
-  if (force || nearBottom()) window.scrollTo({ top: document.body.scrollHeight });
+  if (!(force || isNearBottom())) return;
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: force ? "smooth" : "auto" });
+  updateToLatestBtn();
 }
 
 function finalizeCard(sid, id, ok, detail) {
@@ -294,6 +304,7 @@ function finalizeCard(sid, id, ok, detail) {
   st.stopBtn.classList.add("hidden");
   st.delBtn.classList.remove("hidden");
   renderCard(st);
+  scrollToBottom(false); // 完成后若贴近底部则补齐状态行
   updateActiveCount();
 }
 
@@ -890,6 +901,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  // 滚动跟随：用户滚动时刷新「↓ 最新」浮钮；点击平滑回底
+  chatEl.addEventListener("scroll", () => updateToLatestBtn(), { passive: true });
+  if (btnToLatest) btnToLatest.addEventListener("click", () => scrollToBottom(true));
 
   // PWA：注册 service worker（离线外壳；/api 与 SSE 在 sw.js 中直通网络不缓存）
   if ("serviceWorker" in navigator) {

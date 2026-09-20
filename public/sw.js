@@ -4,7 +4,7 @@
 //  - 页面导航：网络优先，离线回退到缓存首页
 //  - 同源静态资源（app.js/style.css/icons）：缓存优先 + 后台更新（SWR 式回填）
 // 静态资源有更新时，递增 CACHE 版本号并重新部署即可
-const CACHE = "qa-mini-v1";
+const CACHE = "qa-mini-v2";
 const SHELL = [
   "/",
   "/app.js",
