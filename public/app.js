@@ -150,6 +150,9 @@ function updateAdminUI() {
   $("btn-session").classList.toggle("hidden", !on);
   $("btn-settings").classList.toggle("hidden", !on);
 }
+// 门禁通过（或无需门禁）后解锁首页（去掉 booting 类）
+function unlockApp() { document.body.classList.remove("booting"); }
+
 async function checkGates() {
   let st = null;
   try {
@@ -1121,8 +1124,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       showToast((r.data && r.data.detail) || "清理失败", 2500);
     }
   });
-  if (!(await checkGates())) return; // 停在门禁页
-  bootApp();
+  if (await checkGates()) {
+    unlockApp();
+    bootApp();
+  }
+  // 需要门禁时保留 booting（首页隐藏），登录成功后再解锁
 });
 
 function onAdminGateSubmit(e) {
@@ -1131,6 +1137,7 @@ function onAdminGateSubmit(e) {
     if (r.status === 200 && r.data && r.data.ok) {
       setAuth("qa-mini-admin", r.data.token, r.data.expires_at);
       hideGates();
+      unlockApp();
       updateAdminUI();
       showToast(r.data.initialized ? "管理密码已初始化" : "管理登录成功");
       bootApp();
@@ -1148,6 +1155,7 @@ function onAccessGateSubmit(e) {
     if (r.status === 200 && r.data && r.data.ok) {
       if (!r.data.anonymous) setAuth("qa-mini-access", r.data.token, r.data.expires_at);
       hideGates();
+      unlockApp();
       updateAdminUI();
       bootApp();
     } else {

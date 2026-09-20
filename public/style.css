@@ -677,6 +677,8 @@ input:focus, textarea:focus, select:focus {
   padding: 20px;
 }
 .gate.hidden { display: none; }
+/* 启动门禁等待：隐藏首页避免先闪一下再弹门禁 */
+body.booting .app { display: none; }
 .gate-box {
   width: min(380px, 100%);
   background: var(--card);
