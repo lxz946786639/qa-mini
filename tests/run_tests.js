@@ -947,6 +947,13 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // 会话详情（聊天记录）持访问 token 应可取（前端按 GET+访问 token 加载）
     assert.strictEqual((await api("GET", "/api/sessions/" + tgt.id + "?access=" + accessTok)).status, 200, "会话详情?access 应 200");
     assert.strictEqual((await api("GET", "/api/events?access=bogus_token")).status, 403, "SSE 事件流无效访问 token 应 403（前端探测依据）");
+    // 管理 token 走 ?access= 通道（/admin 页 SSE/XHR 无法带 X-Admin-Token 头）
+    assert.strictEqual((await api("GET", "/api/sessions?access=" + adminTok)).status, 200, "管理 token 经 ?access= 应放行会话列表");
+    {
+      const sr = await fetch(BASE + "/api/events?access=" + adminTok);
+      assert.strictEqual(sr.status, 200, "管理 token 经 ?access= 应放行 SSE");
+      try { await sr.body.cancel(); } catch {}
+    }
     // push 只凭会话推送 token（无需访问码）
     const pushOk = await api("POST", "/api/push", { token: tgt.token, text: "推送鉴权测试" });
     assert.strictEqual(pushOk.status, 202, "有效 token 的 push 在访问码模式下应通过: " + pushOk.status);

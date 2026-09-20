@@ -111,7 +111,10 @@ function viewerOk(req, urlObj, extraAccess) {
   if (secCfg().allow_anonymous !== false) return true;
   if (adminEnabled() && isAdmin(req, urlObj)) return true;
   const t = extraAccess || (urlObj && urlObj.searchParams.get("access")) || req.headers["x-access-token"] || "";
-  return typeof t === "string" && t !== "" && validAccessToken(t);
+  if (typeof t !== "string" || t === "") return false;
+  // 管理 token 亦可走 ?access= 通道：/admin 页的 SSE（EventSource 无法自定义请求头）
+  // 与查看级 XHR 都靠它携带管理凭证
+  return validAccessToken(t) || (adminEnabled() && validAdminToken(t));
 }
 function issueAdminToken() {
   const t = crypto.randomBytes(16).toString("hex");
