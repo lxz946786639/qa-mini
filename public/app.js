@@ -813,7 +813,47 @@ function copyText(text, okMsg) {
 }
 
 // ---------- SSE 广播 ----------
+// ---------- SSE 鉴权探测：EventSource 看不到 403 状态，出错后用一次
+// 带鉴权的探测请求区分「token 已失效（过期/被撤销/服务端重启）」与「网络抖动」；
+// 确认失效 → 清除本地 token、停掉无谓重连、弹出对应门禁要求重新输入 ----------
+let authProbeAt = 0;
+let authProbeBusy = false;
+async function probeAuthOnSSEError() {
+  const now = Date.now();
+  if (authProbeBusy || now - authProbeAt < 5000) return;
+  authProbeBusy = true;
+  authProbeAt = now;
+  try {
+    let r;
+    try {
+      if (ADMIN_ROUTE) {
+        const t = getAdminToken();
+        r = await fetch("/api/config", { headers: t ? { "X-Admin-Token": t } : {} });
+      } else {
+        const t = viewerToken();
+        r = await fetch("/api/sessions" + (t ? "?access=" + encodeURIComponent(t) : ""));
+      }
+    } catch {
+      return; // 网络错误：不是鉴权问题，继续按 SSE 自动重连
+    }
+    if (ADMIN_ROUTE) {
+      if (r.status === 401) {
+        try { localStorage.removeItem("qa-mini-admin"); } catch {}
+        if (es) { es.close(); es = null; }
+        showAdminGate();
+      }
+    } else if (r.status === 403) {
+      try { localStorage.removeItem("qa-mini-access"); } catch {}
+      if (es) { es.close(); es = null; }
+      showAccessGate();
+    }
+  } finally {
+    authProbeBusy = false;
+  }
+}
+
 function connectEvents() {
+  if (es) { try { es.close(); } catch {} es = null; }
   const conn = $("conn-state");
   const t = viewerToken();
   // EventSource 无法自定义请求头 → 访问 token 走查询参数
@@ -825,6 +865,7 @@ function connectEvents() {
   es.addEventListener("error", () => {
     conn.textContent = "重连中…";
     conn.className = "conn off";
+    probeAuthOnSSEError();
   });
   es.addEventListener("sessions", (e) => {
     const list = JSON.parse(e.data).sessions || [];
