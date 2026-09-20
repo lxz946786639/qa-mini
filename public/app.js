@@ -292,7 +292,8 @@ function updateToLatestBtn() {
 
 function scrollToBottom(force) {
   if (!(force || isNearBottom())) return;
-  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: force ? "smooth" : "auto" });
+  // force（切会话/新提问/浮钮）平滑；流式跟随时必须 instant（每帧跟随，slow 动画会滞后）
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: force ? "smooth" : "instant" });
   updateToLatestBtn();
 }
 
@@ -386,7 +387,13 @@ function renderSessionView(session, running) {
     $("hint-proto").textContent = "当前协议：" + (PROTOCOL_NAMES[session.protocol] || session.protocol)
       + " · 会话ID " + session.id + " · 连接状态见左下角";
   }
-  scrollToBottom(true);
+  // 打开会话默认显示最新位置：即时落底（不用 smooth——此刻 scrollHeight 尚缺
+  // rAF 延迟渲染的答案高度，且动画会被后续增高打断），markdown 渲染完成后再补一次
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: "instant" });
+  requestAnimationFrame(() => {
+    chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: "instant" });
+    updateToLatestBtn();
+  });
 }
 
 async function switchSession(sid) {

@@ -194,7 +194,7 @@ main {
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 18px 0 30px;
-  scroll-behavior: smooth;
+  /* 注意：不用 CSS scroll-behavior，滚动行为由 JS 按场景显式指定（instant/smooth） */
 }
 
 /* 「↓ 最新」浮钮：用户上滑阅读时出现，点击平滑回底 */
