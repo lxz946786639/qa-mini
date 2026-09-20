@@ -460,7 +460,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v6"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v7"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -907,6 +907,15 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const c = await adminFetch("POST", "/api/sessions", { name: "安全测试" }, adminTok);
     assert.strictEqual(c.status, 201);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + c.data.session.id, undefined, adminTok)).status, 200);
+  });
+  await test("security: 修改管理密码（旧密码失效、新密码可用）", async () => {
+    const put = await adminFetch("PUT", "/api/config", { security: { admin_password: "newpw456" } }, adminTok);
+    assert.strictEqual(put.status, 200);
+    assert.strictEqual((await api("POST", "/api/admin/login", { password: "testpw123" })).status, 401, "旧密码应失效");
+    const lg = await api("POST", "/api/admin/login", { password: "newpw456" });
+    assert.strictEqual(lg.status, 200);
+    adminTok = lg.data.token;
+    assert.strictEqual((await adminFetch("GET", "/api/config", undefined, adminTok)).status, 200);
   });
   let accessTok = "";
   await test("security: 关闭匿名 → 403；访问码登录 → 放行", async () => {

@@ -207,7 +207,7 @@ npm test           # node tests/run_tests.js
 - `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
   SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**96 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**97 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。

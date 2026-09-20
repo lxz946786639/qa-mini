@@ -194,26 +194,54 @@
       <input id="cfg-ragflow-chat_id" type="text" spellcheck="false">
     </section>
     <section class="cfg-panel hidden" data-cfgtab="security">
-      <h3>访问控制</h3>
-      <label class="check-line">
-        <input type="checkbox" id="cfg-sec-anonymous">
-        开放匿名访问（关闭后打开应用需 6 位访问码）
-      </label>
-      <h4>访问码（可多个，各自独立有效时长）</h4>
-      <div id="sec-codes" class="sec-codes"></div>
-      <div class="sec-code-row">
-        <input id="sec-code-custom" type="text" inputmode="numeric" maxlength="6" placeholder="自定义 6 位码（可空=随机）">
-        <input id="sec-code-hours" type="number" min="0.5" max="720" step="0.5" value="8" title="有效时长（小时，每个码单独生效）">
-        <input id="sec-code-count" type="number" min="1" max="10" step="1" value="1" title="随机生成数量（1-10；自定义码固定 1 个）">
-        <button id="btn-gen-code" class="btn">生成</button>
+      <div class="sec-wrap">
+        <div class="sec-card">
+          <h3 class="sec-title">🌐 匿名访问</h3>
+          <label class="check-line sec-check">
+            <input type="checkbox" id="cfg-sec-anonymous">
+            <span class="sec-check-txt">开放匿名访问<small>切换即时生效；关闭后打开应用需输入 6 位访问码</small></span>
+          </label>
+        </div>
+        <div class="sec-card">
+          <div class="sec-card-head">
+            <h3 class="sec-title">🎫 访问码</h3>
+            <button id="btn-clean-codes" class="btn ghost" type="button">清理已过期</button>
+          </div>
+          <p class="sec-desc">可生成多个，每个码独立设置有效时长；支持延期、一键失效。</p>
+          <div id="sec-codes" class="sec-codes"></div>
+          <div class="sec-gen">
+            <label class="fld">
+              <span>码</span>
+              <input id="sec-code-custom" type="text" inputmode="numeric" maxlength="6" placeholder="自定义 6 位数字，留空 = 随机">
+            </label>
+            <label class="fld">
+              <span>有效时长</span>
+              <span class="fld-suffix">
+                <input id="sec-code-hours" type="number" min="0.5" max="720" step="0.5" value="8">
+                <i>小时</i>
+              </span>
+            </label>
+            <label class="fld">
+              <span>数量</span>
+              <span class="fld-suffix">
+                <input id="sec-code-count" type="number" min="1" max="10" step="1" value="1">
+                <i>个</i>
+              </span>
+            </label>
+            <button id="btn-gen-code" class="btn primary" type="button">生成访问码</button>
+          </div>
+          <p class="sec-hint">数量仅对随机码生效（自定义码固定生成 1 个），单次最多 10 个。</p>
+        </div>
+        <div class="sec-card">
+          <h3 class="sec-title">🔑 管理密码</h3>
+          <p class="sec-desc">只有经 <code>/admin</code> 输入管理密码的用户，才能看到右上角「会话设置 / ⚙ 设置」。</p>
+          <div class="sec-pw-row">
+            <input id="cfg-sec-adminpw" type="password" spellcheck="false" placeholder="输入新管理密码（4-64 位）">
+            <button id="btn-save-adminpw" class="btn primary" type="button">修改管理密码</button>
+          </div>
+          <div id="sec-pw-state" class="sec-note"></div>
+        </div>
       </div>
-      <div class="sec-code-row">
-        <button id="btn-clean-codes" class="btn">清理已过期</button>
-      </div>
-      <h4>管理密码</h4>
-      <label>新管理密码（留空保持不变；4-64 位）</label>
-      <input id="cfg-sec-adminpw" type="password" spellcheck="false" placeholder="••••••">
-      <div id="sec-pw-state" class="sec-note"></div>
     </section>
   </div>
   <div class="drawer-actions">

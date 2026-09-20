@@ -914,8 +914,9 @@ async function fillSettingsForm() {
     $("cfg-sec-anonymous").checked = sec.allow_anonymous !== false;
     $("cfg-sec-adminpw").value = "";
     $("sec-pw-state").textContent = sec.admin_password
-      ? "管理密码：已设置（在上方输入新密码可修改）"
-      : "管理密码：未设置（管理接口暂不鉴权，建议尽快设置）";
+      ? "已设置。输入新密码后点「修改管理密码」即可更换。"
+      : "未设置（管理接口暂不鉴权）。输入 4-64 位密码后点「修改管理密码」完成初始化。";
+    $("btn-save-adminpw").textContent = sec.admin_password ? "修改管理密码" : "设置管理密码";
     renderCodeList(Array.isArray(sec.access_codes) ? sec.access_codes : []);
   } catch (err) {
     showToast("设置加载失败: " + err.message, 3000);
@@ -998,6 +999,60 @@ async function refreshCodeList() {
   } catch {}
 }
 
+// 安全面板：匿名开关即时生效（独立于「保存配置」）
+async function applyAnonymousToggle() {
+  const checked = $("cfg-sec-anonymous").checked;
+  try {
+    const h = { "Content-Type": "application/json" };
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
+    const resp = await fetch("/api/config", {
+      method: "PUT", headers: h, body: JSON.stringify({ security: { allow_anonymous: checked } })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.ok) {
+      showToast(checked ? "已开放匿名访问" : "已关闭匿名访问（打开应用需访问码）", 3000);
+    } else {
+      $("cfg-sec-anonymous").checked = !checked;
+      showToast("切换失败: " + (data.detail || ("HTTP " + resp.status)), 3000);
+    }
+  } catch (err) {
+    $("cfg-sec-anonymous").checked = !checked;
+    showToast("切换失败: " + err.message, 3000);
+  }
+}
+
+// 安全面板：管理密码独立修改（不经过「保存配置」）
+async function saveAdminPassword() {
+  const pw = $("cfg-sec-adminpw").value.trim();
+  if (!pw) { showToast("请输入新管理密码", 2500); return; }
+  if (pw.length < 4 || pw.length > 64) { showToast("管理密码需 4-64 位字符", 2500); return; }
+  const btn = $("btn-save-adminpw");
+  const wasSet = !/未设置/.test($("sec-pw-state").textContent);
+  btn.disabled = true;
+  try {
+    const h = { "Content-Type": "application/json" };
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
+    const resp = await fetch("/api/config", {
+      method: "PUT", headers: h, body: JSON.stringify({ security: { admin_password: pw } })
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data.ok) {
+      $("cfg-sec-adminpw").value = "";
+      $("sec-pw-state").textContent = "已设置。输入新密码后点「修改管理密码」即可更换。";
+      btn.textContent = "修改管理密码";
+      showToast(wasSet ? "管理密码已更新" : "管理密码已初始化", 3000);
+    } else {
+      showToast("修改失败: " + (data.detail || ("HTTP " + resp.status)), 3500);
+    }
+  } catch (err) {
+    showToast("修改失败: " + err.message, 3000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function saveSettings() {
   const state = $("save-state");
   state.textContent = "保存中…";
@@ -1008,13 +1063,6 @@ async function saveSettings() {
     if (!el) continue;
     const val = el.type === "checkbox" ? el.checked : el.value;
     setNested(patch, key, val);
-  }
-  // 安全：匿名访问开关 + 管理密码（留空=保持不变）
-  setNested(patch, "security.allow_anonymous", $("cfg-sec-anonymous").checked);
-  const pw = $("cfg-sec-adminpw").value.trim();
-  if (pw) {
-    if (pw.length < 4 || pw.length > 64) { showToast("管理密码需 4-64 位字符", 2500); return; }
-    setNested(patch, "security.admin_password", pw);
   }
   try {
     const h = { "Content-Type": "application/json" };
@@ -1195,6 +1243,8 @@ function bootApp() {
   });
   $("btn-close-settings").addEventListener("click", () => $("settings").classList.add("hidden"));
   $("btn-save-config").addEventListener("click", saveSettings);
+  $("cfg-sec-anonymous").addEventListener("change", applyAnonymousToggle);
+  $("btn-save-adminpw").addEventListener("click", saveAdminPassword);
   // 协议配置分 tab 切换
   const cfgTabs = Array.from(document.querySelectorAll(".cfg-tab"));
   for (const btn of cfgTabs) {
