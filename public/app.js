@@ -941,7 +941,7 @@ function connectEvents() {
     if (d.session_id === currentSid) showToast("会话已重置（后端上下文已清空）");
   });
   es.addEventListener("config", () => {
-    if (!$("settings").classList.contains("hidden")) fillSettingsForm();
+    if (!$("settings").classList.contains("hidden")) fillSettingsForm(false);
   });
 }
 
@@ -973,7 +973,14 @@ function setNested(obj, key, val) {
   o[parts[parts.length - 1]] = val;
 }
 
-async function fillSettingsForm() {
+function setSettingsLoading(on) {
+  const ov = $("settings-loading");
+  if (ov) ov.classList.toggle("hidden", !on);
+  const sb = $("btn-save-config");
+  if (sb) sb.disabled = !!on;
+}
+async function fillSettingsForm(showLoading) {
+  if (showLoading) setSettingsLoading(true);
   try {
     const h = {};
     const t = getAdminToken();
@@ -999,6 +1006,8 @@ async function fillSettingsForm() {
     renderCodeList(Array.isArray(sec.access_codes) ? sec.access_codes : []);
   } catch (err) {
     showToast("设置加载失败: " + err.message, 3000);
+  } finally {
+    if (showLoading) setSettingsLoading(false);
   }
 }
 
@@ -1329,9 +1338,19 @@ $("font-mode").addEventListener("change", () => {
   $("sd-delete").addEventListener("click", deleteCurrentSession);
   $("btn-settings").addEventListener("click", async () => {
     $("settings").classList.remove("hidden");
-    await fillSettingsForm();
+    fillSettingsForm(true);
   });
   $("btn-close-settings").addEventListener("click", () => $("settings").classList.add("hidden"));
+  // 点击抽屉外部自动收起（点击来自打开按钮的不处理，避免与打开动作冲突）
+  for (const [drawerId, openerSel] of [["#settings", "#btn-settings"], ["#session-drawer", "#btn-session"]]) {
+    document.addEventListener("click", (e) => {
+      const dr = $(drawerId);
+      if (!dr || dr.classList.contains("hidden")) return;
+      if (dr.contains(e.target)) return;
+      if (e.target instanceof Element && openerSel && e.target.closest(openerSel)) return;
+      dr.classList.add("hidden");
+    });
+  }
   $("btn-save-config").addEventListener("click", saveSettings);
   $("cfg-sec-anonymous").addEventListener("change", applyAnonymousToggle);
   $("btn-save-adminpw").addEventListener("click", saveAdminPassword);
