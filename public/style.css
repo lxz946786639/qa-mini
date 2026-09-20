@@ -157,7 +157,8 @@ header {
 }
 #btn-toggle-sidebar:hover { color: var(--text); border-color: var(--border); }
 .title { display: flex; align-items: baseline; gap: 8px; }
-.title .logo { font-size: 20px; }
+/* 文字 logo（原 emoji 🐝 已移除） */
+.title .logo { font-size: 14px; font-weight: 800; color: var(--accent); letter-spacing: 1px; }
 .title .name { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
 .title .sub { font-size: 12px; color: var(--text-dim); }
 .header-right { display: flex; align-items: center; gap: 10px; }

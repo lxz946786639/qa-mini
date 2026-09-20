@@ -130,7 +130,7 @@ function showAdminGate(adminSet) {
     adminSet = window.__qaStatusAdminSet;
   }
   $("admin-gate-hint").textContent = adminSet
-    ? "输入管理密码后，右上角显示「会话设置 / ⚙ 设置」"
+    ? "输入管理密码后，右上角显示「会话设置 / ⚙︎ 设置」"
     : "尚未设置管理密码：现在输入的密码将初始化为管理密码（4-64 位）";
   $("admin-pw").value = "";
   $("admin-gate-err").textContent = "";
@@ -219,7 +219,7 @@ function applyTheme() {
   if (mt) mt.setAttribute("content", themeMode === "dark" ? "#0f1216" : "#f2f4f7");
   const b = $("btn-theme");
   if (b) {
-    b.textContent = themeMode === "dark" ? "☀️" : "🌙";
+    b.textContent = themeMode === "dark" ? "☀︎" : "☾";
     b.title = themeMode === "dark" ? "切换到浅色主题" : "切换到深色主题";
   }
 }
@@ -240,8 +240,8 @@ function fmtTime(iso) {
 }
 
 function sourceBadge(source) {
-  if (source === "push") return '<span class="badge push">🎤 语音推送</span>';
-  return '<span class="badge web">💬 网页</span>';
+  if (source === "push") return '<span class="badge push">语音推送</span>';
+  return '<span class="badge web">网页</span>';
 }
 
 // ---------- 问答字号（默认 / 大 / 自定义，本地持久化） ----------
@@ -305,7 +305,7 @@ function makeCard(sid, opts) {
         sourceBadge(opts.source) +
         '<span class="badge proto">' + escapeHtml(opts.protocolName || opts.protocol || "") + "</span>" +
         '<span class="time">' + fmtTime(opts.ts) + "</span>" +
-        '<button class="mini-del hidden" title="删除这条记录">🗑</button>' +
+        '<button class="mini-del hidden" title="删除这条记录">删</button>' +
         '<button class="mini-stop hidden" title="停止生成">✕</button>' +
       "</span>" +
       '<button class="copy-btn" title="复制问题">⧉ 复制</button>' +
