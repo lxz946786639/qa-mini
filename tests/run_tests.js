@@ -798,6 +798,21 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(hist.length >= 1, "默认会话应有历史");
     assert.ok(hist.every((h) => typeof h.duration_s === "number" && h.duration_s >= 0), "DB 加载的历史含 duration_s");
   });
+  await test("sessions: 列表按最新对话时间倒序", async () => {
+    const c = await api("POST", "/api/sessions", { name: "排序测试" });
+    const sX = c.data.session.id;
+    await new Promise((r) => setTimeout(r, 20));
+    const r = await api("POST", "/api/chat", { session_id: sX, question: "排序" });
+    await waitDone(r.data.qa_id, 10000);
+    const list = await api("GET", "/api/sessions");
+    const ids = list.data.sessions.map((s) => s.id);
+    assert.strictEqual(ids[0], sX, "刚对话的会话应排第一: " + ids.join(","));
+    const arr = list.data.sessions;
+    for (let i = 1; i < arr.length; i++) {
+      assert.ok(new Date(arr[i - 1].updated_at) >= new Date(arr[i].updated_at), "updated_at 应降序");
+    }
+    await api("DELETE", "/api/sessions/" + sX);
+  });
 
   // ---------- 会话生命周期 ----------
   await test("sessions: PUT 改名", async () => {
