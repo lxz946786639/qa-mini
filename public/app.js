@@ -543,8 +543,13 @@ function updateActiveCount() {
 // ---------- API ----------
 // 管理接口路径（需要 X-Admin-Token）；其余 /api/* 为查看级（带 access 参数）
 const ADMIN_PATH_RE = /^\/api\/(config|sessions(\/.*)?|session\/reset|admin\/access-codes)/;
+// 注意：GET /api/sessions 与 GET /api/sessions/:id 是查看级（走访问 token），
+// 其余 sessions 路径（POST/PUT/DELETE）才是管理级 —— 必须按方法区分
+function isViewerSessionsPath(method, p) {
+  return method === "GET" && /^\/api\/sessions(\/[^/]+)?(\/.*)?$/.test(p);
+}
 function withAuth(method, p, body, headers) {
-  const isAdminCall = ADMIN_PATH_RE.test(p);
+  const isAdminCall = ADMIN_PATH_RE.test(p) && !isViewerSessionsPath(method, p);
   const h = Object.assign({ "Content-Type": "application/json" }, headers || {});
   let url = p;
   if (isAdminCall) {

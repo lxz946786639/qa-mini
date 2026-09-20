@@ -468,7 +468,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v11"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v12"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -944,6 +944,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(tgt && typeof tgt.token === "string", "管理视图应含 token");
     const chat = await api("POST", "/api/chat?access=" + accessTok, { session_id: tgt.id, question: "sec" });
     assert.notStrictEqual(chat.status, 403, "持访问 token 不应被 403: " + chat.status);
+    // 会话详情（聊天记录）持访问 token 应可取（前端按 GET+访问 token 加载）
+    assert.strictEqual((await api("GET", "/api/sessions/" + tgt.id + "?access=" + accessTok)).status, 200, "会话详情?access 应 200");
     // push 只凭会话推送 token（无需访问码）
     const pushOk = await api("POST", "/api/push", { token: tgt.token, text: "推送鉴权测试" });
     assert.strictEqual(pushOk.status, 202, "有效 token 的 push 在访问码模式下应通过: " + pushOk.status);
