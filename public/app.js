@@ -97,6 +97,79 @@ const PROTOCOL_NAMES = { openai: "OpenAI 兼容", dify: "Dify Chatflow", generic
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function $(id) { return document.getElementById(id); }
 
+// ---------- 访问控制（管理密码 /admin + 访问码）----------
+// 管理：仅 /admin 路由 + 有效管理 token 时显示「会话设置 / ⚙ 设置」；服务端对管理接口强制鉴权。
+// 访问：allow_anonymous=false 时需访问码（换访问 token）；token 存 localStorage（带过期）。
+const ADMIN_ROUTE = location.pathname === "/admin" || location.pathname === "/admin/";
+function readAuthToken(k) {
+  try {
+    const v = JSON.parse(localStorage.getItem(k) || "null");
+    if (v && v.token && typeof v.expires_at === "number" && Date.now() < v.expires_at) return v.token;
+  } catch {}
+  return "";
+}
+function getAdminToken() { return readAuthToken("qa-mini-admin"); }
+function getAccessToken() { return readAuthToken("qa-mini-access"); }
+function setAuth(k, token, expiresAtIso) {
+  try { localStorage.setItem(k, JSON.stringify({ token, expires_at: Date.parse(expiresAtIso) })); } catch {}
+}
+function viewerToken() {
+  return getAccessToken() || (ADMIN_ROUTE ? getAdminToken() : "");
+}
+let lastAuthNudge = 0;
+function nudgeAuth(isAdminCall) {
+  if (Date.now() - lastAuthNudge < 4000) return;
+  lastAuthNudge = Date.now();
+  if (isAdminCall) showAdminGate();
+  else if (ADMIN_ROUTE) showAdminGate();
+  else showAccessGate();
+}
+function showAdminGate(adminSet) {
+  if (adminSet === undefined) {
+    // 未知时取最近一次状态缓存
+    adminSet = window.__qaStatusAdminSet;
+  }
+  $("admin-gate-hint").textContent = adminSet
+    ? "输入管理密码后，右上角显示「会话设置 / ⚙ 设置」"
+    : "尚未设置管理密码：现在输入的密码将初始化为管理密码（4-64 位）";
+  $("admin-pw").value = "";
+  $("admin-gate-err").textContent = "";
+  $("admin-gate").classList.remove("hidden");
+}
+function showAccessGate() {
+  $("access-code").value = "";
+  $("access-gate-err").textContent = "";
+  $("access-gate").classList.remove("hidden");
+}
+function hideGates() {
+  $("admin-gate").classList.add("hidden");
+  $("access-gate").classList.add("hidden");
+}
+function updateAdminUI() {
+  const on = ADMIN_ROUTE && !!getAdminToken();
+  $("btn-session").classList.toggle("hidden", !on);
+  $("btn-settings").classList.toggle("hidden", !on);
+}
+async function checkGates() {
+  let st = null;
+  try {
+    const r = await fetch("/api/status");
+    st = await r.json();
+    window.__qaStatusAdminSet = !!st.admin_set;
+  } catch {}
+  updateAdminUI();
+  if (ADMIN_ROUTE && !getAdminToken()) {
+    showAdminGate(window.__qaStatusAdminSet);
+    return false;
+  }
+  if (st && st.allow_anonymous === false && !getAccessToken() && !(ADMIN_ROUTE && getAdminToken())) {
+    showAccessGate();
+    return false;
+  }
+  hideGates();
+  return true;
+}
+
 // ---------- 会话侧栏（宽桌面：收起/展开且记忆；平板/窄屏 ≤1024px：自动收起，可手动展开；
 //          手机 ≤720px：左侧滑出抽屉，选择后关闭） ----------
 const appEl = document.querySelector(".app");
@@ -449,14 +522,32 @@ function updateActiveCount() {
 }
 
 // ---------- API ----------
+// 管理接口路径（需要 X-Admin-Token）；其余 /api/* 为查看级（带 access 参数）
+const ADMIN_PATH_RE = /^\/api\/(config|sessions(\/.*)?|session\/reset|admin\/access-codes)/;
+function withAuth(method, p, body, headers) {
+  const isAdminCall = ADMIN_PATH_RE.test(p);
+  const h = Object.assign({ "Content-Type": "application/json" }, headers || {});
+  let url = p;
+  if (isAdminCall) {
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
+  } else if (!/^\/api\/(status|admin\/login|access\/login)/.test(p)) {
+    const t = viewerToken();
+    if (t) url = p + (p.includes("?") ? "&" : "?") + "access=" + encodeURIComponent(t);
+  }
+  return { url, headers: h, isAdminCall };
+}
 async function api(method, p, body) {
-  const resp = await fetch(p, {
+  const au = withAuth(method, p, body);
+  const resp = await fetch(au.url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: au.headers,
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   let data = null;
   try { data = await resp.json(); } catch {}
+  if (resp.status === 401 && au.isAdminCall) nudgeAuth(true);
+  else if (resp.status === 403 && !au.isAdminCall) nudgeAuth(false);
   return { status: resp.status, data };
 }
 
@@ -478,11 +569,13 @@ async function sendQuestion() {
     if (i >= 0) pendingLocals.splice(i, 1);
   };
   try {
-    const resp = await fetch("/api/chat", {
+    const au = withAuth("POST", "/api/chat", null);
+    const resp = await fetch(au.url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: au.headers,
       body: JSON.stringify({ session_id: currentSid, question: q })
     });
+    if (resp.status === 403) nudgeAuth(false);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       st.statusEl.className = "status status-err";
@@ -684,7 +777,9 @@ function copyText(text, okMsg) {
 // ---------- SSE 广播 ----------
 function connectEvents() {
   const conn = $("conn-state");
-  es = new EventSource("/api/events");
+  const t = viewerToken();
+  // EventSource 无法自定义请求头 → 访问 token 走查询参数
+  es = new EventSource("/api/events" + (t ? "?access=" + encodeURIComponent(t) : ""));
   es.addEventListener("open", () => {
     conn.textContent = "已连接";
     conn.className = "conn on";
@@ -695,6 +790,13 @@ function connectEvents() {
   });
   es.addEventListener("sessions", (e) => {
     const list = JSON.parse(e.data).sessions || [];
+    // 广播统一剥离 token（防非管理端获取）；管理端保留本地已知值
+    for (const s of list) {
+      if (!s.token) {
+        const prev = sessions.get(s.id);
+        if (prev && prev.token) s.token = prev.token;
+      }
+    }
     sessions.clear();
     for (const s of list) sessions.set(s.id, s);
     renderSessionList();
@@ -794,7 +896,11 @@ function setNested(obj, key, val) {
 
 async function fillSettingsForm() {
   try {
-    const resp = await fetch("/api/config");
+    const h = {};
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
+    const resp = await fetch("/api/config", { headers: h });
+    if (resp.status === 401) { nudgeAuth(true); throw new Error("管理登录已失效"); }
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const cfg = await resp.json();
     for (const key of CFG_FIELDS) {
@@ -804,9 +910,61 @@ async function fillSettingsForm() {
       if (el.type === "checkbox") el.checked = !!val;
       else el.value = val == null ? "" : val;
     }
+    const sec = cfg.security || {};
+    $("cfg-sec-anonymous").checked = sec.allow_anonymous !== false;
+    $("cfg-sec-adminpw").value = "";
+    $("sec-pw-state").textContent = sec.admin_password
+      ? "管理密码：已设置（在上方输入新密码可修改）"
+      : "管理密码：未设置（管理接口暂不鉴权，建议尽快设置）";
+    renderCodeList(Array.isArray(sec.access_codes) ? sec.access_codes : []);
   } catch (err) {
     showToast("设置加载失败: " + err.message, 3000);
   }
+}
+
+// 访问码列表（设置 → 安全）
+function renderCodeList(codes) {
+  const box = $("sec-codes");
+  box.innerHTML = "";
+  if (!codes.length) {
+    box.innerHTML = '<div class="sec-empty">暂无有效访问码</div>';
+    return;
+  }
+  for (const c of codes) {
+    const row = document.createElement("div");
+    row.className = "sec-code-item";
+    const span = document.createElement("span");
+    span.className = "sec-code";
+    span.innerHTML = "<b>" + escapeHtml(c.code) + "</b> <small>· 至 " + escapeHtml(fmtTime(c.expires_at)) + "</small>";
+    const btn = document.createElement("button");
+    btn.className = "btn";
+    btn.textContent = "失效";
+    btn.addEventListener("click", async () => {
+      if (!window.confirm("将访问码 " + c.code + " 立即失效？")) return;
+      const r = await api("DELETE", "/api/admin/access-codes/" + encodeURIComponent(c.code));
+      if (r.status === 200) {
+        showToast("访问码已失效");
+        refreshCodeList();
+      } else {
+        showToast((r.data && r.data.detail) || "失效失败", 2500);
+      }
+    });
+    row.appendChild(span);
+    row.appendChild(btn);
+    box.appendChild(row);
+  }
+}
+async function refreshCodeList() {
+  try {
+    const h = {};
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
+    const resp = await fetch("/api/config", { headers: h });
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    const sec = cfg.security || {};
+    renderCodeList(Array.isArray(sec.access_codes) ? sec.access_codes : []);
+  } catch {}
 }
 
 async function saveSettings() {
@@ -820,10 +978,20 @@ async function saveSettings() {
     const val = el.type === "checkbox" ? el.checked : el.value;
     setNested(patch, key, val);
   }
+  // 安全：匿名访问开关 + 管理密码（留空=保持不变）
+  setNested(patch, "security.allow_anonymous", $("cfg-sec-anonymous").checked);
+  const pw = $("cfg-sec-adminpw").value.trim();
+  if (pw) {
+    if (pw.length < 4 || pw.length > 64) { showToast("管理密码需 4-64 位字符", 2500); return; }
+    setNested(patch, "security.admin_password", pw);
+  }
   try {
+    const h = { "Content-Type": "application/json" };
+    const t = getAdminToken();
+    if (t) h["X-Admin-Token"] = t;
     const resp = await fetch("/api/config", {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: h,
       body: JSON.stringify(patch)
     });
     const data = await resp.json().catch(() => ({}));
@@ -844,9 +1012,75 @@ async function saveSettings() {
   }
 }
 
-// ---------- 初始化 ----------
-document.addEventListener("DOMContentLoaded", () => {
+// ---------- 初始化（门禁 → 主流程）----------
+document.addEventListener("DOMContentLoaded", async () => {
+  $("admin-gate-form").addEventListener("submit", onAdminGateSubmit);
+  $("access-gate-form").addEventListener("submit", onAccessGateSubmit);
+  $("btn-gen-code").addEventListener("click", genAccessCode);
+  if (!(await checkGates())) return; // 停在门禁页
+  bootApp();
+});
+
+function onAdminGateSubmit(e) {
+  e.preventDefault();
+  api("POST", "/api/admin/login", { password: $("admin-pw").value }).then((r) => {
+    if (r.status === 200 && r.data && r.data.ok) {
+      setAuth("qa-mini-admin", r.data.token, r.data.expires_at);
+      hideGates();
+      updateAdminUI();
+      showToast(r.data.initialized ? "管理密码已初始化" : "管理登录成功");
+      bootApp();
+    } else {
+      $("admin-gate-err").textContent = (r.data && r.data.detail) || ("HTTP " + r.status);
+    }
+  }).catch(() => {
+    $("admin-gate-err").textContent = "网络错误，请重试";
+  });
+}
+
+function onAccessGateSubmit(e) {
+  e.preventDefault();
+  api("POST", "/api/access/login", { code: $("access-code").value.trim() }).then((r) => {
+    if (r.status === 200 && r.data && r.data.ok) {
+      if (!r.data.anonymous) setAuth("qa-mini-access", r.data.token, r.data.expires_at);
+      hideGates();
+      updateAdminUI();
+      bootApp();
+    } else {
+      $("access-gate-err").textContent = (r.data && r.data.detail) || ("HTTP " + r.status);
+    }
+  }).catch(() => {
+    $("access-gate-err").textContent = "网络错误，请重试";
+  });
+}
+
+async function genAccessCode() {
+  const custom = $("sec-code-custom").value.trim();
+  const hours = parseFloat($("sec-code-hours").value);
+  const r = await api("POST", "/api/admin/access-codes", {
+    code: custom || undefined,
+    hours: isNaN(hours) ? undefined : hours
+  });
+  if (r.status === 201 && r.data && r.data.entry) {
+    showToast("已生成 " + r.data.entry.code + "（有效至 " + fmtTime(r.data.entry.expires_at) + "）", 3500);
+    $("sec-code-custom").value = "";
+    refreshCodeList();
+  } else {
+    showToast((r.data && r.data.detail) || "生成失败", 3000);
+  }
+}
+
+function bootApp() {
   connectEvents();
+  // 管理端：SSE 广播不带 token，主动拉一次含 token 的会话列表（会话设置用）
+  if (ADMIN_ROUTE && getAdminToken()) {
+    api("GET", "/api/sessions").then((r) => {
+      if (r.status === 200 && r.data && Array.isArray(r.data.sessions)) {
+        for (const s of r.data.sessions) if (s.token) sessions.set(s.id, s);
+        renderSessionList();
+      }
+    });
+  }
   applyFont();
   applySidebar();
   $("btn-toggle-sidebar").addEventListener("click", () => {
@@ -939,4 +1173,4 @@ document.addEventListener("DOMContentLoaded", () => {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     });
   }
-});
+}

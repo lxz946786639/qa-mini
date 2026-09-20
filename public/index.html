@@ -60,8 +60,8 @@
           </select>
           <input id="font-px" type="number" min="12" max="28" step="1" value="15" title="自定义字号（12–28px）">
         </div>
-        <button id="btn-session" class="btn" title="当前会话：token / 会话ID / asr-tool 对接">会话设置</button>
-        <button id="btn-settings" class="btn" title="协议配置">⚙ 设置</button>
+        <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / asr-tool 对接（/admin + 管理密码后可见）">会话设置</button>
+        <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）">⚙ 设置</button>
       </div>
     </header>
 
@@ -154,6 +154,7 @@
     <button class="cfg-tab" data-cfgtab="dify" type="button">Dify</button>
     <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
     <button class="cfg-tab" data-cfgtab="ragflow" type="button">RAGFlow</button>
+    <button class="cfg-tab" data-cfgtab="security" type="button">🔒 安全</button>
   </div>
   <div class="drawer-body">
     <section class="cfg-panel" data-cfgtab="openai">
@@ -192,12 +193,55 @@
       <label>Chat ID（必填）</label>
       <input id="cfg-ragflow-chat_id" type="text" spellcheck="false">
     </section>
+    <section class="cfg-panel hidden" data-cfgtab="security">
+      <h3>访问控制</h3>
+      <label class="check-line">
+        <input type="checkbox" id="cfg-sec-anonymous">
+        开放匿名访问（关闭后打开应用需 6 位访问码）
+      </label>
+      <h4>访问码（默认有效 8 小时；一键失效）</h4>
+      <div id="sec-codes" class="sec-codes"></div>
+      <div class="sec-code-row">
+        <input id="sec-code-custom" type="text" inputmode="numeric" maxlength="6" placeholder="自定义 6 位码（可空=随机）">
+        <input id="sec-code-hours" type="number" min="0.5" max="720" step="0.5" value="8" title="有效时长（小时）">
+        <button id="btn-gen-code" class="btn">生成访问码</button>
+      </div>
+      <h4>管理密码</h4>
+      <label>新管理密码（留空保持不变；4-64 位）</label>
+      <input id="cfg-sec-adminpw" type="password" spellcheck="false" placeholder="••••••">
+      <div id="sec-pw-state" class="sec-note"></div>
+    </section>
   </div>
   <div class="drawer-actions">
     <span id="save-state" class="save-state"></span>
     <button id="btn-save-config" class="btn primary">保存配置</button>
   </div>
 </aside>
+
+<!-- 门禁：管理密码（/admin） -->
+<div id="admin-gate" class="gate hidden">
+  <div class="gate-box">
+    <h2>🔒 管理员登录</h2>
+    <p id="admin-gate-hint">输入管理密码后，右上角显示「会话设置 / ⚙ 设置」</p>
+    <form id="admin-gate-form">
+      <input id="admin-pw" type="password" placeholder="管理密码" autocomplete="current-password" required>
+      <button type="submit" class="btn primary">进入</button>
+    </form>
+    <p class="gate-err" id="admin-gate-err"></p>
+  </div>
+</div>
+<!-- 门禁：访问码（关闭匿名访问时） -->
+<div id="access-gate" class="gate hidden">
+  <div class="gate-box">
+    <h2>🎫 访问码</h2>
+    <p>本应用已关闭匿名访问，请输入管理员发放的 6 位访问码</p>
+    <form id="access-gate-form">
+      <input id="access-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位访问码" required>
+      <button type="submit" class="btn primary">进入</button>
+    </form>
+    <p class="gate-err" id="access-gate-err"></p>
+  </div>
+</div>
 
 <div id="toast" class="toast hidden"></div>
 

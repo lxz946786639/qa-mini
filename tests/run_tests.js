@@ -460,7 +460,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v4"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v5"), "CACHE 版本常量");
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
@@ -865,6 +865,93 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(list.data.sessions.length, 1);
     assert.strictEqual(list.data.sessions[0].name, "默认会话");
     assert.ok(list.data.sessions[0].token.startsWith("kaasr_"));
+  });
+
+  // ---------- 安全：管理密码 + 访问码 ----------
+  const adminFetch = async (method, p, body, tok) => {
+    const headers = { "Content-Type": "application/json" };
+    if (tok) headers["X-Admin-Token"] = tok;
+    const resp = await fetch(BASE + p, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    let data = null;
+    try { data = await resp.json(); } catch {}
+    return { status: resp.status, data };
+  };
+  let adminTok = "";
+  await test("security: /api/status 公开 + /admin 页面", async () => {
+    const r = await api("GET", "/api/status");
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.data.allow_anonymous, true);
+    assert.strictEqual(r.data.admin_set, false);
+    const adm = await fetch(BASE + "/admin");
+    assert.strictEqual(adm.status, 200);
+    assert.ok((adm.headers.get("content-type") || "").includes("text/html"));
+  });
+  await test("security: 首次登录初始化密码；错密码 401", async () => {
+    const r = await api("POST", "/api/admin/login", { password: "testpw123" });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.data.initialized, true);
+    adminTok = r.data.token;
+    const again = await api("POST", "/api/admin/login", { password: "testpw123" });
+    assert.strictEqual(again.status, 200);
+    assert.strictEqual(again.data.initialized, false);
+    assert.strictEqual((await api("POST", "/api/admin/login", { password: "nope9999" })).status, 401);
+    assert.strictEqual((await api("POST", "/api/admin/login", { password: "ab" })).status, 401);
+  });
+  await test("security: 管理接口需 token（config / 会话 CRUD / 全局重置）", async () => {
+    assert.strictEqual((await api("GET", "/api/config")).status, 401);
+    assert.strictEqual((await api("POST", "/api/sessions", { name: "x" })).status, 401);
+    assert.strictEqual((await api("POST", "/api/session/reset")).status, 401);
+    assert.strictEqual((await adminFetch("GET", "/api/config", undefined, adminTok)).status, 200);
+    const c = await adminFetch("POST", "/api/sessions", { name: "安全测试" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + c.data.session.id, undefined, adminTok)).status, 200);
+  });
+  let accessTok = "";
+  await test("security: 关闭匿名 → 403；访问码登录 → 放行", async () => {
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { allow_anonymous: false } }, adminTok)).status, 200);
+    assert.strictEqual((await api("GET", "/api/sessions")).status, 403);
+    assert.strictEqual((await api("GET", "/api/history")).status, 403);
+    assert.strictEqual((await api("POST", "/api/access/login", { code: "999999" })).status, 401);
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "123456", hours: 1 }, adminTok);
+    assert.strictEqual(gen.status, 201);
+    assert.strictEqual(gen.data.entry.code, "123456");
+    const lg = await api("POST", "/api/access/login", { code: "123456" });
+    assert.strictEqual(lg.status, 200);
+    accessTok = lg.data.token;
+    assert.strictEqual((await api("GET", "/api/sessions?access=" + accessTok)).status, 200);
+    const chat = await api("POST", "/api/chat?access=" + accessTok, { session_id: sThrowId, question: "sec" });
+    assert.notStrictEqual(chat.status, 403, "持访问 token 不应被 403: " + chat.status);
+  });
+  await test("security: 随机码 + 一键失效（已发 token 同步吊销）", async () => {
+    const gen = await adminFetch("POST", "/api/admin/access-codes", {}, adminTok);
+    assert.strictEqual(gen.status, 201);
+    assert.ok(/^\d{6}$/.test(gen.data.entry.code));
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/123456", undefined, adminTok)).status, 200);
+    assert.strictEqual((await api("POST", "/api/access/login", { code: "123456" })).status, 401);
+    assert.strictEqual((await api("GET", "/api/sessions?access=" + accessTok)).status, 403, "失效后旧 token 应 403");
+  });
+  await test("security: 过期码 401；恢复匿名", async () => {
+    const put = await adminFetch("PUT", "/api/config", {
+      security: { access_codes: [{ code: "777777", expires_at: "2020-01-01T00:00:00.000Z", created_at: "2020-01-01T00:00:00.000Z" }] }
+    }, adminTok);
+    assert.strictEqual(put.status, 200);
+    assert.strictEqual((await api("POST", "/api/access/login", { code: "777777" })).status, 401);
+    const back = await adminFetch("PUT", "/api/config", { security: { allow_anonymous: true, access_codes: [] } }, adminTok);
+    assert.strictEqual(back.status, 200);
+    assert.strictEqual((await api("GET", "/api/sessions")).status, 200);
+  });
+  await test("security: 非管理视图剥离 token；管理视图可见", async () => {
+    const anon = await api("GET", "/api/sessions");
+    assert.ok(anon.data.sessions.every((s) => s.token === undefined), "匿名视图不应含 token");
+    const adm = await adminFetch("GET", "/api/sessions", undefined, adminTok);
+    assert.ok(adm.data.sessions.every((s) => typeof s.token === "string" && s.token.startsWith("kaasr_")));
+    const id = anon.data.sessions[0].id;
+    const f1 = await api("GET", "/api/sessions/" + id);
+    assert.strictEqual(f1.data.session.token, undefined);
+    const f2 = await adminFetch("GET", "/api/sessions/" + id, undefined, adminTok);
+    assert.ok(String(f2.data.session.token).startsWith("kaasr_"));
   });
 
   // 收尾

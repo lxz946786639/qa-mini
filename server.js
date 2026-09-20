@@ -10,6 +10,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const {
   loadConfig, saveConfig, validateConfig, deepMerge, PROTOCOLS,
@@ -44,6 +45,101 @@ const manager = new SessionManager({
   saveAll: () => saveSessions(sessionsFile, sessions),
   broadcast
 });
+
+// ---- 访问控制（管理密码 + 访问码）----
+// 管理：admin_password 为空 = 管理未启用（保持旧行为）；设置后管理接口强制鉴权。
+// 访问：allow_anonymous=false 时，查看/提问/推送需有效访问码签发的 token（或管理 token）。
+// token 仅存内存（重启后需重新登录）；登录失败限流 10 次/10 分钟/IP。
+const ADMIN_TOKEN_TTL = 12 * 3600e3;   // 管理 token 12h
+const ACCESS_TOKEN_TTL = 24 * 3600e3;  // 访问 token 24h（不超过码自身有效期）
+const DEFAULT_CODE_HOURS = 8;          // 访问码默认有效时长
+const adminTokens = new Map();   // token -> { expires_at: ms }
+const accessTokens = new Map();  // token -> { code, expires_at: ms }
+const loginFails = new Map();    // ip -> { count, reset_at: ms }
+
+function secCfg() { return (config && config.security) || {}; }
+function adminEnabled() { return String(secCfg().admin_password || "") !== ""; }
+function ipOf(req) { return req.socket ? (req.socket.remoteAddress || "?") : "?"; }
+function safeEqual(a, b) {
+  const ha = crypto.createHash("sha256").update(String(a)).digest();
+  const hb = crypto.createHash("sha256").update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+function throttleExceeded(ip) {
+  const n = loginFails.get(ip) || { count: 0, reset_at: 0 };
+  if (Date.now() > n.reset_at) { n.count = 0; n.reset_at = Date.now() + 10 * 60e3; }
+  if (n.count >= 10) return true;
+  loginFails.set(ip, n);
+  return false;
+}
+function recordFail(ip) {
+  const n = loginFails.get(ip) || { count: 0, reset_at: Date.now() + 10 * 60e3 };
+  n.count += 1;
+  loginFails.set(ip, n);
+}
+function validAdminToken(t) {
+  const e = adminTokens.get(t);
+  if (!e) return false;
+  if (Date.now() > e.expires_at) { adminTokens.delete(t); return false; }
+  return true;
+}
+function isAdmin(req, urlObj) {
+  if (!adminEnabled()) return true; // 未设密码 = 未启用管理鉴权（兼容旧行为）
+  const t = req.headers["x-admin-token"] || (urlObj && urlObj.searchParams.get("admin")) || "";
+  return typeof t === "string" && t !== "" && validAdminToken(t);
+}
+function accessCodeList() {
+  const c = secCfg().access_codes;
+  return Array.isArray(c) ? c : [];
+}
+function findValidCode(code) {
+  const now = Date.now();
+  for (const c of accessCodeList()) {
+    if (typeof c.code === "string" && c.code === code && Date.parse(c.expires_at) > now) return c;
+  }
+  return null;
+}
+function validAccessToken(t) {
+  const e = accessTokens.get(t);
+  if (!e) return false;
+  if (Date.now() > e.expires_at) { accessTokens.delete(t); return false; }
+  if (!findValidCode(e.code)) { accessTokens.delete(t); return false; } // 码已失效/过期
+  return true;
+}
+// 查看级鉴权：匿名开放 → 放行；否则 管理 token 或 有效访问 token 放行
+function viewerOk(req, urlObj, extraAccess) {
+  if (secCfg().allow_anonymous !== false) return true;
+  if (adminEnabled() && isAdmin(req, urlObj)) return true;
+  const t = extraAccess || (urlObj && urlObj.searchParams.get("access")) || req.headers["x-access-token"] || "";
+  return typeof t === "string" && t !== "" && validAccessToken(t);
+}
+function issueAdminToken() {
+  const t = crypto.randomBytes(16).toString("hex");
+  adminTokens.set(t, { expires_at: Date.now() + ADMIN_TOKEN_TTL });
+  return { token: t, expires_at: new Date(Date.now() + ADMIN_TOKEN_TTL).toISOString() };
+}
+function issueAccessToken(code) {
+  const c = findValidCode(code);
+  const exp = Math.min(Date.parse(c.expires_at), Date.now() + ACCESS_TOKEN_TTL);
+  const t = crypto.randomBytes(16).toString("hex");
+  accessTokens.set(t, { code, expires_at: exp });
+  return { token: t, expires_at: new Date(exp).toISOString() };
+}
+// 广播用脱敏配置：api_key/管理密码不出现在 SSE（管理端用 GET /api/config 取全量）
+function maskConfigForBroadcast(c) {
+  const m = JSON.parse(JSON.stringify(c));
+  for (const k of Object.keys(m.protocols || {})) {
+    if (m.protocols[k] && m.protocols[k].api_key) m.protocols[k].api_key = "…已设置";
+  }
+  if (m.security) {
+    m.security.admin_password = "";
+    m.security.access_codes = (m.security.access_codes || []).map((x) => ({ ...x }));
+  }
+  return m;
+}
+function saveSecurity() {
+  saveConfig(configFile, config);
+}
 
 // ---- 工具 ----
 function sendJSON(res, status, obj) {
@@ -166,11 +262,11 @@ async function handleCreateSession(req, res) {
     protocol: typeof body.protocol === "string" ? body.protocol : "ragflow",
     continue_session: typeof body.continue_session === "boolean" ? body.continue_session : true
   });
-  return sendJSON(res, 201, { ok: true, session: sessionView(s, 0) });
+  return sendJSON(res, 201, { ok: true, session: sessionView(s, 0, true) });
 }
 
-function handleGetSession(res, id) {
-  const full = manager.full(id);
+function handleGetSession(res, id, includeToken) {
+  const full = manager.full(id, includeToken);
   if (!full) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
   return sendJSON(res, 200, full);
 }
@@ -187,7 +283,7 @@ async function handleUpdateSession(req, res, id) {
   }
   const s = manager.update(id, body);
   if (!s) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
-  return sendJSON(res, 200, { ok: true, session: sessionView(s, 0) });
+  return sendJSON(res, 200, { ok: true, session: sessionView(s, 0, true) });
 }
 
 function handleDeleteSession(res, id) {
@@ -212,6 +308,10 @@ async function handlePush(req, res, urlObj) {
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
+  }
+  // 访问码模式下，asr-tool 需在请求体携带 access（访问 token）
+  if (!viewerOk(req, urlObj, typeof body.access === "string" ? body.access : "")) {
+    return sendJSON(res, 403, { ok: false, detail: "需要访问码（请求体 access 字段）" });
   }
   const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) return sendJSON(res, 401, { ok: false, detail: "token 必填" });
@@ -320,8 +420,107 @@ async function handlePutConfig(req, res) {
     return sendJSON(res, 500, { ok: false, detail: "配置保存失败: " + e.message });
   }
   config = next;
-  broadcast("config", { config: next });
+  broadcast("config", { ok: true, config: maskConfigForBroadcast(next) });
   return sendJSON(res, 200, { ok: true, config: next });
+}
+
+// ---- /api/status（公开，无敏感信息）----
+function handleStatus(res) {
+  return sendJSON(res, 200, {
+    ok: true,
+    allow_anonymous: secCfg().allow_anonymous !== false,
+    admin_set: adminEnabled()
+  });
+}
+
+// ---- /api/admin/login：未设密码时输入即初始化；已设密码时校验 ----
+async function handleAdminLogin(req, res) {
+  const ip = ipOf(req);
+  if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+  let body;
+  try { body = await parseJSONBody(req); }
+  catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
+  const pw = typeof body.password === "string" ? body.password : "";
+  if (!adminEnabled()) {
+    // 初始化：首次设置管理密码（4-64 位）
+    if (pw.length < 4 || pw.length > 64) {
+      return sendJSON(res, 400, { ok: false, detail: "管理密码需 4-64 位字符" });
+    }
+    config.security = Object.assign({}, secCfg(), { admin_password: pw });
+    saveSecurity();
+    const t = issueAdminToken();
+    return sendJSON(res, 200, { ok: true, initialized: true, ...t, detail: "已初始化并登录" });
+  }
+  if (safeEqual(pw, String(secCfg().admin_password))) {
+    const t = issueAdminToken();
+    return sendJSON(res, 200, { ok: true, initialized: false, ...t });
+  }
+  recordFail(ip);
+  return sendJSON(res, 401, { ok: false, detail: "管理密码错误" });
+}
+
+// ---- /api/access/login：访问码 → 访问 token ----
+async function handleAccessLogin(req, res) {
+  if (secCfg().allow_anonymous !== false) {
+    return sendJSON(res, 200, { ok: true, anonymous: true });
+  }
+  const ip = ipOf(req);
+  if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+  let body;
+  try { body = await parseJSONBody(req); }
+  catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "访问码为 6 位数字" });
+  const valid = findValidCode(code);
+  if (!valid) {
+    recordFail(ip);
+    return sendJSON(res, 401, { ok: false, detail: "访问码无效或已过期" });
+  }
+  const t = issueAccessToken(code);
+  return sendJSON(res, 200, { ok: true, anonymous: false, ...t, expires_at_code: valid.expires_at });
+}
+
+// ---- /api/admin/access-codes：生成访问码（管理）----
+async function handleAddAccessCode(req, res) {
+  let body;
+  try { body = await parseJSONBody(req); }
+  catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
+  let code = "";
+  if (typeof body.code === "string" && body.code.trim() !== "") {
+    code = body.code.trim();
+    if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "自定义访问码必须为 6 位数字" });
+  } else {
+    do { code = String(100000 + Math.floor(Math.random() * 900000)); } while (accessCodeList().some((c) => c.code === code));
+  }
+  if (accessCodeList().some((c) => c.code === code)) {
+    return sendJSON(res, 409, { ok: false, detail: "该访问码已存在（未过期）" });
+  }
+  let hours = typeof body.hours === "number" ? body.hours : DEFAULT_CODE_HOURS;
+  if (!(hours > 0)) hours = DEFAULT_CODE_HOURS;
+  hours = Math.min(hours, 720); // 上限 30 天
+  const entry = {
+    code,
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + hours * 3600e3).toISOString()
+  };
+  config.security = Object.assign({}, secCfg(), {
+    access_codes: accessCodeList().concat([entry])
+  });
+  saveSecurity();
+  return sendJSON(res, 201, { ok: true, entry });
+}
+
+// ---- /api/admin/access-codes/:code：一键失效（管理）----
+function handleInvalidateAccessCode(res, code) {
+  const list = accessCodeList();
+  const next = list.filter((c) => c.code !== code);
+  if (next.length === list.length) {
+    return sendJSON(res, 404, { ok: false, detail: "访问码不存在" });
+  }
+  config.security = Object.assign({}, secCfg(), { access_codes: next });
+  saveSecurity();
+  for (const [t, e] of accessTokens) if (e.code === code) accessTokens.delete(t); // 同步吊销已发 token
+  return sendJSON(res, 200, { ok: true, detail: "已失效" });
 }
 
 // ---- 服务器 ----
@@ -334,7 +533,7 @@ const server = http.createServer(async (req, res) => {
   }
   const p = urlObj.pathname;
   try {
-    if (req.method === "GET" && p === "/api/events") return handleEvents(req, res);
+    // 公开：健康检查（docker healthcheck 依赖）/ 状态 / 登录
     if (req.method === "GET" && p === "/api/health") {
       return sendJSON(res, 200, {
         ok: true,
@@ -345,39 +544,95 @@ const server = http.createServer(async (req, res) => {
         protocols: PROTOCOLS
       });
     }
-    if (p === "/api/sessions" && req.method === "GET") {
-      return sendJSON(res, 200, { sessions: manager.list() });
+    if (req.method === "GET" && p === "/api/status") return handleStatus(res);
+    if (req.method === "POST" && p === "/api/admin/login") return await handleAdminLogin(req, res);
+    if (req.method === "POST" && p === "/api/access/login") return await handleAccessLogin(req, res);
+
+    // 管理：访问码生成/失效
+    if (req.method === "POST" && p === "/api/admin/access-codes") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handleAddAccessCode(req, res);
     }
-    if (p === "/api/sessions" && req.method === "POST") return await handleCreateSession(req, res);
+    const mCode = p.match(/^\/api\/admin\/access-codes\/([A-Za-z0-9]+)$/);
+    if (mCode && req.method === "DELETE") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return handleInvalidateAccessCode(res, mCode[1]);
+    }
+
+    // 查看级（匿名开放时直接通过；否则需访问 token 或管理 token）
+    if (req.method === "GET" && p === "/api/events") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return handleEvents(req, res);
+    }
+    if (p === "/api/sessions" && req.method === "GET") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return sendJSON(res, 200, { sessions: manager.list(isAdmin(req, urlObj)) });
+    }
+    if (req.method === "GET" && p === "/api/history") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return sendJSON(res, 200, { items: manager.mergedHistory() });
+    }
+    if (req.method === "POST" && p === "/api/chat") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return await handleChat(req, res);
+    }
+    if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj); // 访问检查在 handler 内（body.access）
+    if (req.method === "POST" && p === "/api/cancel") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return await handleCancel(req, res);
+    }
+
+    // 管理：会话 CRUD / 重置 / 删记录 / 全局重置
+    if (p === "/api/sessions" && req.method === "POST") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handleCreateSession(req, res);
+    }
     const mReset = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)\/reset$/);
-    if (mReset && req.method === "POST") return handleResetSession(res, mReset[1]);
+    if (mReset && req.method === "POST") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return handleResetSession(res, mReset[1]);
+    }
     const mRec = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)\/history\/([a-zA-Z0-9]+)$/);
     if (mRec && req.method === "DELETE") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
       const ok = manager.removeRecord(mRec[1], mRec[2]);
       return sendJSON(res, ok ? 200 : 404, { ok, detail: ok ? "已删除" : "记录不存在" });
     }
-    const mSess = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)$/);
-    if (mSess) {
-      if (req.method === "GET") return handleGetSession(res, mSess[1]);
-      if (req.method === "PUT") return await handleUpdateSession(req, res, mSess[1]);
-      if (req.method === "DELETE") return handleDeleteSession(res, mSess[1]);
-    }
-    if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj);
-    if (req.method === "POST" && p === "/api/chat") return await handleChat(req, res);
-    if (req.method === "POST" && p === "/api/cancel") return await handleCancel(req, res);
     if (req.method === "POST" && p === "/api/session/reset") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
       manager.resetAll();
       manager.broadcastSessions();
       return sendJSON(res, 200, { ok: true });
     }
-    if (req.method === "GET" && p === "/api/history") {
-      return sendJSON(res, 200, { items: manager.mergedHistory() });
+    const mSess = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)$/);
+    if (mSess) {
+      if (req.method === "GET") {
+        if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+        return handleGetSession(res, mSess[1], isAdmin(req, urlObj));
+      }
+      if (req.method === "PUT") {
+        if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+        return await handleUpdateSession(req, res, mSess[1]);
+      }
+      if (req.method === "DELETE") {
+        if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+        return handleDeleteSession(res, mSess[1]);
+      }
     }
+
+    // 管理：协议配置
     if (req.method === "GET" && p === "/api/config") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
       return sendJSON(res, 200, config);
     }
-    if (req.method === "PUT" && p === "/api/config") return await handlePutConfig(req, res);
-    if (req.method === "GET" && (p === "/" || p === "/index.html")) return serveStatic(res, "index.html");
+    if (req.method === "PUT" && p === "/api/config") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handlePutConfig(req, res);
+    }
+
+    if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/admin")) {
+      return serveStatic(res, "index.html");
+    }
     // 其余 GET 一律按 public/ 静态文件提供（app.js / style.css / manifest / sw.js / icons/…）；
     // serveStatic 已做路径穿越防护（403）与存在性检查（404）
     if (req.method === "GET") return serveStatic(res, p.slice(1));
