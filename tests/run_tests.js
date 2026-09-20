@@ -445,6 +445,36 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const r = await api("GET", "/api/nope");
     assert.strictEqual(r.status, 404);
   });
+  await test("PWA: manifest 合法且含 any/maskable 图标", async () => {
+    const r = await fetch(BASE + "/manifest.webmanifest");
+    assert.strictEqual(r.status, 200);
+    assert.ok((r.headers.get("content-type") || "").includes("manifest+json"));
+    const mf = await r.json();
+    assert.strictEqual(mf.start_url, "/");
+    assert.strictEqual(mf.display, "standalone");
+    assert.ok(mf.icons.some((i) => i.sizes === "192x192" && i.purpose === "any"), "192 any");
+    assert.ok(mf.icons.some((i) => i.purpose === "maskable"), "maskable");
+  });
+  await test("PWA: sw.js 可访问且含缓存版本", async () => {
+    const r = await fetch(BASE + "/sw.js");
+    assert.strictEqual(r.status, 200);
+    assert.ok((r.headers.get("content-type") || "").includes("javascript"));
+    const txt = await r.text();
+    assert.ok(txt.includes("qa-mini-v1"), "CACHE 版本常量");
+  });
+  await test("PWA: 图标均为有效 PNG", async () => {
+    for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
+      const r = await fetch(BASE + p);
+      assert.strictEqual(r.status, 200, p);
+      assert.ok((r.headers.get("content-type") || "").includes("image/png"), p);
+      const buf = Buffer.from(await r.arrayBuffer());
+      assert.deepStrictEqual([...buf.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], p + " PNG magic");
+    }
+  });
+  await test("静态: 路径穿越被拦截", async () => {
+    const r = await fetch(BASE + "/..%2fserver.js");
+    assert.ok(r.status === 403 || r.status === 404, "got " + r.status);
+  });
 
   // ---------- 会话建立 ----------
   let defId, sDifyId, sGenericId, sOpenaiId, sRag2Id, sThrowId, sRag2TokenOld, sOpenaiTokenOld;

@@ -2,8 +2,18 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>QA Mini · 语音问答展示</title>
+<meta name="description" content="asr-tool 语音问答 · 多会话实时流式展示">
+<meta name="theme-color" id="meta-theme" content="#0f1216">
+<!-- PWA -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="QA Mini">
 <script>
   (function () {
     try {
@@ -58,10 +68,12 @@
     <main id="chat">
       <div id="empty-hint" class="empty-hint">
         <div class="hint-big">🎤 💬</div>
-        <p>本会话暂无问答。</p>
-        <p>在下方输入问题，或用 <b>asr-tool 推送模式</b>把语音识别结果推送到
-           <code>POST /api/push</code>（请求体带本会话的 token 与 session_id），
-           答案会在这里实时流式显示。</p>
+        <h3>本会话暂无问答</h3>
+        <p>在下方输入问题，按 <code>Enter</code> 发送，答案实时流式显示；<br>
+           或用 <b>asr-tool 推送模式</b>把语音识别结果自动推送到本会话。</p>
+        <p class="hint-proto" id="hint-proto"></p>
+        <p class="hint-sub">asr-tool 对接：打开「会话设置」复制 config.toml 片段（token + 会话ID）。
+           推送接口 <code>POST /api/push</code></p>
       </div>
     </main>
 

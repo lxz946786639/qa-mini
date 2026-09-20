@@ -89,7 +89,8 @@ const MIME = {
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
-  ".ico": "image/x-icon"
+  ".ico": "image/x-icon",
+  ".webmanifest": "application/manifest+json"
 };
 
 function serveStatic(res, rel) {
@@ -377,7 +378,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "PUT" && p === "/api/config") return await handlePutConfig(req, res);
     if (req.method === "GET" && (p === "/" || p === "/index.html")) return serveStatic(res, "index.html");
-    if (req.method === "GET" && (p === "/app.js" || p === "/style.css")) return serveStatic(res, p.slice(1));
+    // 其余 GET 一律按 public/ 静态文件提供（app.js / style.css / manifest / sw.js / icons/…）；
+    // serveStatic 已做路径穿越防护（403）与存在性检查（404）
+    if (req.method === "GET") return serveStatic(res, p.slice(1));
     return sendJSON(res, 404, { ok: false, detail: "not found" });
   } catch (e) {
     console.error("[server] 处理异常:", e);

@@ -168,7 +168,11 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 - 字号：头部「字号」下拉可选 默认（15px）/ 大（18px）/ 自定义（12–28px 数字输入），
   同时作用于问题与答案，选择本地记忆（localStorage）。
 - 主题：头部 ☀️/🌙 按钮切换 浅色/深色 主题，全部组件双主题配色，
-  选择本地记忆（localStorage），刷新不闪烁。
+  选择本地记忆（localStorage），刷新不闪烁（status bar 颜色随主题联动）。
+- **PWA（移动端）**：`/manifest.webmanifest` + service worker（`/sw.js`）——
+  手机/平板浏览器「添加到主屏幕」后可全屏离线启动；离线时首页与静态资源走
+  缓存，**问答 API 与 SSE 永远走网络（不缓存）**；静态资源更新需递增
+  `sw.js` 中 `CACHE` 版本号。
 - 一键复制：问题块右下角「⧉ 复制」复制问题原文；答案状态行右侧「⧉ 复制」
   复制答案原文（生成中可复制已出内容），点击后短暂显示「✔ 已复制」。
 - 底部：当前会话协议徽标 + 提问框（Enter 发送 / Shift+Enter 换行）+ 发送 / 停止。
@@ -187,7 +191,7 @@ npm test           # node tests/run_tests.js
 - `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
   SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**79 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**84 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。

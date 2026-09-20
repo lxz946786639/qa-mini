@@ -138,6 +138,8 @@ try {
 } catch {}
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", themeMode);
+  const mt = $("meta-theme");
+  if (mt) mt.setAttribute("content", themeMode === "dark" ? "#0f1216" : "#f2f4f7");
   const b = $("btn-theme");
   if (b) {
     b.textContent = themeMode === "dark" ? "☀️" : "🌙";
@@ -341,7 +343,8 @@ function updateComposerProto() {
 
 function renderSessionView(session, running) {
   const sid = session.id;
-  chatEl.innerHTML = "";
+  // 只清除卡片，保留静态空态提示（innerHTML 清空会把 #empty-hint 销毁，导致空会话不再显示提示）
+  chatEl.querySelectorAll(".card").forEach((el) => el.remove());
   for (const m of sessionCards.values()) m.clear();
   const items = (session.history || []).slice().reverse();
   for (const it of items) {
@@ -366,7 +369,12 @@ function renderSessionView(session, running) {
     renderCard(st);
     lastActive.set(sid, rec.id);
   }
-  if (!items.length && !(running || []).length) emptyHint.classList.remove("hidden");
+  const is_empty = !items.length && !(running || []).length;
+  emptyHint.classList.toggle("hidden", !is_empty);
+  if (is_empty) {
+    $("hint-proto").textContent = "当前协议：" + (PROTOCOL_NAMES[session.protocol] || session.protocol)
+      + " · 会话ID " + session.id + " · 连接状态见左下角";
+  }
   scrollToBottom(true);
 }
 
@@ -880,6 +888,13 @@ document.addEventListener("DOMContentLoaded", () => {
       for (const p of document.querySelectorAll(".cfg-panel")) {
         p.classList.toggle("hidden", p.dataset.cfgtab !== name);
       }
+    });
+  }
+
+  // PWA：注册 service worker（离线外壳；/api 与 SSE 在 sw.js 中直通网络不缓存）
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
     });
   }
 });
