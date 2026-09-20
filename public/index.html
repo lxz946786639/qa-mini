@@ -162,16 +162,16 @@
   </div>
   <div class="cfg-tabs" role="tablist">
     <span class="cfg-group-label">协议配置</span>
-    <button class="cfg-tab active" data-cfgtab="openai" type="button">OpenAI</button>
+    <button class="cfg-tab active" data-cfgtab="ragflow" type="button">知识引擎</button>
     <button class="cfg-tab" data-cfgtab="dify" type="button">编排引擎</button>
+    <button class="cfg-tab" data-cfgtab="openai" type="button">OpenAI</button>
     <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
-    <button class="cfg-tab" data-cfgtab="ragflow" type="button">知识引擎</button>
     <span class="cfg-divider" aria-hidden="true"></span>
     <span class="cfg-group-label">安全配置</span>
     <button class="cfg-tab" data-cfgtab="security" type="button">🔒 安全</button>
   </div>
   <div class="drawer-body">
-    <section class="cfg-panel" data-cfgtab="openai">
+    <section class="cfg-panel hidden" data-cfgtab="openai">
       <h3>OpenAI 兼容</h3>
       <label>接口地址（chat completions 完整地址）</label>
       <input id="cfg-openai-url" type="text" spellcheck="false">
@@ -198,7 +198,7 @@
       <label>请求体 JSON 模板 <small>（{question} / {context} 占位符）</small></label>
       <textarea id="cfg-generic-body" rows="3" spellcheck="false"></textarea>
     </section>
-    <section class="cfg-panel hidden" data-cfgtab="ragflow">
+    <section class="cfg-panel" data-cfgtab="ragflow">
       <h3>知识引擎</h3>
       <label>接口基址（如 http://host:9380/api/v1）</label>
       <input id="cfg-ragflow-url" type="text" spellcheck="false">

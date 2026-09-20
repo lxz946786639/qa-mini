@@ -533,12 +533,20 @@ input:focus, textarea:focus, select:focus {
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
 }
+/* 组标签：左侧强调色竖条 + 宽字距小字，明确为「分区标记」而非可点 tab */
 .cfg-group-label {
   flex: none;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
   color: var(--text-dim);
-  letter-spacing: 1px;
-  margin-right: 4px;
+  letter-spacing: 2px;
+  padding: 3px 8px 3px 7px;
+  border-left: 3px solid var(--accent);
+  margin-right: 2px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
 }
 .cfg-divider {
   flex: none;
