@@ -470,6 +470,13 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const txt = await r.text();
     assert.ok(txt.includes("qa-mini-v19"), "CACHE 版本常量");
   });
+  await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
+    const { spawnSync } = require("child_process");
+    for (const f of [path.join(ROOT, "public/app.js"), path.join(ROOT, "public/sw.js")]) {
+      const r = spawnSync(process.execPath, ["--check", f], { encoding: "utf8" });
+      assert.strictEqual(r.status, 0, "node --check " + path.basename(f) + "：" + (r.stderr || "").slice(0, 200));
+    }
+  });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {
       const r = await fetch(BASE + p);

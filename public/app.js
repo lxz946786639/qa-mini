@@ -244,7 +244,7 @@ function fmtTime(iso) {
 }
 
 function sourceBadge(source) {
-  if (source === "push") return '<span class="badge push">' + IC("i-mic") + "语音推送</span>';
+  if (source === "push") return '<span class="badge push">' + IC("i-mic") + '语音推送</span>';
   return '<span class="badge web">' + IC("i-message") + '网页</span>';
 }
 
