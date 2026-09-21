@@ -13,7 +13,8 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 ## 2. 硬性技术约束（违反即错）
 
 1. **零 npm 依赖**：只用 Node 内置模块（http/fs/crypto/path/node:sqlite）。
-   禁止 `npm install` 新包；前端禁止引入框架/构建步骤（public/ 纯静态三件套）。
+   禁止 `npm install` 新包；前端禁止引入框架/构建步骤（public/ 纯静态资源：
+   index.html / app.js / icons.svg / style.css）。
 2. **Node ≥ 18（建议 24）**：会话存储依赖 `node:sqlite`（DatabaseSync，
    同步 API）——不要改成异步驱动，不要引入 better-sqlite3。
 3. **SSE 事件必须带 `session_id`**：新增广播事件时同步前端 `app.js` 处理。
@@ -68,7 +69,7 @@ lib/config.js    配置 + SQLite 存储（唯一允许碰 data/ 文件的模块�
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 asr-tool 对齐
 lib/sse.js       QaError（协议错误载体）
-public/          纯静态前端：index.html / app.js / style.css
+public/          纯静态前端：index.html / app.js / icons.svg（图标 sprite）/ style.css
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml）
 doc/             项目文档（本规范守护对象）

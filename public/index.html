@@ -31,8 +31,8 @@
     <div class="side-head">
       <span class="side-title">会话列表</span>
       <span class="side-head-actions">
-        <button id="btn-new-session" class="btn primary side-new" title="新建会话（独立 token / 会话ID / 协议）">＋</button>
-        <button id="btn-close-sidebar" class="side-close" title="关闭会话列表">✕</button>
+        <button id="btn-new-session" class="btn primary side-new" title="新建会话（独立 token / 会话ID / 协议）"><svg class="icon"><use href="/icons.svg#i-plus"></use></svg></button>
+        <button id="btn-close-sidebar" class="side-close" title="关闭会话列表"><svg class="icon"><use href="/icons.svg#i-x"></use></svg></button>
       </span>
     </div>
     <div id="session-list"></div>
@@ -43,15 +43,15 @@
 
   <div class="main-col">
     <header>
-      <button id="btn-toggle-sidebar" title="收起 / 展开会话列表" aria-label="收起或展开会话列表">☰</button>
+      <button id="btn-toggle-sidebar" title="收起 / 展开会话列表" aria-label="收起或展开会话列表"><svg class="icon"><use href="/icons.svg#i-menu"></use></svg></button>
       <div class="title">
-        <span class="logo">QA</span>
+        <span class="logo"><svg class="logo-icon" aria-hidden="true"><use href="/icons.svg#i-bot"></use></svg></span>
         <span class="name">QA Mini</span>
         <span class="sub">asr-tool 语音问答 · 流式展示</span>
       </div>
       <div class="header-right">
         <span id="active-count" class="active-pill hidden"></span>
-        <button id="btn-theme" class="theme-btn" title="切换浅色 / 深色主题">☀︎</button>
+        <button id="btn-theme" class="theme-btn" title="切换浅色 / 深色主题"><svg class="icon"><use id="theme-use" href="/icons.svg#i-sun"></use></svg></button>
         <div class="font-ctl" title="问答字号（默认 / 大 / 自定义）">
           <select id="font-mode">
             <option value="default">字号：默认</option>
@@ -68,13 +68,13 @@
           </select>
         </div>
         <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / asr-tool 对接（/admin + 管理密码后可见）">会话设置</button>
-        <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）">⚙︎ 设置</button>
+        <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）"><svg class="icon"><use href="/icons.svg#i-settings"></use></svg> 设置</button>
       </div>
     </header>
 
     <main id="chat">
       <div id="empty-hint" class="empty-hint">
-        <div class="hint-big">问答</div>
+        <div class="hint-icons" aria-hidden="true"><svg class="icon"><use href="/icons.svg#i-bot"></use></svg><svg class="icon"><use href="/icons.svg#i-messages"></use></svg></div>
         <h3>本会话暂无问答</h3>
         <p>在下方输入问题，按 <code>Enter</code> 发送，答案实时流式显示；<br>
            或用 <b>asr-tool 推送模式</b>把语音识别结果自动推送到本会话。</p>
@@ -91,13 +91,13 @@
           <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
           <div class="composer-actions">
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
-            <button id="btn-send" class="btn primary">发送</button>
+            <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>
         </div>
       </div>
     </footer>
 
-    <button id="btn-to-latest" class="to-latest hidden" title="回到最新内容">↓ 最新</button>
+    <button id="btn-to-latest" class="to-latest hidden" title="回到最新内容"><svg class="icon"><use href="/icons.svg#i-arrow-down"></use></svg>最新</button>
   </div>
 </div>
 
@@ -105,7 +105,7 @@
 <aside id="session-drawer" class="drawer hidden">
   <div class="drawer-head">
     <h2>会话设置</h2>
-    <button id="btn-close-session-drawer" class="btn">✕</button>
+    <button id="btn-close-session-drawer" class="btn"><svg class="icon"><use href="/icons.svg#i-x"></use></svg></button>
   </div>
   <div class="drawer-body">
     <label>会话名称</label>
@@ -153,8 +153,8 @@
 <!-- 协议配置（全局，所有会话共用） -->
 <aside id="settings" class="drawer hidden">
   <div class="drawer-head">
-    <h2>⚙︎ 设置</h2>
-    <button id="btn-close-settings" class="btn">✕</button>
+    <h2><svg class="icon"><use href="/icons.svg#i-settings"></use></svg> 设置</h2>
+    <button id="btn-close-settings" class="btn"><svg class="icon"><use href="/icons.svg#i-x"></use></svg></button>
   </div>
   <div id="settings-loading" class="drawer-loading hidden">
     <div class="spin" aria-hidden="true"></div>
@@ -168,7 +168,7 @@
     <button class="cfg-tab" data-cfgtab="generic" type="button">通用</button>
     <span class="cfg-divider" aria-hidden="true"></span>
     <span class="cfg-group-label">安全配置</span>
-    <button class="cfg-tab" data-cfgtab="security" type="button">安全</button>
+    <button class="cfg-tab" data-cfgtab="security" type="button"><svg class="icon"><use href="/icons.svg#i-lock"></use></svg> 安全</button>
   </div>
   <div class="drawer-body">
     <section class="cfg-panel hidden" data-cfgtab="openai">
@@ -210,7 +210,7 @@
     <section class="cfg-panel hidden" data-cfgtab="security">
       <div class="sec-wrap">
         <div class="sec-card">
-          <h3 class="sec-title">匿名访问</h3>
+          <h3 class="sec-title"><svg class="icon"><use href="/icons.svg#i-globe"></use></svg> 匿名访问</h3>
           <label class="check-line sec-check">
             <input type="checkbox" id="cfg-sec-anonymous">
             <span class="sec-check-txt">开放匿名访问<small>切换即时生效；关闭后打开应用需输入 6 位访问码</small></span>
@@ -218,7 +218,7 @@
         </div>
         <div class="sec-card">
           <div class="sec-card-head">
-            <h3 class="sec-title">访问码</h3>
+            <h3 class="sec-title"><svg class="icon"><use href="/icons.svg#i-ticket"></use></svg> 访问码</h3>
             <button id="btn-clean-codes" class="btn ghost" type="button">清理已过期</button>
           </div>
           <p class="sec-desc">可生成多个，每个码独立设置有效时长；支持延期、一键失效。</p>
@@ -247,7 +247,7 @@
           <p class="sec-hint">数量仅对随机码生效（自定义码固定生成 1 个），单次最多 10 个。</p>
         </div>
         <div class="sec-card">
-          <h3 class="sec-title">管理密码</h3>
+          <h3 class="sec-title"><svg class="icon"><use href="/icons.svg#i-key"></use></svg> 管理密码</h3>
           <p class="sec-desc">只有经 <code>/admin</code> 输入管理密码的用户，才能看到右上角「会话设置 / ⚙︎ 设置」。</p>
           <div class="sec-pw-row">
             <input id="cfg-sec-adminpw" type="password" spellcheck="false" placeholder="输入新管理密码（4-64 位）">
@@ -267,7 +267,7 @@
 <!-- 门禁：管理密码（/admin） -->
 <div id="admin-gate" class="gate hidden">
   <div class="gate-box">
-    <h2>管理员登录</h2>
+    <h2><svg class="icon gate-icon"><use href="/icons.svg#i-lock"></use></svg> 管理员登录</h2>
     <p id="admin-gate-hint">输入管理密码后，右上角显示「会话设置 / ⚙︎ 设置」</p>
     <form id="admin-gate-form">
       <input id="admin-pw" type="password" placeholder="管理密码" autocomplete="current-password" required>
@@ -279,7 +279,7 @@
 <!-- 门禁：访问码（关闭匿名访问时） -->
 <div id="access-gate" class="gate hidden">
   <div class="gate-box">
-    <h2>访问码</h2>
+    <h2><svg class="icon gate-icon"><use href="/icons.svg#i-key"></use></svg> 访问码</h2>
     <p>本应用已关闭匿名访问，请输入管理员发放的 6 位访问码</p>
     <form id="access-gate-form">
       <input id="access-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位访问码" required>

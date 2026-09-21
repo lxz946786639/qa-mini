@@ -6,6 +6,9 @@
 //  - 内置极简 Markdown 渲染（先转义再应用子集，防 XSS）
 
 // ---------- Markdown ----------
+// 轻量 SVG 图标（自托管 sprite /icons.svg，Lucide 风格 2px 描边）
+const IC = (id, cls) =>
+  '<svg class="icon' + (cls ? " " + cls : "") + '" aria-hidden="true"><use href="/icons.svg#' + id + '"></use></svg>';
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -219,7 +222,8 @@ function applyTheme() {
   if (mt) mt.setAttribute("content", themeMode === "dark" ? "#0f1216" : "#f2f4f7");
   const b = $("btn-theme");
   if (b) {
-    b.textContent = themeMode === "dark" ? "☀︎" : "☾";
+    const u = b.querySelector("use");
+    if (u) u.setAttribute("href", themeMode === "dark" ? "/icons.svg#i-sun" : "/icons.svg#i-moon");
     b.title = themeMode === "dark" ? "切换到浅色主题" : "切换到深色主题";
   }
 }
@@ -240,8 +244,8 @@ function fmtTime(iso) {
 }
 
 function sourceBadge(source) {
-  if (source === "push") return '<span class="badge push">语音推送</span>';
-  return '<span class="badge web">网页</span>';
+  if (source === "push") return '<span class="badge push">' + IC("i-mic") + "语音推送</span>';
+  return '<span class="badge web">' + IC("i-message") + '网页</span>';
 }
 
 // ---------- 问答字号（默认 / 大 / 自定义，本地持久化） ----------
@@ -305,15 +309,15 @@ function makeCard(sid, opts) {
         sourceBadge(opts.source) +
         '<span class="badge proto">' + escapeHtml(opts.protocolName || opts.protocol || "") + "</span>" +
         '<span class="time">' + fmtTime(opts.ts) + "</span>" +
-        '<button class="mini-del hidden" title="删除这条记录">删</button>' +
-        '<button class="mini-stop hidden" title="停止生成">✕</button>' +
+        '<button class="mini-del hidden" title="删除这条记录">' + IC("i-trash") + '</button>' +
+        '<button class="mini-stop hidden" title="停止生成">' + IC("i-stop") + '</button>' +
       "</span>" +
-      '<button class="copy-btn" title="复制问题">⧉ 复制</button>' +
+      '<button class="copy-btn" title="复制问题">' + IC("i-copy") + ' 复制</button>' +
     "</div>" +
     '<div class="card-a">' +
       '<div class="a-head"><span class="a-tag">答</span></div>' +
       '<div class="a-body"></div>' +
-      '<span class="status status-running"><span class="status-text">生成中…</span><button class="copy-btn hidden" title="复制答案">⧉ 复制</button></span>' +
+      '<span class="status status-running"><span class="status-text">生成中…</span><button class="copy-btn hidden" title="复制答案">' + IC("i-copy") + ' 复制</button></span>' +
     "</div>";
   chatEl.appendChild(el);
   const state = {
@@ -409,7 +413,7 @@ function finalizeCard(sid, id, ok, detail, dur) {
   if (!st) return;
   stopTicker(st);
   st.statusEl.className = "status " + (ok ? "status-ok" : "status-err");
-  st.statusTextEl.textContent = (ok ? "✔ " : "✘ ") + detail + (dur != null ? " · " + dur + "s" : "");
+  st.statusTextEl.innerHTML = IC("i-" + (ok ? "check" : "xmark"), "st-" + (ok ? "ok" : "err")) + escapeHtml(detail) + (dur != null ? escapeHtml(" · " + dur + "s") : "");
   st.stopBtn.classList.add("hidden");
   st.delBtn.classList.remove("hidden");
   renderCard(st);
@@ -477,8 +481,7 @@ function renderSessionView(session, running) {
     });
     st.raw = it.answer;
     st.statusEl.className = "status " + (it.ok ? "status-ok" : "status-err");
-    st.statusTextEl.textContent = (it.ok ? "✔ " : "✘ ") + it.detail
-      + (it.duration_s != null ? " · " + it.duration_s + "s" : "");
+    st.statusTextEl.innerHTML = IC("i-" + (it.ok ? "check" : "xmark"), "st-" + (it.ok ? "ok" : "err")) + escapeHtml(it.detail) + (it.duration_s != null ? escapeHtml(" · " + it.duration_s + "s") : "");
     st.stopBtn.classList.add("hidden");
     st.delBtn.classList.remove("hidden");
     renderCard(st);
@@ -603,14 +606,14 @@ async function sendQuestion() {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       st.statusEl.className = "status status-err";
-      st.statusTextEl.textContent = "✘ " + (data.detail || ("HTTP " + resp.status));
+    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml(data.detail || ("HTTP " + resp.status));
       st.stopBtn.classList.add("hidden");
       drop();
       updateActiveCount();
     }
   } catch (err) {
     st.statusEl.className = "status status-err";
-    st.statusTextEl.textContent = "✘ 网络错误: " + err.message;
+    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml("网络错误: " + err.message);
     st.stopBtn.classList.add("hidden");
     drop();
     updateActiveCount();
@@ -789,10 +792,10 @@ function wireCopyBtn(btn, getText) {
     if (!text) { showToast("暂无可复制内容", 1500); return; }
     const done = () => {
       btn.classList.add("copied");
-      btn.textContent = "✔ 已复制";
+      btn.innerHTML = IC("i-check") + " 已复制";
       setTimeout(() => {
         btn.classList.remove("copied");
-        btn.textContent = "⧉ 复制";
+        btn.innerHTML = IC("i-copy") + " 复制";
       }, 1400);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) {
