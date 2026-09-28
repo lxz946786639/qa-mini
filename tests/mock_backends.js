@@ -166,6 +166,11 @@ function ragflowServer() {
         return res.end(JSON.stringify({ code: 102, message: "not found" }));
       }
       m.sessionsCalls = (m.sessionsCalls || 0) + 1;
+      // 记录会话归属（chat_id → Set<session_id>），/chat/completions 校验归属
+      const cid = url.match(/^\/api\/v1\/chats\/([^/]+)\/sessions$/)[1];
+      m.created = m.created || {};
+      m.created[cid] = m.created[cid] || new Set();
+      m.created[cid].add("sess-1");
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ code: 0, message: "", data: { id: "sess-1", name: body.name || "qa-mini" } }));
     }
@@ -174,6 +179,12 @@ function ragflowServer() {
       if ((m.mode || "new") === "legacy") {
         res.writeHead(404, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ code: 102, message: "route not found" }));
+      }
+      // 会话不属于该 chat → 纯 JSON 错误（HTTP 200，非 SSE），与真实 RAGFlow 一致
+      if (body.session_id && !((m.created || {})[String(body.chat_id || "")] || new Set()).has(String(body.session_id))) {
+        m.staleCalls = (m.staleCalls || 0) + 1;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ code: 102, message: "Session does not belong to this chat!" }));
       }
       const q = String(body.question || "");
       const env = (data) => "data: " + JSON.stringify({ code: 0, message: "", data });

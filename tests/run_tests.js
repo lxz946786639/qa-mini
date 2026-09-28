@@ -347,6 +347,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(MOCKS.ragflow.sessionsCalls, before);
     assert.strictEqual(MOCKS.ragflow.last.body.session_id, "sess-1");
   });
+  await test("ragflow: stale session（不属于该 chat）纯 JSON 错误 → 报错而非空回答", async () => {
+    const e = await firstError(streamRagflow(ragflowCfg, "hi", { sessionId: "stale-xyz" }));
+    assert.ok(e, "stale session 应报错");
+    assert.ok(String(e.detail || e.message).includes("belong"), e.detail || e.message);
+    assert.ok(MOCKS.ragflow.staleCalls >= 1, "mock 收到 stale 请求");
+  });
   await test("ragflow: 思考区跳过 + 多文档引用", async () => {
     const out = await drain(streamRagflow(ragflowCfg, "think 问题", {}));
     assert.strictEqual(out, "最终答案。" + "\n\n---\n**参考来源**：文档A.pdf");
@@ -1189,6 +1195,65 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", {}, "")).status, 401, "非管理 -> 401");
     // 恢复全局 ragflow（url/key/chat_id 全量还原）+ 清理会话
     assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+  await test("sessions: 会话级 chat_id 变更自动重置 ragflow 后端会话", async () => {
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
+    const c = await adminFetch("POST", "/api/sessions", { name: "stale-reset", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    const sid = c.data.session.id;
+    const r1 = await api("POST", "/api/chat", { session_id: sid, question: "q1" });
+    assert.strictEqual(r1.status, 202);
+    const rec1 = await waitDone(r1.data.qa_id);
+    assert.strictEqual(rec1.ok, true, rec1.detail);
+    const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
+    // 会话级 chat_id 变更 → 后端会话重置
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { ragflow: { chat_id: "C8" } } }, adminTok)).status, 200);
+    const d2 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(d2.data.session.ragflow_session_id, "", "chat_id 变更后 ragflow_session_id 被清空");
+    // 新 chat 下重新提问 → 建新会话并正常
+    const r2 = await api("POST", "/api/chat", { session_id: sid, question: "q2" });
+    const rec2 = await waitDone(r2.data.qa_id);
+    assert.strictEqual(rec2.ok, true, rec2.detail);
+    const d3 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.ok(d3.data.session.ragflow_session_id, "新 chat 会话已保存");
+    // 协议切换也重置
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol: "openai" }, adminTok)).status, 200);
+    const d4 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(d4.data.session.ragflow_session_id, "", "协议切换后清空");
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+  await test("sessions: 全局 ragflow 配置变更重置回退全局会话的后端会话", async () => {
+    const c = await adminFetch("POST", "/api/sessions", { name: "global-reset", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    const sid = c.data.session.id;
+    const r1 = await api("POST", "/api/chat", { session_id: sid, question: "q1" });
+    const rec1 = await waitDone(r1.data.qa_id);
+    assert.strictEqual(rec1.ok, true, rec1.detail);
+    const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
+    // 改全局 chat_id（该会话无覆盖 → 生效值变化）→ 重置
+    const cp = await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C8" } } }, adminTok);
+    assert.strictEqual(cp.status, 200);
+    const d2 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(d2.data.session.ragflow_session_id, "", "全局 chat_id 变更后被清空");
+    assert.strictEqual(typeof cp.data.invalidated_sessions, "number", "响应带 invalidated_sessions");
+    // 该会话加覆盖（C9）→ 不受全局变更影响
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { ragflow: { chat_id: "C9" } } }, adminTok)).status, 200);
+    const r2 = await api("POST", "/api/chat", { session_id: sid, question: "q2" });
+    const rec2 = await waitDone(r2.data.qa_id);
+    assert.strictEqual(rec2.ok, true, rec2.detail);
+    const d3 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    const sid3 = d3.data.session.ragflow_session_id;
+    assert.ok(sid3, "覆盖会话提问正常");
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C7" } } }, adminTok)).status, 200);
+    const d4 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(d4.data.session.ragflow_session_id, sid3, "有覆盖的会话不受全局变更影响");
+    // 恢复全局 + 清理
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C9" } } }, adminTok)).status, 200);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
   });
 

@@ -14,7 +14,7 @@ const crypto = require("crypto");
 
 const {
   loadConfig, saveConfig, validateConfig, deepMerge, PROTOCOLS,
-  loadSessions, saveSessions, sessionView
+  loadSessions, saveSessions, sessionView, resolveProtocolConfig
 } = require("./lib/config");
 const { SessionManager } = require("./lib/qa_runner");
 const { QaError } = require("./lib/sse");
@@ -451,9 +451,29 @@ async function handlePutConfig(req, res) {
   } catch (e) {
     return sendJSON(res, 500, { ok: false, detail: "配置保存失败: " + e.message });
   }
+  const prev = config;
   config = next;
+  // 全局协议配置变化 → 回退全局的会话（对应字段留空）后端上下文失效：
+  // ragflow 的 url/api_key/chat_id、dify 的 url/api_key 变化时清空会话后端会话 ID，
+  // 下次提问按新配置重建（否则旧会话不属于新 chat → RAGFlow 报错/空回答）
+  let invalidated = 0;
+  for (const s of manager.getSessions()) {
+    const p = s.protocol;
+    if (p !== "ragflow" && p !== "dify") continue;
+    const a = resolveProtocolConfig(s, prev, p);
+    const b = resolveProtocolConfig(s, next, p);
+    const sameStr = (x, y) => String(x || "") === String(y || "");
+    if (p === "ragflow" &&
+        (!sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key) || !sameStr(a.chat_id, b.chat_id))) {
+      if (s.ragflow_session_id) { s.ragflow_session_id = ""; invalidated++; }
+    }
+    if (p === "dify" && (!sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key))) {
+      if (s.dify_conversation_id) { s.dify_conversation_id = ""; invalidated++; }
+    }
+  }
+  if (invalidated) manager.save();
   broadcast("config", { ok: true, config: maskConfigForBroadcast(next) });
-  return sendJSON(res, 200, { ok: true, config: next });
+  return sendJSON(res, 200, { ok: true, config: next, invalidated_sessions: invalidated });
 }
 
 // ---- /api/status（公开，无敏感信息）----
