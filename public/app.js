@@ -1350,13 +1350,15 @@ $("font-mode").addEventListener("change", () => {
     fillSettingsForm(true);
   });
   $("btn-close-settings").addEventListener("click", () => $("settings").classList.add("hidden"));
-  // 点击抽屉外部自动收起（点击来自打开按钮的不处理，避免与打开动作冲突）
-  for (const [drawerId, openerSel] of [["#settings", "#btn-settings"], ["#session-drawer", "#btn-session"]]) {
+  // 点击抽屉外部自动收起（点击来自打开按钮的不处理，避免与打开动作冲突；
+  // 会话列表项点击视为相关区域：会话设置抽屉跟随刷新内容而非收起，见 switchSession）
+  for (const [drawerSel, openerSel] of [["#settings", "#btn-settings"], ["#session-drawer", "#btn-session"]]) {
     document.addEventListener("click", (e) => {
-      const dr = $(drawerId);
+      const dr = document.querySelector(drawerSel);
       if (!dr || dr.classList.contains("hidden")) return;
       if (dr.contains(e.target)) return;
       if (e.target instanceof Element && openerSel && e.target.closest(openerSel)) return;
+      if (drawerSel === "#session-drawer" && e.target instanceof Element && e.target.closest(".session-item")) return;
       dr.classList.add("hidden");
     });
   }
