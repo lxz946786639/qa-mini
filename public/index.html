@@ -136,12 +136,16 @@
         <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 asr-tool 的 body">重生成</button>
       </div>
 
-      <label>asr-tool 配置片段（config.toml · 推送模式，可直接粘贴）</label>
-      <textarea id="sd-snippet" rows="6" readonly class="mono"></textarea>
-      <div class="id-row"><button id="sd-copy-snippet" class="btn" type="button">复制片段</button></div>
-      <label>body 值（asr-tool 设置页「第三方接口 body」直接粘贴）</label>
-      <textarea id="sd-snippet-body" rows="2" readonly class="mono"></textarea>
-      <div class="id-row"><button id="sd-copy-body" class="btn" type="button">复制 body</button></div>
+      <div class="asr-fld">
+        <span>asr-tool 配置片段 <small>（config.toml · 推送模式，可直接粘贴）</small></span>
+        <button id="sd-copy-snippet" class="btn" type="button">复制</button>
+      </div>
+      <textarea id="sd-snippet" rows="6" readonly class="mono" aria-label="asr-tool 配置片段"></textarea>
+      <div class="asr-fld">
+        <span>body 值 <small>（asr-tool 设置页「第三方接口 body」直接粘贴）</small></span>
+        <button id="sd-copy-body" class="btn" type="button">复制</button>
+      </div>
+      <textarea id="sd-snippet-body" rows="2" readonly class="mono" aria-label="body 值"></textarea>
     </div>
 
     <div class="drawer-inline-actions">

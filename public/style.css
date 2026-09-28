@@ -650,6 +650,11 @@ input:focus, textarea:focus, select:focus {
 .asr-toggle[aria-expanded="true"] .icon { transform: rotate(90deg); }
 #sd-asr-extra { margin-top: 4px; }
 #sd-asr-extra label:first-child { margin-top: 12px; }
+/* asr-tool 只读字段：复制按钮与字段名同行（避免按钮孤立成行） */
+.asr-fld { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 3px; }
+.asr-fld span { font-size: 12px; color: var(--text-dim); }
+.asr-fld small { opacity: 0.7; }
+.asr-fld .btn { flex: 0 0 auto; padding: 3px 10px; font-size: 12px; }
 .drawer-inline-actions { margin-top: 16px; }
 .drawer-actions {
   display: flex; align-items: center; justify-content: flex-end; gap: 10px;
