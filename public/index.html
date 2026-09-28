@@ -119,25 +119,30 @@
     </select>
     <label class="chk"><input id="sd-continue" type="checkbox"> 提问续接本会话（语音追问带上下文）</label>
 
-    <label>会话 ID <small>（asr-tool 推送请求体需同时携带）</small></label>
-    <div class="id-row">
-      <input id="sd-session-id" type="text" readonly class="mono">
-      <button id="sd-copy-sid" class="btn" type="button">复制</button>
-    </div>
+    <button id="sd-asr-toggle" class="asr-toggle" type="button" aria-expanded="false" title="对接 asr-tool 推送模式时展开：会话 ID / 推送 token / config.toml 片段与 body 值">
+      <svg class="icon"><use href="/icons.svg#i-chevron-down"></use></svg> asr-tool 对接（推送模式）
+    </button>
+    <div id="sd-asr-extra" class="hidden">
+      <label>会话 ID <small>（asr-tool 推送请求体需同时携带）</small></label>
+      <div class="id-row">
+        <input id="sd-session-id" type="text" readonly class="mono">
+        <button id="sd-copy-sid" class="btn" type="button">复制</button>
+      </div>
 
-    <label>推送 token</label>
-    <div class="id-row">
-      <input id="sd-token" type="password" readonly class="mono">
-      <button id="sd-copy-token" class="btn" type="button">复制</button>
-      <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 asr-tool 的 body">重生成</button>
-    </div>
+      <label>推送 token</label>
+      <div class="id-row">
+        <input id="sd-token" type="password" readonly class="mono">
+        <button id="sd-copy-token" class="btn" type="button">复制</button>
+        <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 asr-tool 的 body">重生成</button>
+      </div>
 
-    <label>asr-tool 配置片段（config.toml · 推送模式，可直接粘贴）</label>
-    <textarea id="sd-snippet" rows="6" readonly class="mono"></textarea>
-    <div class="id-row"><button id="sd-copy-snippet" class="btn" type="button">复制片段</button></div>
-    <label>body 值（asr-tool 设置页「第三方接口 body」直接粘贴）</label>
-    <textarea id="sd-snippet-body" rows="2" readonly class="mono"></textarea>
-    <div class="id-row"><button id="sd-copy-body" class="btn" type="button">复制 body</button></div>
+      <label>asr-tool 配置片段（config.toml · 推送模式，可直接粘贴）</label>
+      <textarea id="sd-snippet" rows="6" readonly class="mono"></textarea>
+      <div class="id-row"><button id="sd-copy-snippet" class="btn" type="button">复制片段</button></div>
+      <label>body 值（asr-tool 设置页「第三方接口 body」直接粘贴）</label>
+      <textarea id="sd-snippet-body" rows="2" readonly class="mono"></textarea>
+      <div class="id-row"><button id="sd-copy-body" class="btn" type="button">复制 body</button></div>
+    </div>
 
     <div class="drawer-inline-actions">
       <button id="sd-reset" class="btn" type="button" title="清空该会话的后端对话上下文（等同 asr-tool「清空」），已显示记录保留">重置会话（清空后端上下文）</button>

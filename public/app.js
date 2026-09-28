@@ -680,6 +680,11 @@ function openSessionDrawer() {
   $("sd-snippet-body").value = asrBody(s);
   $("sd-save-state").textContent = "";
   $("sd-save-state").className = "save-state";
+  // asr-tool 对接区块每次「打开抽屉」时收起（打开状态下跟随切换刷新时保留用户当前展开状态）
+  if ($("session-drawer").classList.contains("hidden")) {
+    $("sd-asr-extra").classList.add("hidden");
+    $("sd-asr-toggle").setAttribute("aria-expanded", "false");
+  }
   $("session-drawer").classList.remove("hidden");
   // 会话设置需要推送 token：查看级视图剥离 token（防非管理端获取），
   // 本地摘要缺 token 时用管理视图补取一次详情
@@ -1344,6 +1349,11 @@ $("font-mode").addEventListener("change", () => {
   $("sd-copy-snippet").addEventListener("click", () => copyText($("sd-snippet").value, "asr-tool 配置片段已复制"));
   $("sd-copy-body").addEventListener("click", () => copyText($("sd-snippet-body").value, "body 值已复制"));
   $("sd-reset").addEventListener("click", resetCurrentSession);
+  // asr-tool 对接区块：默认收起，点击展开/折叠（会话设置表单对非 asr-tool 用户只保留 名称/协议/续接）
+  $("sd-asr-toggle").addEventListener("click", () => {
+    const nowHidden = $("sd-asr-extra").classList.toggle("hidden");
+    $("sd-asr-toggle").setAttribute("aria-expanded", String(!nowHidden));
+  });
   $("sd-delete").addEventListener("click", deleteCurrentSession);
   $("btn-settings").addEventListener("click", async () => {
     $("settings").classList.remove("hidden");
