@@ -18,6 +18,7 @@ const {
 } = require("./lib/config");
 const { SessionManager } = require("./lib/qa_runner");
 const { QaError } = require("./lib/sse");
+const { testProtocol } = require("./lib/protocol_test");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 
@@ -291,6 +292,32 @@ async function handleUpdateSession(req, res, id) {
   const s = manager.update(id, body);
   if (!s) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
   return sendJSON(res, 200, { ok: true, session: sessionView(s, 0, true) });
+}
+
+// ---- /api/sessions/:id/protocol-test：会话级协议配置「测试连接」 ----
+// body { protocol?, config? }：config = 表单当前草稿（含空串，空 = 回退全局）。
+// 用 全局×草稿 合并值探测后端（与提问前置校验同值）；返回 { ok, detail }（HTTP 恒 200，
+// ok=false 时 detail = 失败原因）；非法输入 400 / 会话不存在 404。
+async function handleProtocolTest(req, res, id) {
+  let body;
+  try {
+    body = await parseJSONBody(req);
+  } catch (e) {
+    return sendJSON(res, 400, { ok: false, detail: e.__badBody ? e.message : String(e.message || e) });
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
+  }
+  if (body.config !== undefined &&
+      (typeof body.config !== "object" || body.config === null || Array.isArray(body.config))) {
+    return sendJSON(res, 400, { ok: false, detail: "config 必须是对象（{ 字段: 值 }）" });
+  }
+  const s = manager.sessionById(id);
+  if (!s) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
+  const proto = typeof body.protocol === "string" ? body.protocol.trim() : s.protocol;
+  if (!PROTOCOLS.includes(proto)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + proto });
+  const r = await testProtocol(proto, config, body.config || {});
+  return sendJSON(res, 200, { ok: r.ok, detail: r.detail });
 }
 
 function handleDeleteSession(res, id) {
@@ -650,6 +677,11 @@ const server = http.createServer(async (req, res) => {
     if (mReset && req.method === "POST") {
       if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
       return handleResetSession(res, mReset[1]);
+    }
+    const mTest = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)\/protocol-test$/);
+    if (mTest && req.method === "POST") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handleProtocolTest(req, res, mTest[1]);
     }
     const mRec = p.match(/^\/api\/sessions\/([a-zA-Z0-9]+)\/history\/([a-zA-Z0-9]+)$/);
     if (mRec && req.method === "DELETE") {

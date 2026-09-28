@@ -635,10 +635,97 @@ function renderSessionProtoFields(s, protoOverride) {
     el.spellcheck = false;
     el.dataset.pf = field;
     el.value = typeof ov[field] === "string" ? ov[field] : "";
-    const gval = typeof g[field] === "string" ? g[field] : "";
-    el.placeholder = gval || "留空使用全局默认";
+    // 占位符不显示全局默认明文（避免密钥/地址明文暴露），仅提示全局侧是否已配置
+    const hasGlobal = typeof g[field] === "string" && g[field].trim() !== "";
+    el.placeholder = "留空使用全局默认（" + (hasGlobal ? "已配置" : "未配置") + "）";
     box.appendChild(el);
   }
+}
+
+// —— 会话级协议配置「测试连接」+ 保存门控 ——
+// 语义：当前协议的配置草稿与已保存值有差异（= 有修改）时，必须先测试通过才能保存；
+// 只改名称/协议选择等不涉及该协议配置修改的保存不受限。
+// sdProtoTested = { proto, key }：测试通过的草稿指纹（协议 + 各字段 trim 后非空值）
+let sdProtoTested = null;
+
+function protoFieldValues() {
+  const vals = {};
+  for (const el of $("sd-proto-fields").querySelectorAll("[data-pf]")) vals[el.dataset.pf] = el.value;
+  return vals;
+}
+
+function protoDraftKey(proto, vals) {
+  const parts = [];
+  for (const [field] of PROTO_FIELD_DEFS[proto] || []) {
+    const v = typeof vals[field] === "string" ? vals[field].trim() : "";
+    if (v) parts.push(field + "=" + v);
+  }
+  return parts.join("|");
+}
+
+function protoDraftDirty(s, proto) {
+  if (!s) return false;
+  const saved = (s.protocol_config && s.protocol_config[proto]) || {};
+  return protoDraftKey(proto, protoFieldValues()) !== protoDraftKey(proto, saved);
+}
+
+function protoTested(proto) {
+  return !!(sdProtoTested && sdProtoTested.proto === proto &&
+    sdProtoTested.key === protoDraftKey(proto, protoFieldValues()));
+}
+
+function setProtoTestState(text, cls) {
+  const el = $("sd-proto-test-state");
+  el.textContent = text;
+  el.className = "save-state proto-test-state" + (cls ? " " + cls : "");
+}
+
+function refreshProtoTestGate() {
+  const s = curSession();
+  const saveBtn = $("sd-save");
+  if (!s || !saveBtn) return;
+  const proto = $("sd-protocol").value;
+  // 草稿含非空值（= 真正引入/修改覆盖）才需测试通过；全部清空（回退全局默认）无需测试
+  const blocked = protoDraftDirty(s, proto) && protoDraftKey(proto, protoFieldValues()) !== "" && !protoTested(proto);
+  saveBtn.disabled = blocked;
+  saveBtn.title = blocked ? "协议配置有修改，请先通过「测试连接」再保存" : "";
+  if (blocked) {
+    const st = $("sd-proto-test-state");
+    if (!st.classList.contains("ok") && !st.classList.contains("err")) {
+      setProtoTestState("修改后需测试通过才能保存", "warn");
+    }
+  }
+}
+
+async function testSessionProto() {
+  const s = curSession();
+  if (!s) return;
+  const proto = $("sd-protocol").value;
+  const pf = protoFieldValues();
+  const btn = $("sd-proto-test");
+  btn.disabled = true;
+  setProtoTestState("测试中…", "");
+  try {
+    const r = await api("POST", "/api/sessions/" + s.id + "/protocol-test",
+      { protocol: proto, config: pf }, { asAdmin: true });
+    if (r.status === 200 && r.data && typeof r.data.ok === "boolean") {
+      if (r.data.ok) {
+        setProtoTestState("连接正常", "ok");
+        sdProtoTested = { proto, key: protoDraftKey(proto, pf) };
+      } else {
+        setProtoTestState(r.data.detail || "测试失败", "err");
+        sdProtoTested = null;
+      }
+    } else {
+      setProtoTestState("测试失败: " + ((r.data && r.data.detail) || ("HTTP " + r.status)), "err");
+      sdProtoTested = null;
+    }
+  } catch (err) {
+    setProtoTestState("测试失败: " + err.message, "err");
+    sdProtoTested = null;
+  }
+  btn.disabled = false;
+  refreshProtoTestGate();
 }
 
 // ---------- 提问 / 取消 ----------
@@ -743,8 +830,11 @@ function openSessionDrawer() {
     $("sd-asr-toggle").setAttribute("aria-expanded", "false");
   }
   $("session-drawer").classList.remove("hidden");
-  // 协议配置字段：值 = 本会话覆盖，占位符 = 当前全局值（全局配置加载完成后刷新一次）
+  // 协议配置字段：值 = 本会话覆盖，占位符 = 全局是否已配置（全局配置加载完成后刷新一次）
   renderSessionProtoFields(s);
+  sdProtoTested = null;
+  setProtoTestState("", "");
+  refreshProtoTestGate();
   loadGlobalCfg().then(() => {
     if (curSession() === s && !$("session-drawer").classList.contains("hidden")) {
       renderSessionProtoFields(s, $("sd-protocol").value);
@@ -762,6 +852,8 @@ function openSessionDrawer() {
       $("sd-snippet").value = asrSnippet(s);
       $("sd-snippet-body").value = asrBody(s);
       renderSessionProtoFields(s, $("sd-protocol").value);
+      setProtoTestState("", "");
+      refreshProtoTestGate();
     }
   }).catch(() => {});
 }
@@ -769,6 +861,13 @@ function openSessionDrawer() {
 async function saveSessionDrawer() {
   const s = curSession();
   if (!s) return;
+  // 门控：当前协议的配置草稿有修改且未测试通过 → 拒绝保存
+  const protoNow0 = $("sd-protocol").value;
+  if (protoDraftDirty(s, protoNow0) && protoDraftKey(protoNow0, protoFieldValues()) !== "" && !protoTested(protoNow0)) {
+    setProtoTestState("协议配置有修改，请先测试", "err");
+    showToast("协议配置有修改，请先点「测试连接」并通过后再保存", 3000);
+    return;
+  }
   const state = $("sd-save-state");
   state.textContent = "保存中…";
   state.className = "save-state";
@@ -794,6 +893,8 @@ async function saveSessionDrawer() {
       s.continue_session = fresh.continue_session;
       s.token = fresh.token;
       s.protocol_config = fresh.protocol_config || {};
+      sdProtoTested = { proto: protoNow, key: protoDraftKey(protoNow, pf) };
+      setProtoTestState("", "");
       $("sd-name").value = fresh.name;
       $("sd-token").value = fresh.token;
       $("sd-session-id").value = fresh.id;
@@ -1413,6 +1514,13 @@ $("font-mode").addEventListener("change", () => {
   $("btn-session").addEventListener("click", openSessionDrawer);
   $("btn-close-session-drawer").addEventListener("click", () => $("session-drawer").classList.add("hidden"));
   $("sd-save").addEventListener("click", saveSessionDrawer);
+  $("sd-proto-test").addEventListener("click", testSessionProto);
+  // 协议配置任一字段输入 → 既有测试指纹失效（需重新测试）
+  $("sd-proto-fields").addEventListener("input", () => {
+    sdProtoTested = null;
+    if ($("sd-proto-test-state").classList.contains("ok")) setProtoTestState("", "");
+    refreshProtoTestGate();
+  });
   $("sd-regen-token").addEventListener("click", regenToken);
   $("sd-copy-sid").addEventListener("click", () => copyText($("sd-session-id").value, "会话 ID 已复制"));
   $("sd-copy-token").addEventListener("click", () => copyText($("sd-token").value, "token 已复制"));
@@ -1424,10 +1532,14 @@ $("font-mode").addEventListener("change", () => {
     const nowHidden = $("sd-asr-extra").classList.toggle("hidden");
     $("sd-asr-toggle").setAttribute("aria-expanded", String(!nowHidden));
   });
-  // 切换协议立即刷新协议配置字段（未保存前只改渲染，不落库）
+  // 切换协议立即刷新协议配置字段（未保存前只改渲染，不落库）；旧协议的测试结果作废
   $("sd-protocol").addEventListener("change", () => {
     const s = curSession();
-    if (s) renderSessionProtoFields(s, $("sd-protocol").value);
+    if (!s) return;
+    sdProtoTested = null;
+    renderSessionProtoFields(s, $("sd-protocol").value);
+    setProtoTestState("", "");
+    refreshProtoTestGate();
   });
   $("sd-delete").addEventListener("click", deleteCurrentSession);
   $("btn-settings").addEventListener("click", async () => {

@@ -522,7 +522,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v25"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v26"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -1138,6 +1138,57 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(rec.session_id, sid);
     // 恢复全局配置 + 清理会话
     assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+
+  await test("sessions: 协议配置测试连接 protocol-test（预检/合并/mock 全链路/脱敏）", async () => {
+    const pt = require("../lib/protocol_test");
+    // 单测：前置校验（不发请求）
+    assert.strictEqual((await pt.testProtocol("ragflow", { protocols: { ragflow: { url: "http://x", api_key: "", chat_id: "C" } } }, {})).detail, "未配置 API Key（知识引擎 API 密钥）");
+    assert.strictEqual((await pt.testProtocol("openai", { protocols: { openai: {} } }, {})).detail, "未配置接口地址");
+    assert.strictEqual((await pt.testProtocol("dify", { protocols: { dify: { url: "http://x" } } }, {})).detail, "未配置 API Key（编排引擎应用密钥）");
+    assert.strictEqual((await pt.testProtocol("ragflow", { protocols: { ragflow: { url: "http://x", api_key: "k" } } }, {})).detail, "未配置知识引擎 Chat ID");
+    assert.ok((await pt.testProtocol("generic", { protocols: { generic: { url: "http://x" } } }, { body: "{bad json" })).detail.includes("合法 JSON"));
+    assert.ok((await pt.testProtocol("generic", { protocols: { generic: { url: "http://x" } } }, { body: "\"str\"" })).detail.includes("JSON 对象"));
+    // 单测：全局 × 草稿合并（空草稿回退全局、非空优先）
+    assert.deepStrictEqual(pt.mergedForTest("ragflow", { protocols: { ragflow: { url: "http://g", api_key: "gk", chat_id: "gc" } } }, { url: "", api_key: "sk" }),
+      { url: "http://g", api_key: "sk", chat_id: "gc" });
+    // mock 全链路：ragflow 探测（基址 /api/v1，key 校验，chat_id 命中）
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
+    const c = await adminFetch("POST", "/api/sessions", { name: "protocol-test", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    const sid = c.data.session.id;
+    const t1 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { config: {} }, adminTok);
+    assert.strictEqual(t1.status, 200);
+    assert.strictEqual(t1.data.ok, true, t1.data.detail);
+    assert.ok(MOCKS.ragflow.chatGetCalls >= 1, "mock 收到 /chats 探测");
+    assert.strictEqual(MOCKS.ragflow.lastChatGetId, "C9");
+    const t2 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { config: { api_key: "wrong-key" } }, adminTok);
+    assert.strictEqual(t2.data.ok, false);
+    assert.ok(t2.data.detail.includes("401"), t2.data.detail);
+    const t3 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { config: { api_key: "ragflow-key", chat_id: "CX" } }, adminTok);
+    assert.strictEqual(t3.data.ok, true, t3.data.detail);
+    assert.strictEqual(MOCKS.ragflow.lastChatGetId, "CX", "覆盖 chat_id 生效");
+    const t4 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { config: { url: "http://127.0.0.1:1/none" } }, adminTok);
+    assert.strictEqual(t4.data.ok, false);
+    assert.ok(t4.data.detail.includes("无法连接"), t4.data.detail);
+    // dify：缺 key 预检（先清空全局 key）/ 探测 /parameters
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { api_key: "" } } }, adminTok)).status, 200);
+    const t5 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { protocol: "dify", config: { url: "http://127.0.0.1:" + PORTS.dify } }, adminTok);
+    assert.strictEqual(t5.data.ok, false, "dify 缺 key 预检");
+    assert.ok(t5.data.detail.includes("API Key"), t5.data.detail);
+    const t6 = await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { protocol: "dify", config: { url: "http://127.0.0.1:" + PORTS.dify, api_key: "dify-key" } }, adminTok);
+    assert.strictEqual(t6.data.ok, true, t6.data.detail);
+    assert.ok(MOCKS.dify.paramCalls >= 1, "mock 收到 /parameters 探测");
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { api_key: "dify-key" } } }, adminTok)).status, 200, "恢复全局 dify key");
+    // 非法输入 / 鉴权
+    assert.strictEqual((await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { config: "x" }, adminTok)).status, 400, "config 非对象 -> 400");
+    assert.strictEqual((await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", { protocol: "nope" }, adminTok)).status, 400, "未知协议 -> 400");
+    assert.strictEqual((await adminFetch("POST", "/api/sessions/ffffffff/protocol-test", {}, adminTok)).status, 404, "会话不存在 -> 404");
+    assert.strictEqual((await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", {}, "")).status, 401, "非管理 -> 401");
+    // 恢复全局 ragflow（url/key/chat_id 全量还原）+ 清理会话
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
   });
 

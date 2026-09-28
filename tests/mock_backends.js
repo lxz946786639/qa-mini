@@ -1,9 +1,10 @@
 "use strict";
 // 本地 mock 协议服务（对齐 asr-tool tests/ 的 mock 思路）：
 //  18701 openai   — SSE delta 流 / text 兼容 / 500 / 非法 SSE / slow(keepalive) / stall(无 keepalive)
-//  18702 dify     — 全事件流 / conversation_id / error 事件 / 401 / 空 answer / slow
+//  18702 dify     — 全事件流 / conversation_id / error 事件 / 401 / 空 answer / slow / GET /parameters（探活）
 //  18703 ragflow  — 新路径 delta / 思考区 / 引用 / data:true；legacy 404 回退 + cumulative + ##0$$；
-//                   两步建会话 / no-sessions(404) / cumulative(新路径 legacy:true) / 500 / 401
+//                   两步建会话 / no-sessions(404) / cumulative(新路径 legacy:true) / 500 / 401 /
+//                   GET /chats/:id（探活）
 //  18704 generic  — SSE JSON / OpenAI 风格 / 纯文本 data / 单 JSON 文档 / 纯文本 / 500
 
 const http = require("http");
@@ -99,6 +100,11 @@ function difyServer() {
     if (auth !== "Bearer dify-key") {
       res.writeHead(401, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ code: "unauthorized", message: "API key is invalid" }));
+    }
+    if (req.url === "/parameters" || req.url.endsWith("/parameters")) {
+      MOCKS.dify.paramCalls = (MOCKS.dify.paramCalls || 0) + 1;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ user_required: true, file_upload: { enabled: false } }));
     }
     if (!req.url.endsWith("/chat-messages")) {
       res.writeHead(404, { "Content-Type": "application/json" });
@@ -204,6 +210,14 @@ function ragflowServer() {
         env({ reference: { doc_aggs: [{ doc_name: "文档A.pdf" }] } }),
         env(true)
       ], 5);
+    }
+
+    const chatMatch = url.match(/^\/api\/v1\/chats\/([^/]+)$/);
+    if (chatMatch) {
+      m.chatGetCalls = (m.chatGetCalls || 0) + 1;
+      m.lastChatGetId = chatMatch[1];
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ code: 0, message: "", data: { id: chatMatch[1], name: "test-chat" } }));
     }
 
     if (legacyMatch) {
