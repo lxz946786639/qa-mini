@@ -117,7 +117,11 @@ function setAuth(k, token, expiresAtIso) {
   try { localStorage.setItem(k, JSON.stringify({ token, expires_at: Date.parse(expiresAtIso) })); } catch {}
 }
 function viewerToken() {
-  return getAccessToken() || (ADMIN_ROUTE ? getAdminToken() : "");
+  // /admin 页优先用管理 token（viewerOk 明确接受，经 ?access= 承载）：
+  // 本地未过期但服务端已失效（如容器重启清空内存 token 表）的 access token
+  // 若抢先发送，会使查看级调用全部 403 → nudgeAuth 误弹管理员登录
+  if (ADMIN_ROUTE) return getAdminToken() || getAccessToken();
+  return getAccessToken();
 }
 let lastAuthNudge = 0;
 function nudgeAuth(isAdminCall) {
