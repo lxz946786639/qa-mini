@@ -518,6 +518,8 @@ async function switchSession(sid) {
   renderSessionList();
   updateComposerProto();
   updateActiveCount();
+  // 会话设置抽屉：打开状态下跟随会话切换同步刷新内容（保留点击外部收起）
+  if (!$("session-drawer").classList.contains("hidden")) openSessionDrawer();
   try {
     const r = await api("GET", "/api/sessions/" + sid);
     if (r.status === 200 && currentSid === sid) {
