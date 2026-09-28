@@ -117,6 +117,8 @@
       <option value="dify">编排引擎（对话流）</option>
       <option value="generic">generic · 第三方通用</option>
     </select>
+    <label>本会话协议配置 <small>（留空 = 用「⚙ 设置」的全局默认；占位符为当前全局值）</small></label>
+    <div id="sd-proto-fields"></div>
     <label class="chk"><input id="sd-continue" type="checkbox"> 提问续接本会话（语音追问带上下文）</label>
 
     <button id="sd-asr-toggle" class="asr-toggle" type="button" aria-expanded="false" title="对接 asr-tool 推送模式时展开：会话 ID / 推送 token / config.toml 片段与 body 值">

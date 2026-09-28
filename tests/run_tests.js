@@ -394,6 +394,60 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(e.detail.includes("未配置知识引擎 Chat ID"));
   });
 
+  await test("config: 会话级协议配置合并（会话覆盖全局、空值回退全局）", async () => {
+    const cfgmod = require(path.join(ROOT, "lib/config"));
+    const cfg = { protocols: { openai: { url: "g-url", api_key: "g-key", model: "g-model" } } };
+    const merged = cfgmod.resolveProtocolConfig({ protocol_config: { openai: { url: "s-url", api_key: "" } } }, cfg, "openai");
+    assert.strictEqual(merged.url, "s-url", "非空覆盖生效");
+    assert.strictEqual(merged.api_key, "g-key", "空值回退全局");
+    assert.strictEqual(merged.model, "g-model", "未提交字段沿用全局");
+    assert.deepStrictEqual(cfgmod.resolveProtocolConfig({}, cfg, "openai"), cfg.protocols.openai, "无覆盖 = 原样全局");
+    const sc = cfgmod.sanitizeProtocolConfig({ openai: { url: "  x  ", model: "m", unknown: 1 }, bogus: {} });
+    assert.strictEqual(sc.openai.url, "x", "trim");
+    assert.strictEqual(sc.openai.model, "m");
+    assert.ok(!("unknown" in sc.openai), "未知字段丢弃");
+    assert.ok(!("bogus" in sc), "未知协议丢弃");
+    assert.deepStrictEqual(cfgmod.sanitizeProtocolConfig({ openai: { url: "" } }).openai, {}, "全空 = 清除该协议覆盖");
+    assert.strictEqual(cfgmod.sanitizeProtocolConfig([1]), null);
+    assert.strictEqual(cfgmod.sanitizeProtocolConfig("x"), null);
+  });
+
+  await test("config: 旧库迁移补 protocol_config 列（数据保留）", async () => {
+    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "qa-mini-mig-"));
+    const { DatabaseSync } = require("node:sqlite");
+    const oldDb = new DatabaseSync(path.join(mdir, "qa-mini.db"));
+    oldDb.exec(
+      "CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL, protocol TEXT NOT NULL," +
+      "  continue_session INTEGER NOT NULL DEFAULT 1, dify_conversation_id TEXT NOT NULL DEFAULT ''," +
+      "  ragflow_session_id TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, pos INTEGER NOT NULL DEFAULT 0);"
+    );
+    oldDb.exec(
+      "CREATE TABLE records (seq INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, id TEXT NOT NULL," +
+      "  question TEXT NOT NULL, answer TEXT NOT NULL DEFAULT '', protocol TEXT NOT NULL DEFAULT ''," +
+      "  protocol_name TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', started_at TEXT NOT NULL DEFAULT ''," +
+      "  ok INTEGER NOT NULL DEFAULT 1, detail TEXT NOT NULL DEFAULT '', UNIQUE (session_id, id));"
+    );
+    oldDb.exec(
+      "INSERT INTO sessions (id, name, token, protocol, continue_session, created_at, updated_at, pos)" +
+      " VALUES ('old1', '旧会话', 'kaasr_old123', 'openai', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0)"
+    );
+    oldDb.close();
+    const prevDataDir = process.env.QA_MINI_DATA_DIR;
+    process.env.QA_MINI_DATA_DIR = mdir;
+    try {
+      const cfgmod = require(path.join(ROOT, "lib/config"));
+      const { sessions } = cfgmod.loadSessions(null);
+      assert.strictEqual(sessions.length, 1);
+      assert.strictEqual(sessions[0].id, "old1");
+      assert.strictEqual(sessions[0].name, "旧会话");
+      assert.strictEqual(sessions[0].token, "kaasr_old123", "旧行数据保留");
+      assert.deepStrictEqual(sessions[0].protocol_config, {}, "迁移后默认空覆盖");
+    } finally {
+      process.env.QA_MINI_DATA_DIR = prevDataDir;
+      try { fs.rmSync(mdir, { recursive: true, force: true }); } catch {}
+    }
+  });
+
   // ---------- [2] 服务器 API（多会话） ----------
   console.log("\n[2] 服务器 API 全链路（多会话）");
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qa-mini-test-"));
@@ -468,7 +522,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v24"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v25"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -1033,6 +1087,60 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const f2 = await adminFetch("GET", "/api/sessions/" + id, undefined, adminTok);
     assert.ok(String(f2.data.session.token).startsWith("kaasr_"));
   });
+
+  await test("sessions: 会话级协议配置 保存/剥离/清除/非法 400", async () => {
+    const c = await adminFetch("POST", "/api/sessions", { name: "协议配置测试", protocol: "openai" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    const sid = c.data.session.id;
+    const p1 = await adminFetch("PUT", "/api/sessions/" + sid, {
+      protocol_config: { openai: { url: "http://127.0.0.1:1/c2", api_key: "   ", model: "sess-model", unknown: 9 } }
+    }, adminTok);
+    assert.strictEqual(p1.status, 200);
+    const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(d1.status, 200);
+    assert.strictEqual(d1.data.session.protocol_config.openai.url, "http://127.0.0.1:1/c2");
+    assert.strictEqual(d1.data.session.protocol_config.openai.model, "sess-model");
+    assert.ok(!("api_key" in d1.data.session.protocol_config.openai), "空值不存储（回退全局）");
+    assert.ok(!("unknown" in d1.data.session.protocol_config.openai), "未知字段被清洗");
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: [1] }, adminTok)).status, 400, "数组 -> 400");
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: "x" }, adminTok)).status, 400, "字符串 -> 400");
+    const anon = await api("GET", "/api/sessions/" + sid);
+    assert.strictEqual(anon.status, 200);
+    assert.ok(!("protocol_config" in anon.data.session), "非管理视图剥离 protocol_config");
+    assert.ok(!("token" in anon.data.session));
+    const p2 = await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { openai: {} } }, adminTok);
+    assert.strictEqual(p2.status, 200);
+    assert.deepStrictEqual(p2.data.session.protocol_config.openai, {}, "空对象 = 清除该协议覆盖");
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+  await test("sessions: 会话级配置运行时生效（覆盖优于全局；前置校验用合并值）", async () => {
+    // 全局 ragflow 临时改为错误 key + 空 chat_id；本会话用覆盖值（正确 key + C9）
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { api_key: "wrong-key", chat_id: "" } } }, adminTok)).status, 200);
+    const c = await adminFetch("POST", "/api/sessions", { name: "运行时覆盖", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(c.status, 201);
+    const sid = c.data.session.id;
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, {
+      protocol_config: { ragflow: { api_key: "ragflow-key", chat_id: "C9" } }
+    }, adminTok)).status, 200);
+    // 无覆盖会话：合并后 chat_id 仍为空 -> 前置校验 400
+    const list = await api("GET", "/api/sessions");
+    const other = list.data.sessions.find((s) => s.id !== sid && s.protocol === "ragflow");
+    assert.ok(other, "需存在另一个 ragflow 会话");
+    const rBad = await api("POST", "/api/chat", { session_id: other.id, question: "hi" });
+    assert.strictEqual(rBad.status, 400, "无覆盖会话应被前置校验拦截");
+    assert.ok(rBad.data.detail.includes("Chat ID"), rBad.data.detail);
+    // 有覆盖会话：合并后 key/chat_id 齐全 -> 全链路成功
+    const rOk = await api("POST", "/api/chat", { session_id: sid, question: "覆盖问题" });
+    assert.strictEqual(rOk.status, 202);
+    const rec = await waitDone(rOk.data.qa_id);
+    assert.strictEqual(rec.ok, true, rec.detail);
+    assert.strictEqual(rec.session_id, sid);
+    // 恢复全局配置 + 清理会话
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
 
   // 收尾
   await new Promise((resolve) => {

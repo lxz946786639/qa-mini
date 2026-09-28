@@ -284,6 +284,10 @@ async function handleUpdateSession(req, res, id) {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
   }
+  if (body.protocol_config !== undefined &&
+      (typeof body.protocol_config !== "object" || body.protocol_config === null || Array.isArray(body.protocol_config))) {
+    return sendJSON(res, 400, { ok: false, detail: "protocol_config 必须是对象（按协议分组：{ 协议: { 字段: 值 } }）" });
+  }
   const s = manager.update(id, body);
   if (!s) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
   return sendJSON(res, 200, { ok: true, session: sessionView(s, 0, true) });

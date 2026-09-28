@@ -96,6 +96,29 @@ const sessionCards = new Map();        // sid -> Map<qaId, state>（当前视图
 const pendingLocals = [];              // 乐观卡片（仅当前会话）[{sid, state}]
 const lastActive = new Map();          // sid -> 最近一次 qa id
 const PROTOCOL_NAMES = { openai: "OpenAI 兼容", dify: "编排引擎", generic: "第三方通用", ragflow: "知识引擎" };
+// 会话级协议配置字段（顺序/文案与「⚙ 设置」抽屉一致）：[字段, 标签]，字段名与全局 protocols[协议] 同构
+const PROTO_FIELD_DEFS = {
+  openai: [
+    ["url", "接口地址（chat completions 完整地址）"],
+    ["api_key", "API Key"],
+    ["model", "模型（可空）"]
+  ],
+  dify: [
+    ["url", "接口基址（如 http://host/v1）"],
+    ["api_key", "API Key（app-xxx，必填）"],
+    ["user", "user 标识"]
+  ],
+  generic: [
+    ["url", "目标接口完整地址"],
+    ["api_key", "API Key（可空）"],
+    ["body", "请求体 JSON 模板（{question} / {context} 占位符）"]
+  ],
+  ragflow: [
+    ["url", "接口基址（如 http://host:9380/api/v1）"],
+    ["api_key", "API Key（必填）"],
+    ["chat_id", "Chat ID（必填）"]
+  ]
+};
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function $(id) { return document.getElementById(id); }
@@ -584,6 +607,40 @@ async function api(method, p, body, opts) {
   return { status: resp.status, data };
 }
 
+// 全局配置（管理视图）缓存：会话抽屉的协议配置字段用其值作占位符（当前全局默认）
+let globalCfgCache = null;
+async function loadGlobalCfg() {
+  if (globalCfgCache) return globalCfgCache;
+  const r = await api("GET", "/api/config", undefined, { asAdmin: true });
+  if (r.status !== 200 || !r.data) throw new Error("HTTP " + r.status);
+  globalCfgCache = r.data;
+  return r.data;
+}
+
+// 会话抽屉：渲染协议配置覆盖字段（值 = 本会话覆盖；占位符 = 全局默认；留空保存 = 回退全局）
+function renderSessionProtoFields(s, protoOverride) {
+  const box = $("sd-proto-fields");
+  if (!box || !s) return;
+  const proto = protoOverride || s.protocol;
+  const g = (globalCfgCache && globalCfgCache.protocols && globalCfgCache.protocols[proto]) || {};
+  const ov = (s.protocol_config && s.protocol_config[proto]) || {};
+  box.textContent = "";
+  for (const [field, label] of PROTO_FIELD_DEFS[proto] || []) {
+    const lab = document.createElement("label");
+    lab.textContent = label;
+    box.appendChild(lab);
+    let el;
+    if (field === "body") { el = document.createElement("textarea"); el.rows = 3; }
+    else { el = document.createElement("input"); el.type = field === "api_key" ? "password" : "text"; }
+    el.spellcheck = false;
+    el.dataset.pf = field;
+    el.value = typeof ov[field] === "string" ? ov[field] : "";
+    const gval = typeof g[field] === "string" ? g[field] : "";
+    el.placeholder = gval || "留空使用全局默认";
+    box.appendChild(el);
+  }
+}
+
 // ---------- 提问 / 取消 ----------
 async function sendQuestion() {
   const q = $("question").value.trim();
@@ -686,20 +743,27 @@ function openSessionDrawer() {
     $("sd-asr-toggle").setAttribute("aria-expanded", "false");
   }
   $("session-drawer").classList.remove("hidden");
-  // 会话设置需要推送 token：查看级视图剥离 token（防非管理端获取），
-  // 本地摘要缺 token 时用管理视图补取一次详情
-  if (!s.token) {
-    api("GET", "/api/sessions/" + s.id, undefined, { asAdmin: true }).then((r) => {
-      const fresh = r.status === 200 && r.data && r.data.session;
-      if (fresh && fresh.token && curSession() === s) {
-        s.token = fresh.token;
-        sessions.set(s.id, s);
-        $("sd-token").value = fresh.token;
-        $("sd-snippet").value = asrSnippet(s);
-        $("sd-snippet-body").value = asrBody(s);
-      }
-    });
-  }
+  // 协议配置字段：值 = 本会话覆盖，占位符 = 当前全局值（全局配置加载完成后刷新一次）
+  renderSessionProtoFields(s);
+  loadGlobalCfg().then(() => {
+    if (curSession() === s && !$("session-drawer").classList.contains("hidden")) {
+      renderSessionProtoFields(s, $("sd-protocol").value);
+    }
+  }).catch(() => {});
+  // 会话设置需要推送 token + 会话级协议配置：查看级视图剥离二者（防非管理端获取），
+  // 用管理视图补取一次详情，保证抽屉内值始终最新
+  api("GET", "/api/sessions/" + s.id, undefined, { asAdmin: true }).then((r) => {
+    const fresh = r.status === 200 && r.data && r.data.session;
+    if (fresh && curSession() === s && !$("session-drawer").classList.contains("hidden")) {
+      s.token = fresh.token || s.token;
+      s.protocol_config = fresh.protocol_config || {};
+      sessions.set(s.id, s);
+      $("sd-token").value = s.token || "";
+      $("sd-snippet").value = asrSnippet(s);
+      $("sd-snippet-body").value = asrBody(s);
+      renderSessionProtoFields(s, $("sd-protocol").value);
+    }
+  }).catch(() => {});
 }
 
 async function saveSessionDrawer() {
@@ -709,10 +773,15 @@ async function saveSessionDrawer() {
   state.textContent = "保存中…";
   state.className = "save-state";
   try {
+    // 会话级协议配置：只提交当前协议的字段（空值由服务端丢弃 = 回退全局默认）
+    const protoNow = $("sd-protocol").value;
+    const pf = {};
+    for (const el of $("sd-proto-fields").querySelectorAll("[data-pf]")) pf[el.dataset.pf] = el.value;
     const r = await api("PUT", "/api/sessions/" + s.id, {
       name: $("sd-name").value,
-      protocol: $("sd-protocol").value,
-      continue_session: $("sd-continue").checked
+      protocol: protoNow,
+      continue_session: $("sd-continue").checked,
+      protocol_config: { [protoNow]: pf }
     });
     if (r.status === 200 && r.data && r.data.ok) {
       state.textContent = "已保存 " + fmtTime(new Date().toISOString());
@@ -724,6 +793,7 @@ async function saveSessionDrawer() {
       s.protocol = fresh.protocol;
       s.continue_session = fresh.continue_session;
       s.token = fresh.token;
+      s.protocol_config = fresh.protocol_config || {};
       $("sd-name").value = fresh.name;
       $("sd-token").value = fresh.token;
       $("sd-session-id").value = fresh.id;
@@ -1353,6 +1423,11 @@ $("font-mode").addEventListener("change", () => {
   $("sd-asr-toggle").addEventListener("click", () => {
     const nowHidden = $("sd-asr-extra").classList.toggle("hidden");
     $("sd-asr-toggle").setAttribute("aria-expanded", String(!nowHidden));
+  });
+  // 切换协议立即刷新协议配置字段（未保存前只改渲染，不落库）
+  $("sd-protocol").addEventListener("change", () => {
+    const s = curSession();
+    if (s) renderSessionProtoFields(s, $("sd-protocol").value);
   });
   $("sd-delete").addEventListener("click", deleteCurrentSession);
   $("btn-settings").addEventListener("click", async () => {
