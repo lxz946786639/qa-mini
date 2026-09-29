@@ -270,6 +270,21 @@ function fmtTime(iso) {
   return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
 }
 
+// 会话列表时间：今天/昨天/前天 hh:mm:ss，更早 YYYY-MM-DD hh:mm:ss（按本地日历日）
+function fmtListTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(now) - startOf(d)) / 86400000);
+  const hms = p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  if (diffDays === 0) return "今天 " + hms;
+  if (diffDays === 1) return "昨天 " + hms;
+  if (diffDays === 2) return "前天 " + hms;
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + hms;
+}
+
 function sourceBadge(source) {
   if (source === "push") return '<span class="badge push">' + IC("i-mic") + '语音推送</span>';
   return '<span class="badge web">' + IC("i-message") + '网页</span>';
@@ -509,7 +524,9 @@ function renderSessionList() {
     badge.textContent = PROTOCOL_NAMES[s.protocol] || s.protocol;
     const time = document.createElement("span");
     time.className = "s-time";
-    time.textContent = s.active > 0 ? "生成中…" : (s.last_at ? fmtTime(s.last_at) : "");
+    const ttext = s.active > 0 ? "生成中…" : (s.last_at ? fmtListTime(s.last_at) : "");
+    time.textContent = ttext;
+    if (ttext) time.title = ttext;
     meta.appendChild(badge);
     meta.appendChild(time);
     item.appendChild(name);
