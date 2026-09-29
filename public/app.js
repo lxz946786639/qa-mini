@@ -492,12 +492,32 @@ function stopTicker(st) {
   if (st.tick) { clearInterval(st.tick); st.tick = null; }
 }
 
+// 错误卡片：「请求失败」详情渲染进答案区（与「答」标签同行、红色），状态行留简短摘要；
+// 其余详情（已取消等）保持状态行文本不变。已有部分内容（流式中断）时不覆盖。
+function applyErrorStatus(st, detail, dur) {
+  st.statusEl.className = "status status-err";
+  const d = String(detail || "");
+  const bodyText = d.indexOf("请求失败") === 0 && !st.raw
+    ? (d.slice("请求失败: ".length) || d) : "";
+  if (bodyText) {
+    st.raw = bodyText;
+    st.answerEl.classList.add("err-msg");
+    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + "请求失败" + (dur != null ? escapeHtml(" · " + dur + "s") : "");
+  } else {
+    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml(d) + (dur != null ? escapeHtml(" · " + dur + "s") : "");
+  }
+}
+
 function finalizeCard(sid, id, ok, detail, dur) {
   const st = cardsOf(sid).get(id);
   if (!st) return;
   stopTicker(st);
-  st.statusEl.className = "status " + (ok ? "status-ok" : "status-err");
-  st.statusTextEl.innerHTML = IC("i-" + (ok ? "check" : "xmark"), "st-" + (ok ? "ok" : "err")) + escapeHtml(detail) + (dur != null ? escapeHtml(" · " + dur + "s") : "");
+  if (ok) {
+    st.statusEl.className = "status status-ok";
+    st.statusTextEl.innerHTML = IC("i-check", "st-ok") + escapeHtml(detail) + (dur != null ? escapeHtml(" · " + dur + "s") : "");
+  } else {
+    applyErrorStatus(st, detail, dur);
+  }
   st.stopBtn.classList.add("hidden");
   st.delBtn.classList.remove("hidden");
   renderCard(st);
@@ -567,8 +587,12 @@ function renderSessionView(session, running) {
       protocol: it.protocol, protocolName: it.protocol_name, ts: it.started_at
     });
     st.raw = it.answer;
-    st.statusEl.className = "status " + (it.ok ? "status-ok" : "status-err");
-    st.statusTextEl.innerHTML = IC("i-" + (it.ok ? "check" : "xmark"), "st-" + (it.ok ? "ok" : "err")) + escapeHtml(it.detail) + (it.duration_s != null ? escapeHtml(" · " + it.duration_s + "s") : "");
+    if (it.ok) {
+      st.statusEl.className = "status status-ok";
+      st.statusTextEl.innerHTML = IC("i-check", "st-ok") + escapeHtml(it.detail) + (it.duration_s != null ? escapeHtml(" · " + it.duration_s + "s") : "");
+    } else {
+      applyErrorStatus(st, it.detail, it.duration_s);
+    }
     st.stopBtn.classList.add("hidden");
     st.delBtn.classList.remove("hidden");
     renderCard(st);
@@ -817,16 +841,14 @@ async function askQuestion(q) {
     if (resp.status === 403) nudgeAuth(false);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
-      st.statusEl.className = "status status-err";
-      st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml(data.detail || ("HTTP " + resp.status));
+      applyErrorStatus(st, data.detail || ("HTTP " + resp.status), null);
       st.stopBtn.classList.add("hidden");
       drop();
       refreshRegenButtons(currentSid);
       updateActiveCount();
     }
   } catch (err) {
-    st.statusEl.className = "status status-err";
-    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml("网络错误: " + err.message);
+    applyErrorStatus(st, "网络错误: " + err.message, null);
     st.stopBtn.classList.add("hidden");
     drop();
     refreshRegenButtons(currentSid);

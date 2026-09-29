@@ -304,9 +304,16 @@ main {
   line-height: 1.55;
   font-size: var(--qa-size, 15px);
 }
-/* 答案块 */
-.card-a { padding: 12px 16px 14px; word-break: break-word; background: var(--card); }
-.a-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+/* 答案块（答 标签与内容首行同行，换行对齐内容左缘，同「问」标签） */
+.card-a {
+  padding: 12px 16px 14px;
+  word-break: break-word;
+  background: var(--card);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+}
+.a-head { grid-column: 1; grid-row: 1; align-self: start; }
 .a-tag {
   font-size: 11px;
   font-weight: 700;
@@ -314,8 +321,10 @@ main {
   border: 1px solid var(--green);
   border-radius: 5px;
   padding: 1px 6px;
+  margin-top: 3px;
 }
-.a-body { font-size: var(--qa-size, 15px); }
+.a-body { font-size: var(--qa-size, 15px); grid-column: 2; grid-row: 1; min-width: 0; }
+.a-body.err-msg { color: var(--red); }
 .a-body p { margin: 0 0 8px; line-height: 1.65; }
 .a-body p:last-child { margin-bottom: 0; }
 .a-body pre {
@@ -383,6 +392,8 @@ main {
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px dashed var(--border);
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 /* 卡片操作行（答案状态行右侧：停止/重生成/复制答案/删除） */
 .card-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
