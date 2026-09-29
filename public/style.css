@@ -385,7 +385,13 @@ main {
   padding-top: 6px;
   border-top: 1px dashed var(--border);
 }
-.status .copy-btn { margin-left: auto; }
+/* 卡片操作行（答案状态行右侧：停止/重生成/复制答案/删除） */
+.card-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.mini-regen {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
+}
+.mini-regen:hover { color: var(--accent); border-color: var(--accent); }
 
 /* 一键复制（问题块右下角 / 答案状态行右侧） */
 .copy-btn {

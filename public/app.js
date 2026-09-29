@@ -336,15 +336,19 @@ function makeCard(sid, opts) {
         sourceBadge(opts.source) +
         '<span class="badge proto">' + escapeHtml(opts.protocolName || opts.protocol || "") + "</span>" +
         '<span class="time">' + fmtTime(opts.ts) + "</span>" +
-        '<button class="mini-del hidden" title="删除这条记录">' + IC("i-trash") + '</button>' +
-        '<button class="mini-stop hidden" title="停止生成">' + IC("i-stop") + '</button>' +
       "</span>" +
       '<button class="copy-btn" title="复制问题">' + IC("i-copy") + ' 复制</button>' +
     "</div>" +
     '<div class="card-a">' +
       '<div class="a-head"><span class="a-tag">答</span></div>' +
       '<div class="a-body"></div>' +
-      '<span class="status status-running"><span class="status-text">生成中…</span><button class="copy-btn hidden" title="复制答案">' + IC("i-copy") + ' 复制</button></span>' +
+      '<span class="status status-running"><span class="status-text">生成中…</span>' +
+      '<span class="card-acts">' +
+        '<button class="mini-stop hidden" title="停止生成">' + IC("i-stop") + '</button>' +
+        '<button class="mini-regen hidden" title="重新生成（删除本条，按相同上下文重新提问）">' + IC("i-rotate") + '</button>' +
+        '<button class="copy-btn hidden" title="复制答案">' + IC("i-copy") + ' 复制</button>' +
+        '<button class="mini-del hidden" title="删除这条记录">' + IC("i-trash") + '</button>' +
+      "</span></span>" +
     "</div>";
   chatEl.appendChild(el);
   const state = {
@@ -354,6 +358,7 @@ function makeCard(sid, opts) {
     statusEl: el.querySelector(".status"),
     statusTextEl: el.querySelector(".status .status-text"),
     stopBtn: el.querySelector(".mini-stop"),
+    regenBtn: el.querySelector(".mini-regen"),
     delBtn: el.querySelector(".mini-del"),
     qCopyBtn: el.querySelector(".card-q .copy-btn"),
     aCopyBtn: el.querySelector(".status .copy-btn"),
@@ -377,7 +382,7 @@ function makeCard(sid, opts) {
     if (!window.confirm("删除这条问答记录？（各端同步删除，不可恢复）")) return;
     const r = await api("DELETE", "/api/sessions/" + state.sid + "/history/" + state._id);
     if (r.status === 200) {
-      state.el.remove();
+      removeCardLocal(state);
       if (cardsOf(state.sid).size === 0) {
         emptyHint.classList.remove("hidden");
         updateActiveCount();
@@ -386,8 +391,45 @@ function makeCard(sid, opts) {
       showToast("删除失败: " + ((r.data && r.data.detail) || ""), 2500);
     }
   });
+  state.regenBtn.addEventListener("click", async () => {
+    if (!state._id) return;
+    if (!window.confirm("重新生成回答？\n将删除这条记录，并按相同上下文重新提问。")) return;
+    const r = await api("DELETE", "/api/sessions/" + state.sid + "/history/" + state._id);
+    if (r.status !== 200) {
+      showToast("删除失败: " + ((r.data && r.data.detail) || ""), 2500);
+      return;
+    }
+    removeCardLocal(state);
+    askQuestion(state.question);
+  });
   scrollToBottom(true);
+  refreshRegenButtons(sid);
   return state;
+}
+
+// 本地移除卡片（服务端 record_removed 广播随后到达时找不到卡片即忽略）
+function removeCardLocal(st) {
+  stopTicker(st);
+  st.el.remove();
+  if (st._id) cardsOf(st.sid).delete(st._id);
+}
+
+// 重生成按钮：仅当前会话最后一张「非生成中且有记录ID」的卡片显示。
+// 对更早的记录重新提问会带上其后新增的上下文（与原提问环境不符），故不提供；
+// 在途乐观卡（pendingLocals，尚无 id）或卡内的 running 状态都视为「有在生成」。
+function refreshRegenButtons(sid) {
+  const map = cardsOf(sid);
+  let latest = null;
+  const busy = pendingLocals.some((p) => p.sid === sid);
+  if (!busy) {
+    for (const st of map.values()) {
+      if (st.statusEl.classList.contains("status-running")) { latest = null; break; }
+      if (st._id) latest = st;
+    }
+  }
+  for (const st of map.values()) {
+    if (st.regenBtn) st.regenBtn.classList.toggle("hidden", st !== latest);
+  }
 }
 
 function renderCard(state) {
@@ -445,6 +487,7 @@ function finalizeCard(sid, id, ok, detail, dur) {
   st.delBtn.classList.remove("hidden");
   renderCard(st);
   scrollToBottom(false); // 完成后若贴近底部则补齐状态行
+  refreshRegenButtons(sid);
   updateActiveCount();
 }
 
@@ -729,11 +772,10 @@ async function testSessionProto() {
 }
 
 // ---------- 提问 / 取消 ----------
-async function sendQuestion() {
-  const q = $("question").value.trim();
-  if (!q) return;
+// 统一的提问入口（输入框提交 / 卡片「重新生成」共用）
+async function askQuestion(q) {
   const s = curSession();
-  if (!s) { showToast("请先创建会话", 2500); return; }
+  if (!s) { showToast("请先创建会话", 2500); return null; }
   const protoName = PROTOCOL_NAMES[s.protocol] || s.protocol;
   const st = makeCard(currentSid, {
     source: "web", protocol: s.protocol, protocolName: protoName,
@@ -756,9 +798,10 @@ async function sendQuestion() {
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       st.statusEl.className = "status status-err";
-    st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml(data.detail || ("HTTP " + resp.status));
+      st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml(data.detail || ("HTTP " + resp.status));
       st.stopBtn.classList.add("hidden");
       drop();
+      refreshRegenButtons(currentSid);
       updateActiveCount();
     }
   } catch (err) {
@@ -766,8 +809,17 @@ async function sendQuestion() {
     st.statusTextEl.innerHTML = IC("i-xmark", "st-err") + escapeHtml("网络错误: " + err.message);
     st.stopBtn.classList.add("hidden");
     drop();
+    refreshRegenButtons(currentSid);
     updateActiveCount();
   }
+  return st;
+}
+
+async function sendQuestion() {
+  const q = $("question").value.trim();
+  if (!q) return;
+  $("question").value = "";
+  await askQuestion(q);
 }
 
 async function cancelQa(id) {
@@ -1093,6 +1145,7 @@ function connectEvents() {
         ts: new Date().toISOString(), running: true
       });
     }
+    refreshRegenButtons(d.session_id);
     updateActiveCount();
   });
   es.addEventListener("delta", (e) => {
@@ -1115,11 +1168,16 @@ function connectEvents() {
     const d = JSON.parse(e.data);
     if (d.session_id !== currentSid) return;
     const st = cardsOf(d.session_id).get(d.id);
-    if (st) st.el.remove();
+    if (st) {
+      removeCardLocal(st);
+    } else {
+      cardsOf(d.session_id).delete(d.id);
+    }
     if (currentSid && cardsOf(currentSid).size === 0) {
       emptyHint.classList.remove("hidden");
       updateActiveCount();
     }
+    refreshRegenButtons(d.session_id);
   });
   es.addEventListener("session_reset", (e) => {
     const d = JSON.parse(e.data);
