@@ -344,10 +344,10 @@ function makeCard(sid, opts) {
       '<div class="a-body"></div>' +
       '<span class="status status-running"><span class="status-text">生成中…</span>' +
       '<span class="card-acts">' +
-        '<button class="mini-stop hidden" title="停止生成">' + IC("i-stop") + '</button>' +
-        '<button class="mini-regen hidden" title="重新生成（删除本条，按相同上下文重新提问）">' + IC("i-rotate") + '</button>' +
+        '<button class="mini-btn mini-stop hidden" title="停止生成">' + IC("i-stop") + ' 停止</button>' +
+        '<button class="mini-btn mini-regen hidden" title="重新生成（删除本条，按相同上下文重新提问）">' + IC("i-rotate") + ' 重新生成</button>' +
         '<button class="copy-btn hidden" title="复制答案">' + IC("i-copy") + ' 复制</button>' +
-        '<button class="mini-del hidden" title="删除这条记录">' + IC("i-trash") + '</button>' +
+        '<button class="mini-btn mini-del hidden" title="删除这条记录（各端同步，不可恢复）">' + IC("i-trash") + ' 删除</button>' +
       "</span></span>" +
     "</div>";
   chatEl.appendChild(el);
@@ -566,6 +566,9 @@ function renderSessionView(session, running) {
     renderCard(st);
     lastActive.set(sid, rec.id);
   }
+  // 历史/在途卡片的最终状态在 makeCard 之后才确定（ok/err 类名在上方赋值），
+  // 循环内每次 makeCard 末尾的刷新看到的是「生成中」中间态 → 渲染完成后统一重算一次
+  refreshRegenButtons(sid);
   const is_empty = !items.length && !(running || []).length;
   emptyHint.classList.toggle("hidden", !is_empty);
   if (is_empty) {

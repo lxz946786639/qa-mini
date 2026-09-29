@@ -200,11 +200,15 @@ header {
 .btn.primary:hover:not(:disabled) { background: #24496f; }
 .btn.danger { border-color: var(--red); color: var(--red); }
 .btn.danger:hover:not(:disabled) { background: #3a1d1b; }
-.mini-stop {
+/* 卡片操作按钮（停止 / 重新生成 / 删除：文字 + 图标，与「复制」一致） */
+.mini-btn {
   background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
+  border-radius: 6px; height: 22px; padding: 0 8px; cursor: pointer; font-size: 11px;
+  display: inline-flex; align-items: center; gap: 4px; line-height: 1;
 }
-.mini-stop:hover { color: var(--red); border-color: var(--red); }
+.mini-btn .icon { width: 12px; height: 12px; }
+.mini-btn:hover { color: var(--accent); border-color: var(--accent); }
+.mini-stop:hover, .mini-del:hover { color: var(--red); border-color: var(--red); }
 
 /* ---------- 内容宽度（窄 / 宽 / 铺满，本地持久化） ---------- */
 :root { --qa-maxw: 860px; }
@@ -299,12 +303,6 @@ main {
   line-height: 1.55;
   font-size: var(--qa-size, 15px);
 }
-.mini-del {
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
-}
-.mini-del:hover { color: var(--red); border-color: var(--red); }
-
 /* 答案块 */
 .card-a { padding: 12px 16px 14px; word-break: break-word; background: var(--card); }
 .a-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -386,12 +384,7 @@ main {
   border-top: 1px dashed var(--border);
 }
 /* 卡片操作行（答案状态行右侧：停止/重生成/复制答案/删除） */
-.card-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-.mini-regen {
-  background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 6px; width: 22px; height: 22px; cursor: pointer; font-size: 11px; line-height: 1;
-}
-.mini-regen:hover { color: var(--accent); border-color: var(--accent); }
+.card-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; flex-wrap: wrap; }
 
 /* 一键复制（问题块右下角 / 答案状态行右侧） */
 .copy-btn {
