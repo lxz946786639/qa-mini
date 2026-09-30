@@ -97,8 +97,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   通过才能保存**；全部清空回退全局无需测试；**修改接口基址/Key/Chat ID 会
   自动重置该会话的后端上下文**（下次提问重建）、续接开关；asr-tool 相关字段
   （会话 ID 只读+复制、token 只读+复制+重生成、config.toml 片段与 body 值只读+复制）
-  默认折叠在「asr-tool 对接（推送模式）」区块，点击展开；「重置会话」（清空该会话
-  后端上下文）、删除会话。
+  默认折叠在「asr-tool 对接（推送模式）」区块，点击展开；「重置会话」（先取消
+  在途问答，再清空该会话后端上下文）、删除会话。
 - 会话数据持久化在 SQLite 数据库 data/qa-mini.db（sessions 表 + records 表；
   token/会话ID/协议/后端会话状态/每会话最近 100 条历史）；
   服务重启后会话与上下文保持。
@@ -133,7 +133,7 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?}`（会话级协议覆盖） |
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」） |
-| POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（dify conversation / ragflow session，对应 asr-tool「清空」） |
+| POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 asr-tool「清空」） |
 | POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿，留空项回退全局）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
 | DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除） |
 | GET | `/api/events` | SSE 广播（EventSource 自动重连）：连接即推 `sessions` 列表 → `qa_start`/`delta`/`done`（均带 session_id）/`sessions`（列表变更）/`session_reset`/`config` |
@@ -235,7 +235,7 @@ npm test           # node tests/run_tests.js
 - `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
   SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**107 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**108 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。

@@ -920,6 +920,31 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const r = await api("POST", "/api/session/reset");
     assert.strictEqual(r.status, 200);
   });
+  await test("sessions: ragflow 重置（清会话ID + 取消在途 + 重置后再建会话）", async () => {
+    const c1 = await api("POST", "/api/chat", { session_id: sRag2Id, question: "重置前问题" });
+    await waitDone(c1.data.qa_id);
+    const d1 = await api("GET", "/api/sessions/" + sRag2Id);
+    assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
+    // 发起长流问题（slow → sseForever 保持流打开），待 session_id 回写
+    const c2 = await api("POST", "/api/chat", { session_id: sRag2Id, question: "slow 在途问题" });
+    await sleep(300);
+    const inFlight = await api("GET", "/api/sessions/" + sRag2Id);
+    assert.ok(inFlight.data.running.some((x) => x.id === c2.data.qa_id), "问题在途");
+    const before = MOCKS.ragflow.sessionsCalls;
+    const r = await api("POST", "/api/sessions/" + sRag2Id + "/reset");
+    assert.strictEqual(r.status, 200);
+    const rec = await waitDone(c2.data.qa_id); // 重置应取消在途问答，流随之关闭
+    assert.strictEqual(rec.status, "done");
+    const d2 = await api("GET", "/api/sessions/" + sRag2Id);
+    assert.strictEqual(d2.data.session.ragflow_session_id, "", "重置后会话ID清空（在途流未回写旧ID）");
+    assert.strictEqual(d2.data.running.length, 0, "在途问答已终止");
+    // 重置后再提问：重建后端会话并保存新会话ID
+    const c3 = await api("POST", "/api/chat", { session_id: sRag2Id, question: "重置后问题" });
+    await waitDone(c3.data.qa_id);
+    assert.ok(MOCKS.ragflow.sessionsCalls > before, "重置后提问重建后端会话");
+    const d3 = await api("GET", "/api/sessions/" + sRag2Id);
+    assert.strictEqual(d3.data.session.ragflow_session_id, "sess-1", "新会话ID已保存");
+  });
   await test("sessions: 删除会话（在途取消 + 记录清空 + token 失效）", async () => {
     const r = await api("DELETE", "/api/sessions/" + sOpenaiId);
     assert.strictEqual(r.status, 200);
