@@ -67,6 +67,14 @@
             <option value="full">宽度：铺满</option>
           </select>
         </div>
+        <div class="font-ctl" title="行间距（默认 / 窄 / 自定义）">
+          <select id="line-mode">
+            <option value="default">行距：默认</option>
+            <option value="narrow">行距：窄</option>
+            <option value="custom">行距：自定义</option>
+          </select>
+          <input id="line-val" type="number" min="1" max="2.5" step="0.05" value="1.65" title="自定义行间距（1.00–2.50）">
+        </div>
         <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / asr-tool 对接（/admin + 管理密码后可见）">会话设置</button>
         <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）"><svg class="icon"><use href="/icons.svg#i-settings"></use></svg> 设置</button>
       </div>

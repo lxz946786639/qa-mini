@@ -329,6 +329,32 @@ function applyWidthMode() {
 }
 applyWidthMode();
 
+// ---------- 行间距（默认 / 窄 / 自定义，本地持久化；默认=各元素原行距不变） ----------
+const LINE_PRESETS = { narrow: 1.35 };
+let lineState = { mode: "default", val: 1.65 };
+try {
+  const rl = localStorage.getItem("qa-mini-line");
+  if (rl) {
+    const l = JSON.parse(rl);
+    if (l && ["default", "narrow", "custom"].indexOf(l.mode) >= 0) lineState = l;
+  }
+} catch {}
+function applyLineMode() {
+  const root = document.documentElement;
+  if (lineState.mode === "custom") root.style.setProperty("--qa-line", String(lineState.val));
+  else if (lineState.mode === "narrow") root.style.setProperty("--qa-line", String(LINE_PRESETS.narrow));
+  else root.style.removeProperty("--qa-line");
+  const m = $("line-mode");
+  const p = $("line-val");
+  if (m) m.value = lineState.mode;
+  if (p) {
+    p.value = lineState.val;
+    p.classList.toggle("hidden", lineState.mode !== "custom");
+  }
+  try { localStorage.setItem("qa-mini-line", JSON.stringify(lineState)); } catch {}
+}
+applyLineMode();
+
 function curSession() { return sessions.get(currentSid) || null; }
 
 function cardsOf(sid) {
@@ -1597,6 +1623,19 @@ $("font-mode").addEventListener("change", () => {
     fontState.mode = "custom";
     $("font-mode").value = "custom";
     applyFont();
+  });
+  $("line-mode").addEventListener("change", () => {
+    lineState.mode = $("line-mode").value;
+    applyLineMode();
+  });
+  $("line-val").addEventListener("change", () => {
+    let v = parseFloat($("line-val").value);
+    if (isNaN(v)) v = 1.65;
+    v = Math.max(1, Math.min(2.5, Math.round(v * 100) / 100));
+    lineState.val = v;
+    lineState.mode = "custom";
+    $("line-mode").value = "custom";
+    applyLineMode();
   });
   $("btn-send").addEventListener("click", sendQuestion);
   $("btn-cancel").addEventListener("click", () => {

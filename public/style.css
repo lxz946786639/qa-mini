@@ -301,7 +301,7 @@ main {
   font-weight: 600;
   word-break: break-word;
   white-space: pre-wrap;
-  line-height: 1.55;
+  line-height: var(--qa-line, 1.55);
   font-size: var(--qa-size, 15px);
 }
 /* 答案块（答 标签与内容首行同行，换行对齐内容左缘，同「问」标签） */
@@ -323,9 +323,9 @@ main {
   padding: 1px 6px;
   margin-top: 3px;
 }
-.a-body { font-size: var(--qa-size, 15px); grid-column: 2; grid-row: 1; min-width: 0; }
+.a-body { font-size: var(--qa-size, 15px); line-height: var(--qa-line, 1.65); grid-column: 2; grid-row: 1; min-width: 0; }
 .a-body.err-msg { color: var(--red); }
-.a-body p { margin: 0 0 8px; line-height: 1.65; }
+.a-body p { margin: 0 0 8px; line-height: var(--qa-line, 1.65); }
 .a-body p:last-child { margin-bottom: 0; }
 .a-body pre {
   background: var(--code-bg);
@@ -347,7 +347,7 @@ main {
 }
 .a-body pre code { border: none; background: none; padding: 0; }
 .a-body ul, .a-body ol { margin: 4px 0 10px; padding-left: 22px; }
-.a-body li { line-height: 1.6; margin-bottom: 2px; }
+.a-body li { line-height: var(--qa-line, 1.6); margin-bottom: 2px; }
 .a-body h1, .a-body h2, .a-body h3, .a-body h4, .a-body h5, .a-body h6 {
   margin: 12px 0 8px; line-height: 1.35;
 }
