@@ -1261,7 +1261,8 @@ const CFG_FIELDS = [
   "protocols.openai.url", "protocols.openai.api_key", "protocols.openai.model",
   "protocols.dify.url", "protocols.dify.api_key", "protocols.dify.user",
   "protocols.generic.url", "protocols.generic.api_key", "protocols.generic.body",
-  "protocols.ragflow.url", "protocols.ragflow.api_key", "protocols.ragflow.chat_id"
+  "protocols.ragflow.url", "protocols.ragflow.api_key", "protocols.ragflow.chat_id",
+  "asr.url", "asr.api_key", "asr.model", "asr.language", "asr.timeout"
 ];
 
 function cfgEl(key) {
@@ -1460,7 +1461,11 @@ async function saveSettings() {
   for (const key of CFG_FIELDS) {
     const el = cfgEl(key);
     if (!el) continue;
-    const val = el.type === "checkbox" ? el.checked : el.value;
+    let val = el.type === "checkbox" ? el.checked : el.value;
+    if (key === "asr.timeout") {
+      const n = parseFloat(val);
+      val = Number.isFinite(n) ? n : "";
+    }
     setNested(patch, key, val);
   }
   try {
@@ -1491,6 +1496,178 @@ async function saveSettings() {
 }
 
 // ---------- 初始化（门禁 → 主流程）----------
+// ---------- 语音输入（麦克风 → WAV 16-bit PCM → POST /api/asr → 服务端转发识别 → 填入输入框） ----------
+// 约束：getUserMedia / AudioWorklet 需安全上下文（https 或 127.0.0.1/localhost）；
+// 经 http 地址访问时按钮禁用并在 title 说明。硬上限 60s 自动停止送识别（对齐 asr-tool
+// max_segment_s），<0.4s 丢弃（min_segment_s）。识别结果填入输入框待确认，不自动发送。
+const ASR_MAX_S = 60;
+const ASR_MIN_S = 0.4;
+const mic = {
+  recording: false, transcribing: false, timer: null, t0: 0,
+  stream: null, ctx: null, node: null, srcNode: null, rate: 16000, chunks: [],
+  secure: !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+};
+function fmtMicTime(s) {
+  const m = Math.floor(s / 60);
+  const ss = Math.floor(s % 60);
+  return m + ":" + String(ss).padStart(2, "0");
+}
+function setMicUI() {
+  const b = $("btn-mic");
+  const label = $("btn-mic-label");
+  b.classList.remove("recording", "busy");
+  if (!mic.secure) {
+    b.disabled = true;
+    b.title = "麦克风需要 https 访问（当前为 http 地址或浏览器不支持）";
+    label.textContent = "语音";
+    return;
+  }
+  if (mic.transcribing) {
+    b.disabled = true;
+    b.title = "语音识别中…";
+    b.classList.add("busy");
+    label.textContent = "识别中…";
+    return;
+  }
+  if (mic.recording) {
+    b.disabled = false;
+    b.title = "再点一次停止录音";
+    b.classList.add("recording");
+    return;
+  }
+  b.disabled = false;
+  b.title = "语音输入：点击开始/停止录音，识别后填入输入框";
+  label.textContent = "语音";
+}
+// 16-bit PCM 单声道 WAV 封装（44 字节 RIFF 头）
+function encodeWav(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0, "RIFF");
+  v.setUint32(4, 36 + samples.length * 2, true);
+  ws(8, "WAVE");
+  ws(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ws(36, "data");
+  v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, samples[i], true);
+  return new Uint8Array(buf);
+}
+async function micStop() {
+  if (!mic.recording) return;
+  mic.recording = false;
+  if (mic.timer) clearInterval(mic.timer);
+  const secs = (Date.now() - mic.t0) / 1000;
+  try {
+    if (mic.node) mic.node.disconnect();
+    if (mic.srcNode) mic.srcNode.disconnect();
+    if (mic.ctx) await mic.ctx.close();
+  } catch {}
+  if (mic.stream) { for (const t of mic.stream.getTracks()) t.stop(); }
+  mic.stream = null; mic.ctx = null; mic.node = null; mic.srcNode = null;
+  const total = mic.chunks.reduce((n, c) => n + c.length, 0);
+  const chunks = mic.chunks;
+  mic.chunks = [];
+  if (secs < ASR_MIN_S || total < 800) {
+    showToast("录音太短（<0.4 秒），未发送识别", 2500);
+    setMicUI();
+    return;
+  }
+  const data = new Int16Array(total);
+  let off = 0;
+  for (const c of chunks) { data.set(c, off); off += c.length; }
+  const wav = encodeWav(data, mic.rate);
+  mic.transcribing = true;
+  setMicUI();
+  try {
+    const resp = await fetch("/api/asr", {
+      method: "POST",
+      headers: { "Content-Type": "audio/wav" },
+      body: wav
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (resp.ok && d.ok) {
+      const ta = $("question");
+      const prev = ta.value.replace(/\s+$/, "");
+      ta.value = prev ? prev + " " + d.text : d.text;
+      ta.focus();
+      showToast(d.text ? ("已识别 " + d.text.length + " 字，请确认后发送") : (d.detail || "未识别到语音"), 3000);
+    } else {
+      showToast("语音识别失败: " + (d.detail || ("HTTP " + resp.status)), 3500);
+    }
+  } catch (e) {
+    showToast("语音识别失败: " + ((e && e.message) || e), 3500);
+  } finally {
+    mic.transcribing = false;
+    setMicUI();
+  }
+}
+async function micStart() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
+    });
+  } catch (e) {
+    const denied = /NotAllowedError|Permission|SecurityError/i.test(String((e && e.name) || e));
+    mic.secure = false; // 权限拒绝后保持禁用
+    showToast(denied ? "麦克风权限被拒绝（浏览器设置 → 网站设置 → 麦克风）" : "无法访问麦克风: " + ((e && e.message) || e), 3500);
+    setMicUI();
+    return;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx({ sampleRate: 16000 });
+  if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+  const workletCode = [
+    "class MicCapture extends AudioWorkletProcessor {",
+    "  process(inputs) {",
+    "    const ch = inputs[0] && inputs[0][0];",
+    "    if (ch) {",
+    "      const i16 = new Int16Array(ch.length);",
+    "      for (let i = 0; i < ch.length; i++) { const s = Math.max(-1, Math.min(1, ch[i])); i16[i] = s < 0 ? s * 32768 : s * 32767; }",
+    "      this.port.postMessage(i16.buffer, [i16.buffer]);",
+    "    }",
+    "    return true;",
+    "  }",
+    "}",
+    "registerProcessor('mic-capture', MicCapture);"
+  ].join("\n");
+  try {
+    const blobUrl = URL.createObjectURL(new Blob([workletCode], { type: "application/javascript" }));
+    await ctx.audioWorklet.addModule(blobUrl);
+    URL.revokeObjectURL(blobUrl);
+  } catch (e) {
+    try { await ctx.close(); } catch {}
+    for (const t of stream.getTracks()) t.stop();
+    showToast("音频采集初始化失败: " + ((e && e.message) || e), 3500);
+    return;
+  }
+  mic.stream = stream;
+  mic.ctx = ctx;
+  mic.rate = ctx.sampleRate || 16000;
+  mic.chunks = [];
+  mic.srcNode = ctx.createMediaStreamSource(stream);
+  mic.node = new AudioWorkletNode(ctx, "mic-capture");
+  mic.node.port.onmessage = (ev) => { if (ev.data) mic.chunks.push(new Int16Array(ev.data)); };
+  mic.srcNode.connect(mic.node);
+  mic.node.connect(ctx.destination); // worklet 输出静音，连 destination 保证处理循环运行
+  mic.recording = true;
+  mic.t0 = Date.now();
+  mic.timer = setInterval(() => {
+    const s = (Date.now() - mic.t0) / 1000;
+    $("btn-mic-label").textContent = fmtMicTime(s);
+    if (s >= ASR_MAX_S) micStop(); // 硬上限：自动停止送识别
+  }, 500);
+  $("btn-mic-label").textContent = fmtMicTime(0);
+  setMicUI();
+}
 document.addEventListener("DOMContentLoaded", async () => {
   $("admin-gate-form").addEventListener("submit", onAdminGateSubmit);
   $("access-gate-form").addEventListener("submit", onAccessGateSubmit);
@@ -1642,6 +1819,17 @@ $("font-mode").addEventListener("change", () => {
     const last = currentSid ? lastActive.get(currentSid) : null;
     if (last) cancelQa(last);
   });
+  // 语音输入：点击开始/停止；http 非安全上下文时按钮已禁用（title 说明）
+  $("btn-mic").addEventListener("click", () => {
+    if (mic.transcribing) return;
+    if (mic.recording) { micStop(); return; }
+    if (!mic.secure) {
+      showToast("麦克风需要 https 访问（当前为 http 地址，浏览器禁止录音）", 3500);
+      return;
+    }
+    micStart();
+  });
+  setMicUI();
   const q = $("question");
   q.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1699,6 +1887,40 @@ $("font-mode").addEventListener("change", () => {
     });
   }
   $("btn-save-config").addEventListener("click", saveSettings);
+  // 语音输入「测试连接」：用表单当前草稿值探测（未填字段回退已存配置）
+  $("btn-asr-test").addEventListener("click", async () => {
+    const btn = $("btn-asr-test");
+    const state = $("asr-test-state");
+    btn.disabled = true;
+    state.className = "save-state";
+    state.textContent = "测试中…";
+    const draft = {
+      url: $("cfg-asr-url").value,
+      api_key: $("cfg-asr-api_key").value,
+      model: $("cfg-asr-model").value,
+      language: $("cfg-asr-language").value,
+      timeout: $("cfg-asr-timeout").value
+    };
+    try {
+      const h = { "Content-Type": "application/json" };
+      const t = getAdminToken();
+      if (t) h["X-Admin-Token"] = t;
+      const resp = await fetch("/api/asr/test", { method: "POST", headers: h, body: JSON.stringify({ asr: draft }) });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.ok) {
+        state.className = "save-state ok";
+        state.textContent = data.detail || "已连接";
+      } else {
+        state.className = "save-state err";
+        state.textContent = data.detail || ("HTTP " + resp.status);
+      }
+    } catch (err) {
+      state.className = "save-state err";
+      state.textContent = "测试失败: " + ((err && err.message) || err);
+    } finally {
+      btn.disabled = false;
+    }
+  });
   $("cfg-sec-anonymous").addEventListener("change", applyAnonymousToggle);
   $("btn-save-adminpw").addEventListener("click", saveAdminPassword);
   // 协议配置分 tab 切换

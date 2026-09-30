@@ -6,11 +6,13 @@
 //                   两步建会话 / no-sessions(404) / cumulative(新路径 legacy:true) / 500 / 401 /
 //                   GET /chats/:id（探活）
 //  18704 generic  — SSE JSON / OpenAI 风格 / 纯文本 data / 单 JSON 文档 / 纯文本 / 500
+//  18707 asr      — OpenAI 兼容 ASR：/health、/v1/models、/v1/audio/transcriptions（multipart）、
+//                   /v1/chat/completions（base64 audio_url 回退路径）；开关 noTranscr(404)/err500
 
 const http = require("http");
 
-const MOCKS = { openai: {}, dify: {}, ragflow: {}, generic: {} };
-const PORTS = { openai: 18701, dify: 18702, ragflow: 18703, generic: 18704 };
+const MOCKS = { openai: {}, dify: {}, ragflow: {}, generic: {}, asr: { last: null, noTranscr: false, err500: false } };
+const PORTS = { openai: 18701, dify: 18702, ragflow: 18703, generic: 18704, asr: 18707 };
 const servers = [];
 const keepalives = new Map(); // req -> interval
 
@@ -291,8 +293,55 @@ function genericServer() {
   return srv;
 }
 
+// ---------- asr mock（OpenAI 兼容 ASR 服务，与 asr-tool 对接形态一致） ----------
+function asrServer() {
+  const srv = http.createServer(async (req, res) => {
+    const u = new URL(req.url, "http://127.0.0.1");
+    const chunks = [];
+    for await (const c of req) { if (chunks.length < 12 * 1024 * 1024) chunks.push(c); }
+    const raw = Buffer.concat(chunks);
+    if (req.method === "GET" && u.pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ status: "ok" }));
+    }
+    if (req.method === "GET" && u.pathname === "/v1/models") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ data: [{ id: "mock-asr" }, { id: "mock-asr-2" }] }));
+    }
+    if (req.method === "POST" && u.pathname === "/v1/audio/transcriptions") {
+      if (MOCKS.asr.noTranscr) { res.writeHead(404); return res.end("not found"); }
+      if (MOCKS.asr.err500) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "asr boom" }));
+      }
+      const s = raw.toString("latin1");
+      if (!s.includes("name=\"file\"") || !s.includes("segment.wav") || !s.includes("name=\"model\"")) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "missing file/model field" }));
+      }
+      MOCKS.asr.last = { path: req.url, headers: req.headers, ok: true };
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ text: "语音识别测试成功" }));
+    }
+    if (req.method === "POST" && u.pathname === "/v1/chat/completions") {
+      let body = {};
+      try { body = JSON.parse(raw.toString("utf8") || "{}"); } catch {}
+      const c0 = body.messages && body.messages[0] && body.messages[0].content;
+      const ok = Array.isArray(c0) && c0.some((p) => p && p.type === "audio_url" &&
+        String((p.audio_url && p.audio_url.url) || "").startsWith("data:audio/wav;base64,"));
+      MOCKS.asr.last = { path: req.url, headers: req.headers, ok: !!ok };
+      if (!ok) { res.writeHead(400); return res.end("bad audio_url"); }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "语音识别测试成功" } }] }));
+    }
+    res.writeHead(404);
+    res.end("not found: " + req.url);
+  });
+  return srv;
+}
+
 async function startMocks() {
-  const map = { openai: openaiServer(), dify: difyServer(), ragflow: ragflowServer(), generic: genericServer() };
+  const map = { openai: openaiServer(), dify: difyServer(), ragflow: ragflowServer(), generic: genericServer(), asr: asrServer() };
   for (const [name, srv] of Object.entries(map)) {
     await new Promise((resolve, reject) => {
       srv.once("error", reject);

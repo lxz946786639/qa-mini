@@ -26,7 +26,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 108 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 114 项断言全绿，
    含 `node --check` 前端语法护栏）；
    测试用 `QA_MINI_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
@@ -67,13 +67,14 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 
 ```
 server.js        唯一入口：HTTP 路由 + SSE + 静态服务（勿拆成多服务）
+lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 asr-tool 同源）
 lib/config.js    配置 + SQLite 存储（唯一允许碰 data/ 文件的模块）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 asr-tool 对齐
 lib/sse.js       QaError（协议错误载体）
 public/          纯静态前端：index.html / app.js / icons.svg（图标 sprite）/ style.css
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
-docker/          容器化定义（Dockerfile / docker-compose.yml）
+docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）
 doc/             项目文档（本规范守护对象）
 data/ config.json 运行时生成，不手工维护、不提交公开仓库（含真实 key）
 ```
@@ -82,7 +83,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js lib/*.js public/app.js   # 语法
-npm test                                        # 108 项断言全绿
+npm test                                        # 114 项断言全绿
 # 前端改动：静态文件按请求读盘，浏览器刷新即生效，无需重启；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```

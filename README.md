@@ -128,6 +128,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 |---|---|---|
 | POST | `/api/push` | **asr-tool 推送接口**。body=`{token, session_id?, text}`；token 定位会话（未知 401）；带 session_id 时校验一致（不匹配 400）；text 非空（否则 400）。默认 202 `{ok, qa_id, session_id}` 异步执行；`?sync=true` 阻塞至完成（上限 28s）返回 `{ok, answer, detail}`。**鉴权 = token 本身**（高熵随机凭证），开启访问码后也无需另带访问码 |
 | POST | `/api/chat` | 网页提问。body `{session_id, question, context?}` → 202 `{ok, qa_id, session_id}` |
+| POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级） |
+| POST | `/api/asr/test` | ASR 服务**测试连接**（管理）。body `{asr?: {url?, api_key?, model?, language?, timeout?}}`（表单草稿，留空回退已存值）→ 200 `{ok, detail, models, health}`（`ok=false` 时 detail = 模型不在服务列表等警告）；未配置 → 400；不可达 → 502 |
 | GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at） |
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?}` → 201 会话 |
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
@@ -142,7 +144,7 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 | GET | `/api/history` | 全部会话最近 100 条 Q&A 合并（新→旧，含 session_id） |
 | GET | `/api/config` | 读取配置（协议级） |
 | PUT | `/api/config` | 修改配置（深合并 + 写盘 + 广播；port 变更需重启生效） |
-| GET | `/api/health` | 存活 / 会话数 / 在途 QA / 广播客户端数 |
+| GET | `/api/health` | 存活 / 会话数 / 在途 QA / 广播客户端数 / asr_configured |
 | GET | `/api/status` | 公开状态：`{ok, allow_anonymous, admin_set}`（无敏感信息） |
 | POST | `/api/admin/login` | 管理登录 `{password}` → 管理 token（未设密码时输入即初始化；12h） |
 | POST | `/api/access/login` | 访问码登录 `{code}` → 访问 token（24h，≤码有效期） |
@@ -167,7 +169,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
     "dify":    { "url": "", "api_key": "", "user": "qa-mini" },
     "generic": { "url": "", "api_key": "", "body": "{\"question\":\"{question}\"}" },
     "ragflow": { "url": "", "api_key": "", "chat_id": "" }
-  }
+  },
+  "asr": { "url": "", "api_key": "", "model": "", "language": "", "timeout": 60 }  // 网页语音输入所用 ASR 服务（OpenAI 兼容；空 url = 未启用）
 }
 ```
 
@@ -182,8 +185,9 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   匿名访问，关闭后打开应用需 6 位访问码：**可生成多个，每个码独立有效时长**（默认 8h，
   可自定义/随机、批量 1-10 个、单个延期、一键失效、清理过期）。
   权限模型与端点表见 doc/01 §3.4，字段说明见 doc/02 §7。
-- **⚙ 设置抽屉**：顶部单行分段标签——「协议配置」（知识引擎 / 编排引擎 / OpenAI / 通用）
-  与「安全配置」（安全），组间细线分隔；宽 880px、内容居中。底部「保存配置」
+- **⚙ 设置抽屉**：顶部单行分段标签——「协议配置」（知识引擎 / 编排引擎 / OpenAI / 通用）、
+  「语音输入」（ASR 服务配置 + 测试连接）与「安全配置」（安全），组间细线分隔；宽 880px、
+  内容居中。底部「保存配置」
   只作用于协议页；安全页的匿名开关与管理密码修改**即时生效**（各自独立保存）。
   打开时显示**加载遮罩**直至配置拉取完成（保存按钮期间禁用），避免手快时
   看到空白表单。**点击抽屉外部自动收起**（会话设置 / ⚙ 设置通用）；「会话设置」
@@ -210,6 +214,14 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 - 行间距：头部「行距」下拉 —— **默认**（各元素原行距）/ **窄**（1.35）/
   **自定义**（1.00–2.50 数字输入），作用于问题与答案正文（`--qa-line` 变量；
   代码块与标题保持紧凑行距），本地记忆（localStorage）。
+- **语音输入（麦克风 → 文字）**：提问框区「🎤 语音」按钮（图标 + 文字）——点击开始
+  录音（红底脉冲 + 秒数计时，**60s 自动停止**；<0.4s 丢弃不送识别），再点停止 →
+  浏览器把 16kHz WAV 上传 `/api/asr`，服务端转发「⚙ 设置 → 语音输入」里配置的
+  **OpenAI 兼容 ASR 服务**（与 asr-tool 同源：`/audio/transcriptions`，404/405/400 自动
+  回退 `/chat/completions` base64 音频），识别结果**填入输入框待确认发送（不自动
+  提问）**。麦克风需**安全上下文**：`http://<IP>` 访问时浏览器禁止录音，按钮自动
+  禁用并 tooltip 说明（需 https，见 doc/03 §8 的 compose `tls` profile 自签入口，
+  或本机 127.0.0.1/localhost 访问）。
 - 图标：引入**轻量自托管 SVG 图标库**（`public/icons.svg` sprite，22 枚 Lucide 风格
   2px 描边图标，`<use>` 引用、随主题变色；无 JS 框架/无构建/零依赖），界面不使用 emoji。
 - 主题：头部 太阳/月亮 图标按钮切换 浅色/深色 主题，全部组件双主题配色，
@@ -222,7 +234,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   原文（生成中可复制已出内容），点击后短暂显示「✔ 已复制」。
 - 滚动跟随：答案生成时自动跟随到底部（仅当已贴近底部，不打断上滑阅读）；
   上滑阅读时右下角出现「↓ 最新」浮钮，点击平滑回底。
-- 底部：当前会话协议徽标 + 提问框（Enter 发送 / Shift+Enter 换行）+ 发送 / 停止。
+- 底部：当前会话协议徽标 + 提问框（Enter 发送 / Shift+Enter 换行）+ 语音（🎤 麦克风
+  输入）/ 发送 / 停止。
 - 顶部：在途答案计数、「会话设置」（token/会话ID/asr-tool 片段/重置/删除）、「⚙ 设置」。
 - 多浏览器同步：所有事件经 /api/events 广播并带 session_id，其他浏览器发起的提问
   与语音推送同样实时显示；切换会话时按会话恢复历史 + 在途问答。
@@ -235,13 +248,16 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 npm test           # node tests/run_tests.js
 ```
 
-- `tests/mock_backends.js`：4 个本地 mock 协议服务（18701-18704），覆盖
-  SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
-  error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态。
-- `tests/run_tests.js`：**108 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/mock_backends.js`：5 个本地 mock 服务（18701-18704 协议 + 18707 ASR），
+  覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
+  error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
+  `/health` / `/v1/models` / transcriptions / chat 回退路径。
+- `tests/run_tests.js`：**114 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
-  广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝）。
+  广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
+  **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
+  测试连接含鉴权/SSE 广播脱敏）。
 - 环境变量 `QA_MINI_IDLE_TIMEOUT_MS` / `QA_MINI_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`QA_MINI_DATA_DIR`
   指定会话存储目录（测试用它做隔离）。
@@ -255,6 +271,10 @@ npm test           # node tests/run_tests.js
 - 继承 asr-tool 已知限制：RAGFlow `legacy: true` 时 think 标签不剥离；
   cumulative 极端情形 LCP 差分可能少量丢字/重复；Dify Chatflow Human Input 节点
   的流会挂起（表现为 60s 块间超时）。
+- **语音输入依赖浏览器麦克风**：`http://<IP>`（非 127.0.0.1）属非安全上下文，
+  浏览器禁止录音，🎤 按钮自动禁用（tooltip 说明）；需 https（compose `tls`
+  profile 自签入口，见 doc/03 §8）或本机 127.0.0.1/localhost 访问。识别质量
+  取决于所配置 ASR 服务；单次录音上限 60s、<0.4s 丢弃。
 - `/api/config` 与 `/api/sessions` 无鉴权（局域网自用）；暴露公网请自行加反向代理鉴权。
 - 本目录 config.json / data/qa-mini.db（及 sessions.json.bak-* 归档）内含本机真实 API Key 与推送 token，
   请勿提交到公开仓库。

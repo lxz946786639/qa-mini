@@ -528,7 +528,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v31"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v32"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -818,6 +818,82 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     await api("PUT", "/api/config", { protocols: { dify: { user: "tester" } } });
     c.close();
   });
+
+  // ---------- ASR 语音输入（浏览器录 WAV → 服务端转发识别） ----------
+  const ASR_BASE = "http://127.0.0.1:" + PORTS.asr;
+  function makeWav(seconds, sampleRate) {
+    const n = Math.floor(seconds * sampleRate);
+    const data = new Int16Array(n);
+    for (let i = 0; i < n; i++) data[i] = Math.round(Math.sin(2 * Math.PI * 440 * i / sampleRate) * 12000);
+    const buf = Buffer.alloc(44 + n * 2);
+    buf.write("RIFF", 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write("WAVE", 8);
+    buf.write("fmt ", 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+    buf.writeUInt32LE(sampleRate, 24); buf.writeUInt32LE(sampleRate * 2, 28);
+    buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write("data", 36); buf.writeUInt32LE(n * 2, 40);
+    Buffer.from(data.buffer).copy(buf, 44);
+    return buf;
+  }
+  const wav02 = makeWav(0.2, 16000);
+  async function asrPost(wav) {
+    const resp = await fetch(BASE + "/api/asr", {
+      method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav
+    });
+    const d = await resp.json().catch(() => ({}));
+    return { status: resp.status, data: d };
+  }
+  await test("asr: /api/asr 全链路（WAV → mock transcriptions → text）", async () => {
+    const put = await api("PUT", "/api/config", { asr: { url: ASR_BASE + "/v1", api_key: "", model: "mock-asr", language: "", timeout: 10 } });
+    assert.strictEqual(put.status, 200);
+    const r = await asrPost(wav02);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.data.ok, true);
+    assert.strictEqual(r.data.text, "语音识别测试成功");
+    assert.ok(typeof r.data.duration_s === "number" && r.data.duration_s >= 0);
+    assert.strictEqual(MOCKS.asr.last.path, "/v1/audio/transcriptions");
+    assert.strictEqual(MOCKS.asr.last.ok, true, "multipart 含 file/model 字段");
+  });
+  await test("asr: 未配置 400 / 非 WAV 400", async () => {
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { url: "" } })).status, 200);
+    const r1 = await asrPost(wav02);
+    assert.strictEqual(r1.status, 400);
+    assert.ok(String(r1.data.detail).includes("未配置"));
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { url: ASR_BASE + "/v1" } })).status, 200);
+    const r2 = await asrPost(Buffer.from("not a wav at all"));
+    assert.strictEqual(r2.status, 400);
+    assert.ok(String(r2.data.detail).includes("WAV"));
+  });
+  await test("asr: 404 回退 chat 路径 / 上游 500 → 502", async () => {
+    MOCKS.asr.noTranscr = true;
+    const r1 = await asrPost(wav02);
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual(r1.data.ok, true);
+    assert.strictEqual(r1.data.text, "语音识别测试成功");
+    assert.strictEqual(MOCKS.asr.last.path, "/v1/chat/completions");
+    assert.strictEqual(MOCKS.asr.last.ok, true, "base64 audio_url 请求形态");
+    MOCKS.asr.noTranscr = false;
+    MOCKS.asr.err500 = true;
+    const r2 = await asrPost(wav02);
+    MOCKS.asr.err500 = false;
+    assert.strictEqual(r2.status, 502);
+    assert.ok(String(r2.data.detail).includes("语音识别失败"));
+  });
+  await test("asr: 请求体 >10MB → 413", async () => {
+    const big = Buffer.alloc(10 * 1024 * 1024 + 1024);
+    big.write("RIFF", 0); big.write("WAVE", 8);
+    const r = await asrPost(big);
+    assert.strictEqual(r.status, 413);
+  });
+  await test("asr: SSE config 事件 asr.api_key 脱敏", async () => {
+    const c = await collectSse();
+    await sleep(200);
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { api_key: "asr-secret-123" } })).status, 200);
+    const hit = await c.wait("config", (d) => d.config && d.config.asr && d.config.asr.api_key);
+    assert.strictEqual(hit.data.config.asr.api_key, "…已设置");
+    assert.ok(!JSON.stringify(hit.data).includes("asr-secret-123"), "明文密钥不得出现在广播");
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { api_key: "" } })).status, 200);
+    c.close();
+  });
+
   await test("config PUT 非法值 → 400", async () => {
     const r = await api("PUT", "/api/config", { port: "abc" });
     assert.strictEqual(r.status, 400);
@@ -1221,6 +1297,24 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // 恢复全局 ragflow（url/key/chat_id 全量还原）+ 清理会话
     assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+  await test("asr: /api/asr/test 测试连接（ok/模型不在列表/未配置/不可达 502/非管理 401）", async () => {
+    const t1 = await adminFetch("POST", "/api/asr/test", { asr: { url: ASR_BASE + "/v1", model: "mock-asr" } }, adminTok);
+    assert.strictEqual(t1.status, 200);
+    assert.strictEqual(t1.data.ok, true, t1.data.detail);
+    assert.ok(t1.data.models.includes("mock-asr"));
+    assert.strictEqual(t1.data.health, true, "/health 探测");
+    const t2 = await adminFetch("POST", "/api/asr/test", { asr: { url: ASR_BASE + "/v1", model: "nope-model" } }, adminTok);
+    assert.strictEqual(t2.status, 200);
+    assert.strictEqual(t2.data.ok, false);
+    assert.ok(String(t2.data.detail).includes("不在服务列表"));
+    const t3 = await adminFetch("POST", "/api/asr/test", { asr: { url: "" } }, adminTok);
+    assert.strictEqual(t3.status, 400, "未配置 -> 400");
+    const t4 = await adminFetch("POST", "/api/asr/test", { asr: { url: ASR_BASE + "/v1" } }, "");
+    assert.strictEqual(t4.status, 401, "非管理 -> 401");
+    const t5 = await adminFetch("POST", "/api/asr/test", { asr: { url: "http://127.0.0.1:18999/v1" } }, adminTok);
+    assert.strictEqual(t5.status, 502, "服务不可达 -> 502");
   });
 
   await test("sessions: 会话级 chat_id 变更自动重置 ragflow 后端会话", async () => {

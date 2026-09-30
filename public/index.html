@@ -99,6 +99,7 @@
           <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
           <div class="composer-actions">
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
+            <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音，识别后填入输入框"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
             <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>
         </div>
@@ -192,6 +193,9 @@
     <span class="cfg-divider" aria-hidden="true"></span>
     <span class="cfg-group-label">安全配置</span>
     <button class="cfg-tab" data-cfgtab="security" type="button"><svg class="icon"><use href="/icons.svg#i-lock"></use></svg> 安全</button>
+    <span class="cfg-divider" aria-hidden="true"></span>
+    <span class="cfg-group-label">语音输入</span>
+    <button class="cfg-tab" data-cfgtab="asr" type="button"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> 语音</button>
   </div>
   <div class="drawer-body">
     <section class="cfg-panel hidden" data-cfgtab="openai">
@@ -278,6 +282,24 @@
           </div>
           <div id="sec-pw-state" class="sec-note"></div>
         </div>
+      </div>
+    </section>
+    <section class="cfg-panel hidden" data-cfgtab="asr">
+      <h3>语音输入（麦克风 → 文字）</h3>
+      <p class="sec-desc">OpenAI 兼容 ASR 服务（与 asr-tool 同源）：浏览器录 WAV，服务端转发识别，结果填入输入框待确认后发送。留空 = 未启用（界面麦克风按钮禁用提示）。</p>
+      <label>接口基址（如 http://host:19003/v1，不以 /v1 结尾会自动补）</label>
+      <input id="cfg-asr-url" type="text" spellcheck="false" placeholder="http://host:19003/v1">
+      <label>API Key（可空）</label>
+      <input id="cfg-asr-api_key" type="password" spellcheck="false">
+      <label>模型（如 qwen3-asr-1.7b）</label>
+      <input id="cfg-asr-model" type="text" spellcheck="false">
+      <label>语言（如 zh，空 = 自动检测）</label>
+      <input id="cfg-asr-language" type="text" spellcheck="false">
+      <label>识别超时（秒，1-300）</label>
+      <input id="cfg-asr-timeout" type="number" min="1" max="300" step="1" value="60">
+      <div class="asr-test-row">
+        <button id="btn-asr-test" class="btn ghost" type="button">测试连接</button>
+        <span id="asr-test-state" class="save-state"></span>
       </div>
     </section>
   </div>

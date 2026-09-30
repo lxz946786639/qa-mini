@@ -19,6 +19,7 @@ const {
 const { SessionManager } = require("./lib/qa_runner");
 const { QaError } = require("./lib/sse");
 const { testProtocol } = require("./lib/protocol_test");
+const { AsrError, transcribe: asrTranscribe, asrProbe } = require("./lib/asr");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 
@@ -135,6 +136,7 @@ function maskConfigForBroadcast(c) {
   for (const k of Object.keys(m.protocols || {})) {
     if (m.protocols[k] && m.protocols[k].api_key) m.protocols[k].api_key = "…已设置";
   }
+  if (m.asr && m.asr.api_key) m.asr.api_key = "…已设置";
   if (m.security) {
     m.security.admin_password = "";
     m.security.access_codes = (m.security.access_codes || []).map((x) => ({ ...x }));
@@ -169,6 +171,37 @@ function readBody(req, limit = 2 * 1024 * 1024) {
       chunks.push(c);
     });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+// 原始字节请求体（WAV 音频上传用）；超过 limit 时读完丢弃，end 后 reject「请求体过大」
+// （不立即 destroy：让客户端能收到 413 响应而非断连）
+function readRawBody(req, limit = 2 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    let overflow = false;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (!overflow) {
+        if (size > limit) {
+          overflow = true;
+          chunks.length = 0; // 丢弃已缓存数据，继续消费流
+        } else {
+          chunks.push(c);
+        }
+      }
+    });
+    req.on("end", () => {
+      if (overflow) {
+        const e = new Error("请求体过大");
+        e.tooLarge = true;
+        reject(e);
+      } else {
+        resolve(Buffer.concat(chunks));
+      }
+    });
     req.on("error", reject);
   });
 }
@@ -318,6 +351,83 @@ async function handleProtocolTest(req, res, id) {
   if (!PROTOCOLS.includes(proto)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + proto });
   const r = await testProtocol(proto, config, body.config || {});
   return sendJSON(res, 200, { ok: r.ok, detail: r.detail });
+}
+
+// ---- /api/asr：Web 端语音输入（浏览器录 WAV → 服务端转发 ASR 服务 → 返回文字） ----
+// 请求体 = 原始 WAV 字节（16-bit PCM，建议 16kHz 单声道；上限 10MB）；
+// 信任模型与 /api/chat 一致（viewer 级鉴权在路由处）；asr.url 未配置 → 400。
+const ASR_MAX_BYTES = 10 * 1024 * 1024;
+function asrSection() {
+  const a = config && config.asr;
+  return a && typeof a === "object" && !Array.isArray(a) ? a : {};
+}
+async function handleAsr(req, res) {
+  const a = asrSection();
+  const url = String(a.url || "").trim();
+  if (!url) return sendJSON(res, 400, { ok: false, detail: "ASR 未配置（设置 → 语音输入）" });
+  let wav;
+  try {
+    wav = await readRawBody(req, ASR_MAX_BYTES);
+  } catch (e) {
+    return sendJSON(res, /过大/.test(e.message || "") ? 413 : 400, { ok: false, detail: e.message || String(e) });
+  }
+  if (wav.length < 44 || wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 12) !== "WAVE") {
+    return sendJSON(res, 400, { ok: false, detail: "请求体必须是 WAV 音频（16-bit PCM）" });
+  }
+  const t0 = Date.now();
+  try {
+    const text = await asrTranscribe(wav, a);
+    return sendJSON(res, 200, {
+      ok: true,
+      text,
+      detail: text ? "" : "（无声/无法识别）",
+      duration_s: Math.round((Date.now() - t0) / 100) / 10
+    });
+  } catch (e) {
+    const msg = e instanceof AsrError ? e.message : ("识别请求异常: " + (e && e.message || e));
+    return sendJSON(res, 502, { ok: false, detail: "语音识别失败: " + msg });
+  }
+}
+
+// ---- /api/asr/test：ASR 服务「测试连接」（管理） ----
+// body 可带 { asr: {...} } 表单草稿（用草稿值探测，未传用已存配置）；
+// /models 为门槛（网络失败 502）；model 非空且不在服务列表 → ok=false。
+async function handleAsrTest(req, res) {
+  let body = {};
+  try { body = await parseJSONBody(req); } catch { body = {}; }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
+  }
+  const draft = body.asr;
+  const a = { ...asrSection() };
+  if (draft && typeof draft === "object" && !Array.isArray(draft)) {
+    for (const k of ["url", "api_key", "model", "language"]) {
+      if (typeof draft[k] === "string") a[k] = draft[k].trim();
+    }
+    if (draft.timeout !== undefined && draft.timeout !== "") a.timeout = draft.timeout;
+  }
+  const url = String(a.url || "").trim();
+  if (!url) return sendJSON(res, 400, { ok: false, detail: "ASR 未配置（请填写接口基址）" });
+  let probe;
+  try {
+    probe = await asrProbe(a);
+  } catch (e) {
+    return sendJSON(res, 502, { ok: false, detail: e instanceof AsrError ? e.message : String(e && e.message || e) });
+  }
+  const model = String(a.model || "").trim();
+  if (model && !probe.models.includes(model)) {
+    return sendJSON(res, 200, {
+      ok: false,
+      detail: "模型不在服务列表（服务提供: " + (probe.models.length ? probe.models.join(", ") : "无") + "）",
+      models: probe.models
+    });
+  }
+  return sendJSON(res, 200, {
+    ok: true,
+    detail: "已连接" + (probe.models.length ? "（模型: " + probe.models.join(", ") + "）" : ""),
+    health: probe.health,
+    models: probe.models
+  });
 }
 
 function handleDeleteSession(res, id) {
@@ -638,7 +748,8 @@ const server = http.createServer(async (req, res) => {
         sessions: manager.list().length,
         active_qa: manager.activeIds(),
         sse_clients: sseClients.size,
-        protocols: PROTOCOLS
+        protocols: PROTOCOLS,
+        asr_configured: Boolean(String(((config || {}).asr || {}).url || "").trim())
       });
     }
     if (req.method === "GET" && p === "/api/status") return handleStatus(res);
@@ -681,6 +792,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/chat") {
       if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
       return await handleChat(req, res);
+    }
+    if (req.method === "POST" && p === "/api/asr") {
+      if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return await handleAsr(req, res);
     }
     if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj); // 凭据 = 会话推送 token（handler 内校验），与访问码无关
     if (req.method === "POST" && p === "/api/cancel") {
@@ -729,6 +844,12 @@ const server = http.createServer(async (req, res) => {
         if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
         return handleDeleteSession(res, mSess[1]);
       }
+    }
+
+    // 管理：ASR 测试连接（草稿值探测；已存配置兜底）
+    if (req.method === "POST" && p === "/api/asr/test") {
+      if (!isAdmin(req, urlObj)) return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      return await handleAsrTest(req, res);
     }
 
     // 管理：协议配置
