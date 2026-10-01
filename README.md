@@ -221,8 +221,8 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   浏览器把 16kHz WAV（整段）上传 `/api/asr`，服务端转发「⚙ 设置 → 语音输入」里配置的
   **OpenAI 兼容 ASR 服务**（与 asr-tool 同源：`/audio/transcriptions`，404/405/400 自动
   回退 `/chat/completions` base64 音频），识别结果**填入输入框待确认发送（不自动
-  提问）**；composer 区「识别后自动发送」勾选（本地偏好，默认关）可让定稿结果**立即
-  发送**（输入框已有文本保留）。麦克风需**安全上下文**：`http://<IP>` 访问时浏览器禁止录音，按钮自动
+  提问）**；composer 区「识别后自动发送」勾选（本地偏好，**默认勾选**）——定稿结果
+  **立即发送**（输入框已有文本保留）；取消勾选则恢复填入输入框待确认。麦克风需**安全上下文**：`http://<IP>` 访问时浏览器禁止录音，按钮自动
   禁用并 tooltip 说明（需 https，见 doc/03 §8 的 compose `tls` profile 自签入口，
   或本机 127.0.0.1/localhost 访问）。
 - 图标：引入**轻量自托管 SVG 图标库**（`public/icons.svg` sprite，22 枚 Lucide 风格

@@ -1503,8 +1503,13 @@ async function saveSettings() {
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
 const ASR_PARTIAL_S = 1.5; // 对齐 asr-tool partial_interval_s：中间识别周期（前缀重提）
-const ASR_AUTOSEND_KEY = "qa-mini-asr-autosend"; // 识别定稿后是否立即发送（默认关 = 确认后再发）
-function asrAutosend() { try { return localStorage.getItem(ASR_AUTOSEND_KEY) === "1"; } catch { return false; } }
+const ASR_AUTOSEND_KEY = "qa-mini-asr-autosend"; // 识别定稿后是否立即发送（默认勾选 = 立即发送；取消勾选 = 确认后再发）
+function asrAutosend() {
+  try {
+    const v = localStorage.getItem(ASR_AUTOSEND_KEY);
+    return v === null ? true : v === "1"; // 无偏好记录时默认开
+  } catch { return true; }
+}
 const mic = {
   recording: false, transcribing: false, starting: false, timer: null, t0: 0,
   partialTimer: null, partialSeq: 0, partialBusy: false,
@@ -1890,7 +1895,7 @@ $("font-mode").addEventListener("change", () => {
     }
     micStart();
   });
-  // 语音输入：识别后是否自动发送（本地偏好，默认关 = 确认后再发）
+  // 语音输入：识别后是否自动发送（本地偏好，默认勾选 = 立即发送）
   const asrAuto = $("asr-autosend");
   asrAuto.checked = asrAutosend();
   asrAuto.addEventListener("change", () => {
