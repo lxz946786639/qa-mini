@@ -1523,9 +1523,16 @@ function rebuildAudioSourceOptions(devices) {
   const cur = sel.value || audioSource();
   const opts = [{ v: "default", t: "默认麦克风" }];
   let n = 0;
-  for (const d of devices || []) {
-    n++;
-    opts.push({ v: d.deviceId, t: d.label || ("麦克风 " + n) });
+  const names = [];
+  for (const d of devices || []) { n++; names.push(d.label || ("麦克风 " + n)); }
+  const totals = {};
+  for (const t of names) totals[t] = (totals[t] || 0) + 1;
+  const idx = {};
+  for (let i = 0; i < names.length; i++) {
+    const t = names[i];
+    idx[t] = (idx[t] || 0) + 1;
+    // 同名设备（如 Realtek 多 profile）追加 ×序号 便于区分
+    opts.push({ v: devices[i].deviceId, t: totals[t] > 1 ? (t + " ×" + idx[t]) : t });
   }
   opts.push({ v: "tab", t: tabCaptureSupported() ? "捕获标签页/窗口音频" : "捕获标签页/窗口音频（需 Chrome）" });
   sel.innerHTML = "";
