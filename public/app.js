@@ -1587,9 +1587,11 @@ async function micStop() {
   mic.transcribing = true;
   setMicUI();
   try {
-    const resp = await fetch("/api/asr", {
+    // 查看级接口：关闭匿名访问时须带访问 token（?access=，与 /api/chat 一致）
+    const au = withAuth("POST", "/api/asr", null, { "Content-Type": "audio/wav" });
+    const resp = await fetch(au.url, {
       method: "POST",
-      headers: { "Content-Type": "audio/wav" },
+      headers: au.headers,
       body: wav
     });
     const d = await resp.json().catch(() => ({}));
