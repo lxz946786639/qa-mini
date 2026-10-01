@@ -375,8 +375,13 @@ async function handleAsr(req, res) {
     return sendJSON(res, 400, { ok: false, detail: "请求体必须是 WAV 音频（16-bit PCM）" });
   }
   const t0 = Date.now();
+  // 客户端断开检测（Node 惯用法：res "close" 且尚未写完 → 断开；req.signal 在
+  // 请求体读完后即 aborted，不能用作断开检测）→ 中止对 ASR 的上游推理
+  const ac = new AbortController();
+  const onClientClose = () => { if (!res.writableFinished) ac.abort(); };
+  res.on("close", onClientClose);
   try {
-    const text = await asrTranscribe(wav, a);
+    const text = await asrTranscribe(wav, a, ac.signal);
     return sendJSON(res, 200, {
       ok: true,
       text,
@@ -386,6 +391,8 @@ async function handleAsr(req, res) {
   } catch (e) {
     const msg = e instanceof AsrError ? e.message : ("识别请求异常: " + (e && e.message || e));
     return sendJSON(res, 502, { ok: false, detail: "语音识别失败: " + msg });
+  } finally {
+    res.off("close", onClientClose);
   }
 }
 

@@ -1502,8 +1502,10 @@ async function saveSettings() {
 // max_segment_s），<0.4s 丢弃（min_segment_s）。识别结果填入输入框待确认，不自动发送。
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
+const ASR_PARTIAL_S = 1.5; // 对齐 asr-tool partial_interval_s：中间识别周期（前缀重提）
 const mic = {
   recording: false, transcribing: false, starting: false, timer: null, t0: 0,
+  partialTimer: null, partialSeq: 0, partialBusy: false,
   stream: null, ctx: null, node: null, srcNode: null, rate: 16000, chunks: [],
   secure: !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
 };
@@ -1560,11 +1562,43 @@ function encodeWav(samples, sampleRate) {
   for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, samples[i], true);
   return new Uint8Array(buf);
 }
+function hideMicInterim() {
+  const el = $("mic-interim");
+  if (el) { el.textContent = ""; el.classList.add("hidden"); }
+}
+// 中间识别（对齐 asr-tool「段进行中」语义）：周期性把「段首→当前」音频前缀重提一次
+// 中间识别，以 … 前缀刷新预览行；同一时刻至多 1 个在途（忙则跳过、不排队）；
+// 中间结果不落盘、不入输入框；失败静默忽略（不 toast）。
+async function partialTick() {
+  if (!mic.recording || mic.transcribing || mic.partialBusy) return;
+  const total = mic.chunks.reduce((n, c) => n + c.length, 0);
+  if (total < 800) return; // 样本不足
+  mic.partialBusy = true;
+  const seq = ++mic.partialSeq;
+  try {
+    const data = new Int16Array(total);
+    let off = 0;
+    for (const c of mic.chunks) { data.set(c, off); off += c.length; }
+    const wav = encodeWav(data, mic.rate);
+    const au = withAuth("POST", "/api/asr", null, { "Content-Type": "audio/wav" });
+    const resp = await fetch(au.url, { method: "POST", headers: au.headers, body: wav });
+    const d = await resp.json().catch(() => ({}));
+    // 序号守卫：仍在录音且为本段最新 partial 才展示（防旧响应回写）
+    if (resp.ok && d.ok && d.text && mic.recording && seq === mic.partialSeq) {
+      const el = $("mic-interim");
+      el.textContent = "…" + d.text;
+      el.classList.remove("hidden");
+    }
+  } catch { /* 中间识别失败静默忽略 */ }
+  finally { mic.partialBusy = false; }
+}
 async function micStop() {
   if (!mic.recording) return;
   mic.recording = false;
   mic.starting = false;
   if (mic.timer) { clearInterval(mic.timer); mic.timer = null; }
+  if (mic.partialTimer) { clearInterval(mic.partialTimer); mic.partialTimer = null; }
+  mic.partialSeq++; // 使在途中间结果作废（展示有 seq 守卫，不等待其返回）
   const secs = (Date.now() - mic.t0) / 1000;
   try {
     if (mic.node) mic.node.disconnect();
@@ -1578,6 +1612,7 @@ async function micStop() {
   mic.chunks = [];
   if (secs < ASR_MIN_S || total < 800) {
     showToast("录音太短（<0.4 秒），未发送识别", 2500);
+    hideMicInterim();
     setMicUI();
     return;
   }
@@ -1609,6 +1644,7 @@ async function micStop() {
     showToast("语音识别失败: " + ((e && e.message) || e), 3500);
   } finally {
     mic.transcribing = false;
+    hideMicInterim(); // 定稿完成（成功/失败）→ 清除中间预览
     setMicUI();
   }
 }
@@ -1660,6 +1696,7 @@ async function micStart() {
   mic.ctx = ctx;
   mic.rate = ctx.sampleRate || 16000;
   mic.chunks = [];
+  mic.partialSeq = 0; mic.partialBusy = false; hideMicInterim();
   mic.srcNode = ctx.createMediaStreamSource(stream);
   mic.node = new AudioWorkletNode(ctx, "mic-capture");
   mic.node.port.onmessage = (ev) => { if (ev.data) mic.chunks.push(new Int16Array(ev.data)); };
@@ -1677,6 +1714,7 @@ async function micStart() {
     }
     if (mic.recording) $("btn-mic-label").textContent = fmtMicTime(s);
   }, 500);
+  mic.partialTimer = setInterval(partialTick, ASR_PARTIAL_S * 1000);
   $("btn-mic-label").textContent = fmtMicTime(0);
   mic.starting = false;
   setMicUI();

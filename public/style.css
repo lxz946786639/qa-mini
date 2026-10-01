@@ -486,6 +486,18 @@ footer {
   max-height: 160px;
   line-height: 1.5;
 }
+/* 语音输入中间识别预览行（… 前缀；不落盘、不入输入框，停止后清除） */
+.mic-interim {
+  margin: 6px 10px 0;
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-dim);
+  border-left: 2px solid var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .composer-bar {
   display: flex;
   align-items: center;

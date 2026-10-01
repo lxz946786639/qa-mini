@@ -528,7 +528,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v34"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v35"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -882,6 +882,35 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     big.write("RIFF", 0); big.write("WAVE", 8);
     const r = await asrPost(big);
     assert.strictEqual(r.status, 413);
+  });
+  await test("asr: transcribe 传入已中止信号 → 快速拒绝（不发上游请求）", async () => {
+    const { AsrError, transcribe } = require("../lib/asr.js");
+    const ac = new AbortController();
+    ac.abort();
+    const t0 = Date.now();
+    let threw = null;
+    try {
+      await transcribe(wav02, { url: ASR_BASE + "/v1", api_key: "", model: "mock-asr", language: "", timeout: 60 }, ac.signal);
+    } catch (e) { threw = e; }
+    assert.ok(threw instanceof AsrError, "应抛 AsrError");
+    assert.ok(/中止/.test(threw.message), "错误信息应标明已中止");
+    assert.ok(Date.now() - t0 < 500, "应快速拒绝（实测 " + (Date.now() - t0) + "ms）");
+  });
+  await test("asr: 客户端断开 → 服务端立即中止上游 ASR 请求", async () => {
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { url: ASR_BASE + "/v1", api_key: "", model: "mock-asr", language: "", timeout: 60 } })).status, 200);
+    MOCKS.asr.delay_ms = 800;
+    MOCKS.asr.aborts = 0;
+    const ac = new AbortController();
+    const p = fetch(BASE + "/api/asr", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: wav02, signal: ac.signal })
+      .then((r) => r.json()).catch(() => null);
+    await sleep(250);
+    ac.abort();
+    await p;
+    await sleep(1500);
+    assert.ok(MOCKS.asr.aborts >= 1, "mock 侧应观察到上游连接被中止（实测 " + MOCKS.asr.aborts + "）");
+    MOCKS.asr.delay_ms = 0;
+    const h = await api("GET", "/api/health");
+    assert.strictEqual(h.status, 200, "中止后服务应继续正常");
   });
   await test("asr: SSE config 事件 asr.api_key 脱敏", async () => {
     const c = await collectSse();

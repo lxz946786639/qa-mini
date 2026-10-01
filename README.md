@@ -128,7 +128,7 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 |---|---|---|
 | POST | `/api/push` | **asr-tool 推送接口**。body=`{token, session_id?, text}`；token 定位会话（未知 401）；带 session_id 时校验一致（不匹配 400）；text 非空（否则 400）。默认 202 `{ok, qa_id, session_id}` 异步执行；`?sync=true` 阻塞至完成（上限 28s）返回 `{ok, answer, detail}`。**鉴权 = token 本身**（高熵随机凭证），开启访问码后也无需另带访问码 |
 | POST | `/api/chat` | 网页提问。body `{session_id, question, context?}` → 202 `{ok, qa_id, session_id}` |
-| POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级） |
+| POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级）；客户端断开即中止对 ASR 的上游请求 |
 | POST | `/api/asr/test` | ASR 服务**测试连接**（管理）。body `{asr?: {url?, api_key?, model?, language?, timeout?}}`（表单草稿，留空回退已存值）→ 200 `{ok, detail, models, health}`（`ok=false` 时 detail = 模型不在服务列表等警告）；未配置 → 400；不可达 → 502 |
 | GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at） |
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?}` → 201 会话 |
@@ -215,8 +215,10 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
   **自定义**（1.00–2.50 数字输入），作用于问题与答案正文（`--qa-line` 变量；
   代码块与标题保持紧凑行距），本地记忆（localStorage）。
 - **语音输入（麦克风 → 文字）**：提问框区「🎤 语音」按钮（图标 + 文字）——点击开始
-  录音（红底脉冲 + 秒数计时，**60s 自动停止**；<0.4s 丢弃不送识别），再点停止 →
-  浏览器把 16kHz WAV 上传 `/api/asr`，服务端转发「⚙ 设置 → 语音输入」里配置的
+  录音（红底脉冲 + 秒数计时，**60s 自动停止**；<0.4s 丢弃不送识别）。录音中每 1.5s
+  重提「段首→当前」音频前缀做**中间识别**，以 `…` 前缀实时显示在提问框上方预览行
+  （asr-tool 同源流式体验；忙则跳过；**中间结果不入输入框**）。再点停止 →
+  浏览器把 16kHz WAV（整段）上传 `/api/asr`，服务端转发「⚙ 设置 → 语音输入」里配置的
   **OpenAI 兼容 ASR 服务**（与 asr-tool 同源：`/audio/transcriptions`，404/405/400 自动
   回退 `/chat/completions` base64 音频），识别结果**填入输入框待确认发送（不自动
   提问）**。麦克风需**安全上下文**：`http://<IP>` 访问时浏览器禁止录音，按钮自动
@@ -252,12 +254,12 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**114 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**116 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
   **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
-  测试连接含鉴权/SSE 广播脱敏）。
+  测试连接含鉴权/SSE 广播脱敏/客户端断开中止上游（lib 级 + E2E））。
 - 环境变量 `QA_MINI_IDLE_TIMEOUT_MS` / `QA_MINI_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`QA_MINI_DATA_DIR`
   指定会话存储目录（测试用它做隔离）。

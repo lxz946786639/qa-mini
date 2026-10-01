@@ -11,7 +11,7 @@
 
 const http = require("http");
 
-const MOCKS = { openai: {}, dify: {}, ragflow: {}, generic: {}, asr: { last: null, noTranscr: false, err500: false } };
+const MOCKS = { openai: {}, dify: {}, ragflow: {}, generic: {}, asr: { last: null, noTranscr: false, err500: false, delay_ms: 0, aborts: 0 } };
 const PORTS = { openai: 18701, dify: 18702, ragflow: 18703, generic: 18704, asr: 18707 };
 const servers = [];
 const keepalives = new Map(); // req -> interval
@@ -319,6 +319,14 @@ function asrServer() {
         res.writeHead(400, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ error: "missing file/model field" }));
       }
+      // delay_ms>0：模拟慢推理；期间客户端（qa-mini 服务端）断开 → aborted 计数
+      // （res 未写完时 socket close = 客户端断开；正常完成不计数）
+      let aborted = false;
+      const onClose = () => { if (!res.writableFinished) { aborted = true; MOCKS.asr.aborts++; } };
+      req.socket.on("close", onClose);
+      if (MOCKS.asr.delay_ms > 0) await new Promise((r) => setTimeout(r, MOCKS.asr.delay_ms));
+      req.socket.removeListener("close", onClose);
+      if (aborted) return; // 上游已断，不再响应
       MOCKS.asr.last = { path: req.url, headers: req.headers, ok: true };
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ text: "语音识别测试成功" }));
