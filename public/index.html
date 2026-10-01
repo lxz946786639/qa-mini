@@ -101,6 +101,9 @@
           <div class="composer-actions">
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
             <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）"><input id="asr-autosend" type="checkbox"> 识别后自动发送</label>
+            <select id="audio-source" class="audio-source" title="音频来源：默认麦克风 / 指定输入设备（如「立体声混音」、虚拟声卡——可将系统播放声音作为输入）/ 捕获标签页或窗口音频（Chrome，每次录音弹共享对话框并勾选「共享音频」）。网页无法直接捕获系统全局输出混音。">
+              <option value="default">默认麦克风</option>
+            </select>
             <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音；识别后填入输入框（勾选「识别后自动发送」则直接发送）"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
             <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>

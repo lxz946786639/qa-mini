@@ -1510,6 +1510,42 @@ function asrAutosend() {
     return v === null ? true : v === "1"; // 无偏好记录时默认开
   } catch { return true; }
 }
+const AUDIO_SOURCE_KEY = "qa-mini-audio-source"; // 音频源：default | 输入设备 deviceId | tab（捕获标签页/窗口音频，Chrome）
+function audioSource() {
+  try { return localStorage.getItem(AUDIO_SOURCE_KEY) || "default"; } catch { return "default"; }
+}
+function tabCaptureSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+}
+function rebuildAudioSourceOptions(devices) {
+  const sel = $("audio-source");
+  if (!sel) return;
+  const cur = sel.value || audioSource();
+  const opts = [{ v: "default", t: "默认麦克风" }];
+  let n = 0;
+  for (const d of devices || []) {
+    n++;
+    opts.push({ v: d.deviceId, t: d.label || ("麦克风 " + n) });
+  }
+  opts.push({ v: "tab", t: tabCaptureSupported() ? "捕获标签页/窗口音频" : "捕获标签页/窗口音频（需 Chrome）" });
+  sel.innerHTML = "";
+  for (const o of opts) {
+    const el = document.createElement("option");
+    el.value = o.v;
+    el.textContent = o.t;
+    if (o.v === "tab" && !tabCaptureSupported()) el.disabled = true;
+    sel.appendChild(el);
+  }
+  if ([...sel.options].some((o) => o.value === cur && !o.disabled)) sel.value = cur;
+  else { sel.value = sel.options[0].value; try { localStorage.setItem(AUDIO_SOURCE_KEY, sel.value); } catch {} }
+}
+async function populateAudioSources() {
+  const sel = $("audio-source");
+  if (!sel || !mic.secure) return;
+  let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput" && d.deviceId); } catch {} // 无权限时 deviceId 为空，跳过
+  rebuildAudioSourceOptions(devs);
+}
 const mic = {
   recording: false, transcribing: false, starting: false, timer: null, t0: 0,
   partialTimer: null, partialSeq: 0, partialBusy: false,
@@ -1524,6 +1560,8 @@ function fmtMicTime(s) {
 function setMicUI() {
   const b = $("btn-mic");
   const label = $("btn-mic-label");
+  const srcSel = $("audio-source");
+  if (srcSel) srcSel.disabled = !mic.secure;
   b.classList.remove("recording", "busy");
   if (!mic.secure) {
     b.disabled = true;
@@ -1667,14 +1705,48 @@ async function micStart() {
   if (mic.recording || mic.transcribing || mic.starting) return;
   mic.starting = true;
   let stream;
+  const src = audioSource(); // default | deviceId | tab
+  const baseAudio = { channelCount: 1, sampleRate: 16000 };
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true }
-    });
+    if (src === "tab") {
+      // 捕获所选标签页/窗口播放的音频（Chrome；每次录音弹出共享对话框，需勾选「共享音频」）
+      const ds = await navigator.mediaDevices.getDisplayMedia({
+        video: true, audio: true, selfBrowserSurface: "include",
+        preferCurrentTab: true, surfaceSwitching: "include"
+      });
+      for (const t of ds.getVideoTracks()) { try { t.stop(); } catch {} } // 只用音频轨
+      if (!ds.getAudioTracks().length) {
+        for (const t of ds.getTracks()) t.stop();
+        mic.starting = false;
+        showToast("未获取到音频：请在共享对话框勾选「共享音频」", 3500);
+        return;
+      }
+      stream = ds;
+    } else {
+      // 指定输入设备（如立体声混音/虚拟声卡）时关闭 AEC/NS/AGC，避免处理程序音频
+      const want = src === "default"
+        ? Object.assign({}, baseAudio, { echoCancellation: true, noiseSuppression: true })
+        : Object.assign({}, baseAudio, { echoCancellation: false, noiseSuppression: false, autoGainControl: false, deviceId: { exact: src } });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: want });
+      } catch (e2) {
+        if (src !== "default" && /(Overconstrained|NotFound)/i.test(String((e2 && e2.name) || e2))) {
+          showToast("音频设备不可用，已改用默认麦克风", 3500);
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else throw e2;
+      }
+      populateAudioSources(); // 权限到手后补齐设备名称（异步，不阻塞）
+    }
   } catch (e) {
-    const denied = /NotAllowedError|Permission|SecurityError/i.test(String((e && e.name) || e));
+    const name = String((e && e.name) || e);
+    if (src === "tab" && /NotAllowedError/i.test(name)) {
+      mic.starting = false;
+      showToast("已取消共享，未开始录音", 2500);
+      return;
+    }
+    const denied = /NotAllowedError|Permission|SecurityError/i.test(name);
     mic.secure = false; // 权限拒绝后保持禁用
-    showToast(denied ? "麦克风权限被拒绝（浏览器设置 → 网站设置 → 麦克风）" : "无法访问麦克风: " + ((e && e.message) || e), 3500);
+    showToast(denied ? "麦克风权限被拒绝（浏览器设置 → 网站设置 → 麦克风）" : "无法访问音频: " + name, 3500);
     setMicUI();
     mic.starting = false;
     return;
@@ -1901,6 +1973,16 @@ $("font-mode").addEventListener("change", () => {
   asrAuto.addEventListener("change", () => {
     try { localStorage.setItem(ASR_AUTOSEND_KEY, asrAuto.checked ? "1" : "0"); } catch {}
   });
+  // 语音输入：音频源选择（默认麦克风 / 指定输入设备 / 捕获标签页或窗口音频）
+  const audioSel = $("audio-source");
+  audioSel.value = audioSource();
+  audioSel.addEventListener("change", () => {
+    try { localStorage.setItem(AUDIO_SOURCE_KEY, audioSel.value); } catch {}
+  });
+  if (mic.secure) {
+    populateAudioSources();
+    try { navigator.mediaDevices.addEventListener("devicechange", populateAudioSources); } catch {}
+  }
   setMicUI();
   const q = $("question");
   q.addEventListener("keydown", (e) => {
