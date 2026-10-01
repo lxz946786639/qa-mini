@@ -100,7 +100,8 @@
           <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
           <div class="composer-actions">
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
-            <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音，识别后填入输入框"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
+            <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）"><input id="asr-autosend" type="checkbox"> 识别后自动发送</label>
+            <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音；识别后填入输入框（勾选「识别后自动发送」则直接发送）"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
             <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>
         </div>

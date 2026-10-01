@@ -1503,6 +1503,8 @@ async function saveSettings() {
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
 const ASR_PARTIAL_S = 1.5; // 对齐 asr-tool partial_interval_s：中间识别周期（前缀重提）
+const ASR_AUTOSEND_KEY = "qa-mini-asr-autosend"; // 识别定稿后是否立即发送（默认关 = 确认后再发）
+function asrAutosend() { try { return localStorage.getItem(ASR_AUTOSEND_KEY) === "1"; } catch { return false; } }
 const mic = {
   recording: false, transcribing: false, starting: false, timer: null, t0: 0,
   partialTimer: null, partialSeq: 0, partialBusy: false,
@@ -1633,10 +1635,18 @@ async function micStop() {
     const d = await resp.json().catch(() => ({}));
     if (resp.ok && d.ok) {
       const ta = $("question");
-      const prev = ta.value.replace(/\s+$/, "");
-      ta.value = prev ? prev + " " + d.text : d.text;
-      ta.focus();
-      showToast(d.text ? ("已识别 " + d.text.length + " 字，请确认后发送") : (d.detail || "未识别到语音"), 3000);
+      if (d.text && asrAutosend()) {
+        // 「识别后自动发送」：定稿立即发送（独立于输入框，框内已有文本保留）
+        const keep = ta.value;
+        await askQuestion(d.text);
+        if (keep.trim()) { ta.value = keep; ta.focus(); }
+        showToast("已识别 " + d.text.length + " 字，自动发送", 2500);
+      } else {
+        const prev = ta.value.replace(/\s+$/, "");
+        ta.value = prev ? prev + " " + d.text : d.text;
+        ta.focus();
+        showToast(d.text ? ("已识别 " + d.text.length + " 字，请确认后发送") : (d.detail || "未识别到语音"), 3000);
+      }
     } else {
       showToast("语音识别失败: " + (d.detail || ("HTTP " + resp.status)), 3500);
     }
@@ -1879,6 +1889,12 @@ $("font-mode").addEventListener("change", () => {
       return;
     }
     micStart();
+  });
+  // 语音输入：识别后是否自动发送（本地偏好，默认关 = 确认后再发）
+  const asrAuto = $("asr-autosend");
+  asrAuto.checked = asrAutosend();
+  asrAuto.addEventListener("change", () => {
+    try { localStorage.setItem(ASR_AUTOSEND_KEY, asrAuto.checked ? "1" : "0"); } catch {}
   });
   setMicUI();
   const q = $("question");
