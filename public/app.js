@@ -1503,7 +1503,7 @@ async function saveSettings() {
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
 const mic = {
-  recording: false, transcribing: false, timer: null, t0: 0,
+  recording: false, transcribing: false, starting: false, timer: null, t0: 0,
   stream: null, ctx: null, node: null, srcNode: null, rate: 16000, chunks: [],
   secure: !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
 };
@@ -1563,7 +1563,8 @@ function encodeWav(samples, sampleRate) {
 async function micStop() {
   if (!mic.recording) return;
   mic.recording = false;
-  if (mic.timer) clearInterval(mic.timer);
+  mic.starting = false;
+  if (mic.timer) { clearInterval(mic.timer); mic.timer = null; }
   const secs = (Date.now() - mic.t0) / 1000;
   try {
     if (mic.node) mic.node.disconnect();
@@ -1612,6 +1613,8 @@ async function micStop() {
   }
 }
 async function micStart() {
+  if (mic.recording || mic.transcribing || mic.starting) return;
+  mic.starting = true;
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -1622,6 +1625,7 @@ async function micStart() {
     mic.secure = false; // 权限拒绝后保持禁用
     showToast(denied ? "麦克风权限被拒绝（浏览器设置 → 网站设置 → 麦克风）" : "无法访问麦克风: " + ((e && e.message) || e), 3500);
     setMicUI();
+    mic.starting = false;
     return;
   }
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -1649,6 +1653,7 @@ async function micStart() {
     try { await ctx.close(); } catch {}
     for (const t of stream.getTracks()) t.stop();
     showToast("音频采集初始化失败: " + ((e && e.message) || e), 3500);
+    mic.starting = false;
     return;
   }
   mic.stream = stream;
@@ -1664,10 +1669,16 @@ async function micStart() {
   mic.t0 = Date.now();
   mic.timer = setInterval(() => {
     const s = (Date.now() - mic.t0) / 1000;
-    $("btn-mic-label").textContent = fmtMicTime(s);
-    if (s >= ASR_MAX_S) micStop(); // 硬上限：自动停止送识别
+    if (s >= ASR_MAX_S) { // 硬上限：先自清理 interval 再送识别（防孤儿 interval 持续计数）
+      clearInterval(mic.timer);
+      mic.timer = null;
+      micStop();
+      return;
+    }
+    if (mic.recording) $("btn-mic-label").textContent = fmtMicTime(s);
   }, 500);
   $("btn-mic-label").textContent = fmtMicTime(0);
+  mic.starting = false;
   setMicUI();
 }
 document.addEventListener("DOMContentLoaded", async () => {
