@@ -768,18 +768,24 @@ input:focus, textarea:focus, select:focus {
   .side-foot { display: flex; }
   /* min-height: 0 让主列被限高在视口内（否则长答案会把输入框挤出屏幕） */
   .main-col { height: auto; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  /* 头部紧凑，尽量单行 */
-  header { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+  /* 头部两行：第 1 行 ☰ + 标题；第 2 行 主题 + 显示设置 + 会话按钮 */
+  header { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; }
   #btn-toggle-sidebar { font-size: 15px; padding: 4px 7px; }
-  .title { gap: 6px; }
+  .title { gap: 6px; flex: 1 1 auto; min-width: 0; }
   .title .logo { font-size: 17px; }
-  .title .name { font-size: 14px; }
+  .title .logo .logo-icon { width: 18px; height: 18px; }
+  .title .name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .title .sub { display: none; }
-  .font-ctl { gap: 4px; }
-  .font-ctl select { font-size: 11px; padding: 4px; }
-  .font-ctl input { width: 46px; font-size: 11px; padding: 4px; }
-  .header-right { gap: 6px; }
+  .header-right { flex: 0 0 100%; order: 2; flex-wrap: wrap; row-gap: 6px; gap: 6px; }
+  .font-ctl { gap: 4px; flex: 1 1 20%; min-width: 70px; }
+  .font-ctl select { font-size: 11px; padding: 4px; width: 100%; min-width: 0; }
+  .font-ctl input { width: 46px; flex: 0 0 auto; font-size: 11px; padding: 4px; }
+  /* 按钮防挤压（避免文字被挤成竖排） */
+  #btn-session, #btn-settings { white-space: nowrap; flex-shrink: 0; }
   .btn { padding: 6px 10px; font-size: 12.5px; }
+  /* 空态图标：居中 + 缩小 */
+  .empty-hint .hint-icons { justify-content: center; }
+  .hint-icons .icon { width: 28px; height: 28px; }
 }
 
 /* ---------- 门禁（管理密码 / 访问码） ---------- */
