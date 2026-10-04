@@ -976,6 +976,12 @@ async function refreshAudioStreams(s) {
   } catch {}
 }
 
+// 设备显示名：旧版 asr-tool 发的是设备序号（纯数字），加提示区分
+function fmtDevName(d) {
+  d = String(d == null ? "" : d);
+  return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
+}
+
 // 渲染设备列表 + 默认设备下拉（保留用户当前选择）
 function renderAudioDeviceList(streams) {
   const box = $("sd-audio-devices");
@@ -997,8 +1003,8 @@ function renderAudioDeviceList(streams) {
     dot.className = "audio-dot";
     const nm = document.createElement("span");
     nm.className = "audio-dev-name";
-    nm.textContent = st.device;
-    nm.title = st.device;
+    nm.textContent = fmtDevName(st.device);
+    nm.title = fmtDevName(st.device);
     const info = document.createElement("span");
     info.className = "audio-dev-info";
     const age = st.ms_since_last_frame == null ? "无帧" : Math.max(0, Math.round(st.ms_since_last_frame / 1000)) + "s 前";
@@ -1009,7 +1015,7 @@ function renderAudioDeviceList(streams) {
     box.appendChild(row);
     const opt = document.createElement("option");
     opt.value = st.device;
-    opt.textContent = st.device + (live ? "" : "（已断开）");
+    opt.textContent = fmtDevName(st.device) + (live ? "" : "（已断开）");
     sel.appendChild(opt);
   }
   if (!(streams || []).length) {
@@ -1397,7 +1403,7 @@ function connectEvents() {
       const v = audioStreamSessions.get(d.session_id) || { n: 0, at: now };
       v.n += 1; v.at = now;
       audioStreamSessions.set(d.session_id, v);
-      if (d.session_id === currentSid) showToast("设备开始推流: " + d.device);
+      if (d.session_id === currentSid) showToast("设备开始推流: " + fmtDevName(d.device));
     } else if (d.state === "data") {
       const v = audioStreamSessions.get(d.session_id) || { n: 0, at: now };
       if (v.n < 1) v.n = 1;
@@ -1410,7 +1416,7 @@ function connectEvents() {
         if (v.n <= 0) audioStreamSessions.delete(d.session_id);
         else audioStreamSessions.set(d.session_id, v);
       }
-      if (d.session_id === currentSid) showToast("设备停止推流: " + d.device);
+      if (d.session_id === currentSid) showToast("设备停止推流: " + fmtDevName(d.device));
     }
     renderSessionList();
     // 抽屉打开且当前会话 → 实时刷新设备列表（字节数/距今）
