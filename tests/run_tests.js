@@ -528,7 +528,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v42"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v44"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -1100,6 +1100,56 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r4.status, 400, "seconds > max");
     const r5 = await api("POST", "/api/audio/capture", { token: "kaasr_nope", seconds: 5 });
     assert.strictEqual(r5.status, 401);
+  });
+  await test("audio-listen: 开始 → SSE partial → 停止定稿（mock ASR）+ 重复 409/未知 401/设备未接收 409", async () => {
+    const st = await startPumping(aTok, "监听设备");
+    await pumpStream(st, 1.2);
+    const c = await collectSse();
+    await sleep(200);
+    const e1 = await api("POST", "/api/audio/listen", { token: "kaasr_nope" });
+    assert.strictEqual(e1.status, 401, "未知 token → 401");
+    const e2 = await api("POST", "/api/audio/listen", { token: aTok, device: "无此设备" });
+    assert.strictEqual(e2.status, 409, "设备未在接收 → 409");
+    const s1 = await api("POST", "/api/audio/listen", { token: aTok, device: "监听设备" });
+    assert.strictEqual(s1.status, 200, "listen 开始: " + JSON.stringify(s1.data));
+    assert.strictEqual(s1.data.state, "listening");
+    const s2 = await api("POST", "/api/audio/listen", { token: aTok, device: "监听设备" });
+    assert.strictEqual(s2.status, 409, "同设备重复监听 → 409");
+    // 建任务后立即来一段（0.5s 音频即可出中间识别）；SSE partial 带 session_id
+    const evP = await c.wait("audio_listen", (d) => d.state === "partial" && d.device === "监听设备");
+    assert.strictEqual(evP.data.session_id, aSid, "SSE 事件带 session_id");
+    assert.strictEqual(evP.data.text, "语音识别测试成功", "mock ASR 中间识别文本");
+    // 停止 → 定稿（全段最后一次识别）
+    const s3 = await api("POST", "/api/audio/listen/stop", { token: aTok, device: "监听设备" });
+    assert.strictEqual(s3.status, 200, "stop: " + JSON.stringify(s3.data));
+    assert.strictEqual(s3.data.state, "stopped");
+    assert.strictEqual(s3.data.text, "语音识别测试成功", "定稿文本");
+    assert.ok(s3.data.elapsed_s >= 0.5, "elapsed_s 合理（=" + s3.data.elapsed_s + "）");
+    const s4 = await api("POST", "/api/audio/listen/stop", { token: aTok, device: "监听设备" });
+    assert.strictEqual(s4.status, 409, "无进行中任务 → 409");
+    c.close();
+    await stopAndAwait(st);
+    await sleep(300);
+  });
+  await test("audio-listen: 取消丢弃 + 推流断开自动停（SSE stream_stopped）", async () => {
+    const st = await startPumping(aTok, "取消设备");
+    await pumpStream(st, 1.2);
+    const c = await collectSse();
+    await sleep(200);
+    const s1 = await api("POST", "/api/audio/listen", { token: aTok, device: "取消设备" });
+    assert.strictEqual(s1.status, 200);
+    const s2 = await api("POST", "/api/audio/listen/cancel", { token: aTok, device: "取消设备" });
+    assert.strictEqual(s2.status, 200);
+    assert.strictEqual(s2.data.state, "cancelled");
+    assert.strictEqual(s2.data.text, "", "取消不返回文本");
+    // 再开始 → 客户端停推流 → 任务自动以 stream_stopped 结束
+    const s3 = await api("POST", "/api/audio/listen", { token: aTok, device: "取消设备" });
+    assert.strictEqual(s3.status, 200);
+    await stopAndAwait(st);
+    const evS = await c.wait("audio_listen", (d) => d.state === "stream_stopped" && d.device === "取消设备");
+    assert.strictEqual(evS.data.session_id, aSid);
+    c.close();
+    await sleep(300);
   });
   await test("audio-stream: 同会话双设备 + 指定设备 capture 隔离 + preferred 失效 409", async () => {
     const st1 = await startPumping(aTok, "Dev-1");

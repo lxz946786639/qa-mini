@@ -673,6 +673,13 @@ function renderSessionView(session, running) {
 
 async function switchSession(sid) {
   if (sid === currentSid) return;
+  if (rmt.listening) { // 正在识别 → 通知服务端取消（避免孤儿任务跑到 120s 上限）
+    const cur = curSession();
+    if (cur) {
+      try { await api("POST", "/api/audio/listen/cancel", { token: cur.token, device: rmt.device }); } catch {}
+    }
+  }
+  resetRmtAll(); // 切换会话 → 收起提问框「音频」面板
   currentSid = sid;
   pendingLocals.length = 0;
   renderSessionList();
@@ -982,21 +989,12 @@ function fmtDevName(d) {
   return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
 }
 
-// 渲染设备列表 + 默认设备下拉（保留用户当前选择）
+// 渲染设备列表（会话设置抽屉内：纯信息展示；识别操作在提问框「音频」按钮）
 function renderAudioDeviceList(streams) {
   const box = $("sd-audio-devices");
-  const sel = $("sd-audio-device");
   box.textContent = "";
-  const curSel = sel.value;
-  sel.textContent = "";
-  const opt0 = document.createElement("option");
-  opt0.value = "";
-  opt0.textContent = "（跟随正在接收的设备）";
-  sel.appendChild(opt0);
-  let anyLive = false;
   for (const st of streams || []) {
     const live = st.ms_since_last_frame != null && st.ms_since_last_frame < 3000;
-    if (live) anyLive = true;
     const row = document.createElement("div");
     row.className = "audio-dev" + (live ? " live" : "");
     const dot = document.createElement("span");
@@ -1013,10 +1011,6 @@ function renderAudioDeviceList(streams) {
     row.appendChild(nm);
     row.appendChild(info);
     box.appendChild(row);
-    const opt = document.createElement("option");
-    opt.value = st.device;
-    opt.textContent = fmtDevName(st.device) + (live ? "" : "（已断开）");
-    sel.appendChild(opt);
   }
   if (!(streams || []).length) {
     const sp = document.createElement("span");
@@ -1024,43 +1018,175 @@ function renderAudioDeviceList(streams) {
     sp.textContent = "无（asr-tool 点「开始推流」后此处显示）";
     box.appendChild(sp);
   }
-  const opts = [...sel.options];
-  const s = curSession();
-  const pref = s && s.audio_remote ? s.audio_remote.preferred_device : "";
-  if (opts.some((o) => o.value === curSel && curSel !== "")) sel.value = curSel;
-  else if (pref && opts.some((o) => o.value === pref)) sel.value = pref;
-  else sel.value = "";
-  const btn = $("sd-audio-capture");
-  btn.disabled = !anyLive;
-  btn.title = anyLive
-    ? "截取最近 N 秒推流音频 → ASR 识别 → 自动作为提问发送"
-    : "无正在接收的设备（asr-tool 点「开始推流」后启用）";
 }
 
-// 识别并提问：POST /api/audio/capture（token 鉴权；服务端 409=未在接收 / 422=无声）
-async function captureRemoteAudio() {
+// ---------- 提问框「音频输入」：asr-tool 推流音频实时识别（对齐 asr-tool 交互：
+// 开始识别 / 停止识别（定稿）/ 取消 / 重新识别；中间识别走 SSE audio_listen partial）----------
+const rmt = { mode: false, device: "", listening: false, finalText: "", busy: false };
+function hideRmtInterim() {
+  const el = $("rmt-interim");
+  if (el) { el.textContent = ""; el.classList.add("hidden"); }
+}
+// 拉取本会话正在接收的设备 → 填设备下拉（保留当前选择；非直播设备禁用）
+async function refreshRmtDevices() {
+  const s = curSession();
+  if (!s || !s.token) return [];
+  const sel = $("rmt-device");
+  let streams = [];
+  try {
+    const r = await api("GET", "/api/audio/stream?token=" + encodeURIComponent(s.token));
+    if (r.status === 200 && r.data && r.data.ok) streams = r.data.streams || [];
+  } catch { return streams; }
+  const prev = rmt.device;
+  sel.textContent = "";
+  sel.disabled = !streams.length;
+  if (!streams.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "无正在接收的设备";
+    sel.appendChild(opt);
+    rmt.device = "";
+    return streams;
+  }
+  for (const st of streams) {
+    const live = st.ms_since_last_frame != null && st.ms_since_last_frame < 5000;
+    const opt = document.createElement("option");
+    opt.value = st.device;
+    opt.textContent = fmtDevName(st.device) + (live ? "" : "（已断开）");
+    opt.disabled = !live;
+    sel.appendChild(opt);
+  }
+  const liveList = streams.filter((x) => x.ms_since_last_frame != null && x.ms_since_last_frame < 5000);
+  const stillOk = streams.some((x) => x.device === prev) &&
+    (liveList.some((x) => x.device === prev) || !liveList.length);
+  rmt.device = stillOk ? prev : (liveList[0] || streams[0]).device;
+  sel.value = rmt.device;
+  return streams;
+}
+function setRmtUI() {
+  const panel = $("rmt-audio-panel");
+  if (!panel) return;
+  const b = $("btn-rmt-audio");
+  const label = $("btn-rmt-audio-label");
+  panel.classList.toggle("hidden", !rmt.mode);
+  b.classList.toggle("on", rmt.mode && !rmt.listening);
+  b.classList.toggle("listening", rmt.listening);
+  b.disabled = rmt.listening;
+  label.textContent = rmt.listening ? "识别中…" : "音频";
+  $("btn-rmt-start").hidden = rmt.listening || !!rmt.finalText;
+  $("btn-rmt-again").hidden = rmt.listening || !rmt.finalText;
+  $("btn-rmt-stop").hidden = !rmt.listening;
+  $("btn-rmt-cancel").hidden = !rmt.listening;
+}
+function resetRmtAll() {
+  rmt.mode = false;
+  rmt.device = "";
+  rmt.listening = false;
+  rmt.finalText = "";
+  rmt.busy = false;
+  hideRmtInterim();
+  setRmtUI();
+}
+async function onRmtAudioToggle() {
+  if (rmt.listening) return; // 识别中：用「停止识别 / 取消」
+  if (rmt.mode) { resetRmtAll(); return; }
+  const s = curSession();
+  if (!s || !s.token) { showToast("查看模式：音频识别不可用（需 asr-tool 对接）", 3000); return; }
+  if (!s.audio_remote || s.audio_remote.enabled !== true) {
+    showToast("本会话未启用「电脑输出音频接收」（会话设置 → 启用）", 3500);
+    return;
+  }
+  rmt.mode = true;
+  setRmtUI();
+  const streams = await refreshRmtDevices();
+  if (!streams.length) showToast("无正在接收的设备（请先在 asr-tool 点「开始推流」）", 3500);
+}
+async function rmtStart() {
+  if (rmt.busy || rmt.listening) return;
   const s = curSession();
   if (!s) return;
-  const btn = $("sd-audio-capture");
-  if (btn.disabled) return;
-  const seconds = Number($("sd-audio-seconds").value) || 30;
-  const device = $("sd-audio-device").value || undefined;
-  const old = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "识别中…";
+  if (!rmt.device) { showToast("无可选音频设备（等 asr-tool 推流后重试）", 3000); return; }
+  rmt.busy = true;
+  $("btn-rmt-start").disabled = true;
+  $("btn-rmt-again").disabled = true;
   try {
-    const r = await api("POST", "/api/audio/capture", { token: s.token, device, seconds });
+    const r = await api("POST", "/api/audio/listen", { token: s.token, device: rmt.device });
     if (r.status === 200 && r.data && r.data.ok) {
-      showToast("已识别并提问: " + (r.data.text || "").slice(0, 40));
+      rmt.listening = true;
+      rmt.finalText = "";
+      const el = $("rmt-interim");
+      el.textContent = "识别中…";
+      el.classList.remove("hidden");
     } else {
-      showToast("识别失败: " + ((r.data && r.data.detail) || ("HTTP " + r.status)), 4000);
+      showToast("开始识别失败: " + ((r.data && r.data.detail) || ("HTTP " + r.status)), 3500);
     }
   } catch (err) {
-    showToast("识别失败: " + err.message, 4000);
+    showToast("开始识别失败: " + err.message, 3500);
   } finally {
-    btn.textContent = old;
-    btn.disabled = false;
-    refreshAudioStreams(s);
+    rmt.busy = false;
+    $("btn-rmt-start").disabled = false;
+    $("btn-rmt-again").disabled = false;
+    setRmtUI();
+  }
+}
+async function rmtStop() {
+  if (!rmt.listening) return;
+  rmt.listening = false; // 先行上锁：服务端 SSE stopped 事件不重复定稿
+  setRmtUI();
+  const s = curSession();
+  if (!s) return;
+  $("btn-rmt-stop").disabled = true;
+  try {
+    const r = await api("POST", "/api/audio/listen/stop", { token: s.token, device: rmt.device });
+    if (r.status === 200 && r.data && r.data.ok) {
+      await finalizeRemoteText(r.data.text || "");
+    } else {
+      showToast("停止失败: " + ((r.data && r.data.detail) || ("HTTP " + r.status)), 3500);
+      setRmtUI();
+    }
+  } catch (err) {
+    showToast("停止失败: " + err.message, 3500);
+    setRmtUI();
+  } finally {
+    $("btn-rmt-stop").disabled = false;
+  }
+}
+async function rmtCancel() {
+  if (!rmt.listening) return;
+  rmt.listening = false;
+  const s = curSession();
+  if (!s) return;
+  try {
+    await api("POST", "/api/audio/listen/cancel", { token: s.token, device: rmt.device });
+  } catch {}
+  rmt.finalText = "";
+  hideRmtInterim();
+  setRmtUI();
+  showToast("已取消识别（文本已丢弃）", 2000);
+}
+// 定稿：自动发送（勾选「识别后自动发送」）或填入输入框待确认（同「语音」语义）
+async function finalizeRemoteText(text) {
+  hideRmtInterim();
+  rmt.listening = false;
+  if (!text || !text.trim()) {
+    showToast("未识别到语音", 3000);
+    setRmtUI();
+    return;
+  }
+  text = text.trim();
+  rmt.finalText = text;
+  setRmtUI();
+  const ta = $("question");
+  if (asrAutosend()) {
+    const keep = ta.value;
+    await askQuestion(text);
+    if (keep.trim()) { ta.value = keep; ta.focus(); }
+    showToast("已识别 " + text.length + " 字，自动发送", 2500);
+  } else {
+    const prev = ta.value.replace(/\s+$/, "");
+    ta.value = prev ? prev + " " + text : text;
+    ta.focus();
+    showToast("已识别 " + text.length + " 字，请确认后发送", 3000);
   }
 }
 
@@ -1072,7 +1198,6 @@ function openSessionDrawer() {
   $("sd-continue").checked = !!s.continue_session;
   const ar = (s.audio_remote && typeof s.audio_remote === "object") ? s.audio_remote : { enabled: false, preferred_device: "" };
   $("sd-audio-enable").checked = ar.enabled === true;
-  $("sd-audio-device").value = typeof ar.preferred_device === "string" ? ar.preferred_device : "";
   $("sd-session-id").value = s.id;
   $("sd-token").value = s.token || "";
   $("sd-snippet").value = asrSnippet(s);
@@ -1141,7 +1266,8 @@ async function saveSessionDrawer() {
       protocol_config: { [protoNow]: pf },
       audio_remote: {
         enabled: $("sd-audio-enable").checked,
-        preferred_device: $("sd-audio-device").value
+        preferred_device: (s.audio_remote && typeof s.audio_remote.preferred_device === "string")
+          ? s.audio_remote.preferred_device : ""
       }
     });
     if (r.status === 200 && r.data && r.data.ok) {
@@ -1424,6 +1550,40 @@ function connectEvents() {
     if (cur && cur.id === d.session_id &&
         !$("session-drawer").classList.contains("hidden")) {
       refreshAudioStreams(cur);
+    }
+    // 提问框「音频」面板打开 → 设备增删时刷新下拉
+    if (rmt.mode && cur && cur.id === d.session_id) refreshRmtDevices();
+  });
+  // 提问框「音频」实时识别：partial（中间识别）/ stopped（定稿）/ cancelled / stream_stopped（推流断开自动停）
+  es.addEventListener("audio_listen", (e) => {
+    let d;
+    try { d = JSON.parse(e.data); } catch { return; }
+    if (!d || !d.session_id || d.session_id !== currentSid) return;
+    if (!rmt.mode || (d.device && d.device !== rmt.device)) return;
+    if (d.state === "partial") {
+      rmt.finalText = d.text || "";
+      const el = $("rmt-interim");
+      el.textContent = "…" + rmt.finalText;
+      el.classList.remove("hidden");
+    } else if (d.state === "stopped") {
+      if (!rmt.listening) return; // 停止点击响应已处理（定稿文本以响应为准）
+      rmt.listening = false;
+      finalizeRemoteText(d.text || "");
+    } else if (d.state === "cancelled") {
+      if (!rmt.listening) return;
+      rmt.listening = false;
+      rmt.finalText = "";
+      hideRmtInterim();
+      setRmtUI();
+    } else if (d.state === "stream_stopped") {
+      if (rmt.listening) {
+        rmt.listening = false;
+        showToast("音频推流已结束，识别自动停止", 3000);
+        finalizeRemoteText(d.text || "");
+        refreshRmtDevices();
+      } else {
+        setRmtUI();
+      }
     }
   });
   es.addEventListener("config", () => {
@@ -2102,7 +2262,12 @@ $("font-mode").addEventListener("change", () => {
   $("sd-copy-body").addEventListener("click", () => copyText($("sd-snippet-body").value, "body 值已复制"));
   $("sd-reset").addEventListener("click", resetCurrentSession);
   // 电脑输出音频：识别并提问（设备列表/按钮可用性由 renderAudioDeviceList 维护）
-  $("sd-audio-capture").addEventListener("click", captureRemoteAudio);
+  // 提问框「音频输入」：asr-tool 推流实时识别（设备下拉 + 开始/停止/取消/重新识别）
+$("btn-rmt-audio").addEventListener("click", onRmtAudioToggle);
+$("btn-rmt-start").addEventListener("click", rmtStart);
+$("btn-rmt-again").addEventListener("click", rmtStart);
+$("btn-rmt-stop").addEventListener("click", rmtStop);
+$("btn-rmt-cancel").addEventListener("click", rmtCancel);
   // asr-tool 对接区块：默认收起，点击展开/折叠（会话设置表单对非 asr-tool 用户只保留 名称/协议/续接）
   $("sd-asr-toggle").addEventListener("click", () => {
     const nowHidden = $("sd-asr-extra").classList.toggle("hidden");

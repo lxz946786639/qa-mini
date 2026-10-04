@@ -96,12 +96,22 @@
       <div class="composer">
         <textarea id="question" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行" autofocus></textarea>
         <div id="mic-interim" class="mic-interim hidden"></div>
+        <div id="rmt-audio-panel" class="rmt-audio-panel hidden">
+          <label class="rmt-audio-label" for="rmt-device">设备</label>
+          <select id="rmt-device" title="asr-tool 正在推流到本会话的设备"></select>
+          <button id="btn-rmt-start" class="btn" type="button">开始识别</button>
+          <button id="btn-rmt-stop" class="btn danger" type="button" hidden>停止识别</button>
+          <button id="btn-rmt-cancel" class="btn" type="button" hidden>取消</button>
+          <button id="btn-rmt-again" class="btn" type="button" hidden>重新识别</button>
+        </div>
+        <div id="rmt-interim" class="mic-interim hidden"></div>
         <div class="composer-bar">
           <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
           <div class="composer-actions">
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
             <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）"><input id="asr-autosend" type="checkbox"> 识别后自动发送</label>
             <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音；识别后填入输入框（勾选「识别后自动发送」则直接发送）"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
+            <button id="btn-rmt-audio" class="btn" type="button" title="音频输入：识别 asr-tool 持续推流到本会话的电脑输出音频（展开设备选择，点「开始识别」）"><svg class="icon"><use href="/icons.svg#i-headphones"></use></svg> <span id="btn-rmt-audio-label">音频</span></button>
             <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>
         </div>
@@ -167,21 +177,8 @@
 
     <label class="chk"><input id="sd-audio-enable" type="checkbox"> 启用电脑输出音频接收 <small>（asr-tool「持续推流」到本会话）</small></label>
     <div id="sd-audio-extra">
-      <label>正在接收的设备 <small>（推流中时实时刷新）</small></label>
+      <label>正在接收的设备 <small>（推流中时实时刷新；识别操作在底部提问框「音频」按钮）</small></label>
       <div id="sd-audio-devices" class="audio-devices"><span class="audio-dev-empty">无</span></div>
-      <label>默认设备 <small>（「识别并提问」未指定设备时使用）</small></label>
-      <select id="sd-audio-device">
-        <option value="">（跟随正在接收的设备）</option>
-      </select>
-      <div class="audio-capture-row">
-        <span>识别最近</span>
-        <select id="sd-audio-seconds">
-          <option value="10">10 秒</option>
-          <option value="30" selected>30 秒</option>
-          <option value="60">60 秒</option>
-        </select>
-        <button id="sd-audio-capture" class="btn" type="button" disabled title="截取最近 N 秒推流音频 → ASR 识别 → 自动作为提问发送">🎧 识别并提问</button>
-      </div>
     </div>
 
     <div class="drawer-inline-actions">

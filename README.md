@@ -91,11 +91,13 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 
 asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI 回环，如 ToDesk 虚拟
 声卡）的音频，持续推给本服务（复用既有端口/TLS sidecar，**不新增端口**；帧协议
-`[u32BE len][Deflate(PCM 16kHz 单声道)]`，200ms/帧，无损压缩）。服务端按会话×设备
-环形缓存（默认 120s），网页「会话设置」勾选「启用电脑输出音频接收」后即可看到
-实时设备列表，点「**🎧 识别并提问**」截取最近 10/30/60s → ASR（复用语音输入配置）→
-自动作为该会话提问（来源徽标「🎧 电脑音频」）。多设备可并存（≤8/会话），
-断线自动重连。详见 doc/01 §3.5、doc/02 §4.1。
+`[u32BE len][Deflate(PCM 16kHz 单声道)]`，200ms/帧，无损压缩；设备头为
+「6位设备码 · 端点名称」，同名虚拟声卡跨机器可区分）。服务端按会话×设备环形
+缓存（默认 120s），网页「会话设置」勾选「启用电脑输出音频接收」后，**提问框区**
+点「**🎧 音频**」按钮选设备 → 「开始识别」实时显示中间识别（对齐 asr-tool 交互）→
+「停止识别」定稿（自动发送或填入输入框）/「取消」/「重新识别」。另有一键 API
+`/api/audio/capture`（截取最近 N 秒 → ASR → 自动提问，来源徽标「🎧 电脑音频」）。
+多设备可并存（≤8/会话），断线自动重连。详见 doc/01 §3.5/§7、doc/02 §4.1。
 
 ## 多会话
 
@@ -108,8 +110,8 @@ asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI �
   自动重置该会话的后端上下文**（下次提问重建）、续接开关；asr-tool 相关字段
   （会话 ID 只读+复制、token 只读+复制+重生成、config.toml 片段与 body 值只读+复制）
   默认折叠在「asr-tool 对接（推送模式）」区块，点击展开；**电脑输出音频**
-  （「启用电脑输出音频接收」开关 + 实时设备列表 + 默认设备 + 「🎧 识别并提问」，
-  见上「持续推流模式」）；「重置会话」（先取消
+  （「启用电脑输出音频接收」开关 + 正在接收的设备信息，识别在提问框「🎧 音频」
+  按钮，见上「持续推流模式」）；「重置会话」（先取消
   在途问答，再清空该会话后端上下文）、删除会话。
 - 会话数据持久化在 SQLite 数据库 data/qa-mini.db（sessions 表 + records 表；
   token/会话ID/协议/后端会话状态/每会话最近 100 条历史）；
@@ -143,7 +145,8 @@ asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI �
 | POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级）；客户端断开即中止对 ASR 的上游请求 |
 | POST | `/api/asr/test` | ASR 服务**测试连接**（管理）。body `{asr?: {url?, api_key?, model?, language?, timeout?}}`（表单草稿，留空回退已存值）→ 200 `{ok, detail, models, health}`（`ok=false` 时 detail = 模型不在服务列表等警告）；未配置 → 400；不可达 → 502 |
 | POST | `/api/audio/stream` | **电脑输出音频推流**（asr-tool 持续推流）。头 `X-Audio-Token`（会话推送 token，缺失/未知 401；会话未启用接收 403；同设备已有流 409）+ `X-Device-Name`（URL 编码设备名）；body = 连续帧 `[u32BE len][Deflate(PCM 16kHz 单声道)]`（200ms/帧）；长连接 chunked，前置校验（401/403/409）即时响应，成功路径在收完整体后回 200 `{ok, stream:"stopped", bytes, frames}`（nginx 截断约束，见 doc/03 §8）；客户端结束 chunked 体 = 正常停止；60s 空闲/协议违例/客户端断开 → 清理该设备流 |
-| POST | `/api/audio/capture` | **识别并提问**。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
+| POST | `/api/audio/listen`（+ `/stop`、`/cancel`） | **实时识别**（提问框「音频」按钮）。body `{token, device?}`：开始监听，每 2.5s 全段重提一次，SSE `audio_listen`（partial/stopped/cancelled/stream_stopped，均带 session_id）；`/stop` 定稿返回 `{ok, text, elapsed_s}`；`/cancel` 丢弃。同设备已有任务 409，设备未接收 409，ASR 未配置 400 |
+| POST | `/api/audio/capture` | **识别并提问**（一键 API）。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
 | GET | `/api/audio/stream?token=` | 该会话正在接收的设备列表 `{ok, enabled, streams:[{device, bytes, frames, ms_since_last_frame}]}`（会话设置抽屉实时刷新用） |
 | GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at） |
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?}` → 201 会话 |
@@ -245,12 +248,14 @@ asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI �
   禁用并 tooltip 说明（需 https，见 doc/03 §8 的 compose `tls` profile 自签入口，
   或本机 127.0.0.1/localhost 访问）。
 - **电脑输出音频（asr-tool 持续推流）**：「会话设置」抽屉内启用开关 + 正在接收
-  的设备列表（`6位设备码 · 端点名称`/累计字节/最近帧距今，绿点 = 直播中，
-  SSE 实时刷新；同名虚拟声卡跨机器推流按码区分来源，旧版 asr-tool 发设备
-  序号时列表标注「（旧版序号编码）」）+ 默认设备
-  下拉 + 「识别最近 10/30/60 秒 → 🎧 识别并提问」按钮（POST /api/audio/capture）；
+  的设备信息（`6位设备码 · 端点名称`/累计字节/最近帧距今，绿点 = 直播中，SSE
+  实时刷新；同名虚拟声卡跨机器推流按码区分来源，旧版 asr-tool 发设备序号时列表
+  标注「（旧版序号编码）」）；**识别交互在提问框区**：「🎧 音频」按钮（i-headphones
+  图标）展开设备下拉 + 「开始识别 / 停止识别（定稿）/ 取消 / 重新识别」，中间识别
+  实时预览（… 前缀），定稿按「识别后自动发送」直接提问或填入输入框（同「语音」）；
+  切换会话自动收起面板并取消在途任务；
   正在推流的会话在列表显示「🎧N」角标；问答卡片来源徽标「🎧 电脑音频」。
-- 图标：引入**轻量自托管 SVG 图标库**（`public/icons.svg` sprite，22 枚 Lucide 风格
+- 图标：引入**轻量自托管 SVG 图标库**（`public/icons.svg` sprite，23 枚 Lucide 风格
   2px 描边图标，`<use>` 引用、随主题变色；无 JS 框架/无构建/零依赖），界面不使用 emoji。
 - 主题：头部 太阳/月亮 图标按钮切换 浅色/深色 主题，全部组件双主题配色，
   选择本地记忆（localStorage），刷新不闪烁（status bar 颜色随主题联动）。
@@ -280,7 +285,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**128 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**130 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
