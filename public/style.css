@@ -275,6 +275,29 @@ main {
 }
 .badge.push { color: var(--orange); border-color: var(--orange); background: #2a1c10; }
 .badge.web { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.badge.remote { color: var(--green); border-color: var(--green); background: #122a18; }
+/* 会话列表：正在接收电脑输出音频的小徽章 */
+.badge.audio-live { color: var(--green); border-color: var(--green); background: #122a18; font-size: 10px; padding: 1px 6px; }
+:root[data-theme="light"] .badge.remote { background: #e8f6ec; }
+:root[data-theme="light"] .badge.audio-live { background: #e8f6ec; }
+/* 会话抽屉：电脑输出音频设备列表 */
+.audio-devices {
+  display: flex; flex-direction: column; gap: 4px;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; min-height: 34px; margin-bottom: 8px;
+}
+.audio-dev { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.audio-dev-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audio-dev-info { flex: 0 0 auto; font-size: 11px; color: var(--text-dim); }
+.audio-dot {
+  flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border);
+}
+.audio-dev.live .audio-dot { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.audio-dev-empty { font-size: 12px; color: var(--text-dim); }
+.audio-capture-row { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 4px; }
+.audio-capture-row select { flex: 0 0 auto; }
+.audio-capture-row .btn { flex: 1 1 auto; }
 .time { font-size: 11px; color: var(--text-dim); }
 /* 问题块（左侧高亮边 + 问 标签，与答案明确区分） */
 .card-q {

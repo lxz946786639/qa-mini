@@ -528,7 +528,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v41"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v42"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -923,6 +923,298 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     c.close();
   });
 
+
+  // ---------- 电脑输出音频流（asr-tool 持续推流：chunked POST + Deflate 帧） ----------
+  // 帧协议：[u32BE len][Deflate(PCM16LE 16kHz 单声道)]；正常帧 = 200ms = 6400B
+  // 本节自建专用会话（不依赖前面会话状态），末尾删除恢复基线
+  const zlib = require("zlib");
+  const http = require("http");
+  function makePcm(seconds) {
+    const rate = 16000;
+    const n = Math.floor(seconds * rate);
+    const pcm = Buffer.alloc(n * 2);
+    for (let i = 0; i < n; i++) {
+      pcm.writeInt16LE(Math.round(Math.sin(2 * Math.PI * 440 * i / rate) * 12000), i * 2);
+    }
+    return pcm;
+  }
+  function frameOf(pcm) {
+    const payload = zlib.deflateSync(pcm);
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(payload.length, 0);
+    return Buffer.concat([head, payload]);
+  }
+  const FRAME = frameOf(makePcm(0.2)); // 200ms 正弦帧
+  // 长连接 chunked 推流器（无 Content-Length → 自动 chunked）
+  function openStream(token, device) {
+    const state = { resp: null, closed: false, respBody: null, stopped: false };
+    const req = http.request({
+      host: "127.0.0.1", port: TEST_PORT, path: "/api/audio/stream", method: "POST",
+      headers: {
+        "X-Audio-Token": token,
+        "X-Device-Name": encodeURIComponent(device),
+        "Content-Type": "application/octet-stream"
+      }
+    });
+    req.on("response", (res) => {
+      let b = "";
+      res.on("data", (d) => (b += d));
+      res.on("end", () => {
+        try { state.respBody = JSON.parse(b); } catch { state.respBody = b; }
+        state.resp = res.statusCode;
+      });
+    });
+    req.on("close", () => { state.closed = true; });
+    req.on("error", () => {}); // 服务端 destroy 时客户端表现为 error/close
+    state.writeFrame = (f) => new Promise((resolve) => {
+      if (state.stopped) return resolve(false);
+      const ok = req.write(f);
+      if (ok) resolve(true);
+      else req.once("drain", () => resolve(true));
+    });
+    state.stop = () => { state.stopped = true; try { req.end(); } catch {} };
+    state.destroy = () => { state.stopped = true; try { req.destroy(); } catch {} };
+    return state;
+  }
+  // 首次 write 才会发出请求头 → 先写一帧再等响应
+  async function startAwaiting(token, device) {
+    const st = openStream(token, device);
+    await st.writeFrame(FRAME);
+    const t0 = Date.now();
+    while (st.resp === null && Date.now() - t0 < 3000) await sleep(20);
+    return st;
+  }
+  async function pumpStream(st, seconds) {
+    const t0 = Date.now();
+    while (!st.stopped && Date.now() - t0 < seconds * 1000) {
+      await st.writeFrame(FRAME);
+      await sleep(25); // 8× 于实时（200ms 帧 / 25ms），协议行为与实时一致
+    }
+  }
+  const aBaseCount = (await api("GET", "/api/sessions")).data.sessions.length;
+  const ac0 = await api("POST", "/api/sessions", { name: "音频测试会话", protocol: "ragflow" });
+  assert.strictEqual(ac0.status, 201);
+  const aSid = ac0.data.session.id;
+  const aTok = ac0.data.session.token;
+  await test("audio-stream: 鉴权 401（缺 token / token 未知）", async () => {
+    const r1 = await fetch(BASE + "/api/audio/stream", { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: FRAME });
+    assert.strictEqual(r1.status, 401, "缺 X-Audio-Token");
+    const r2 = await fetch(BASE + "/api/audio/stream", { method: "POST", headers: { "X-Audio-Token": "kaasr_nope", "Content-Type": "application/octet-stream" }, body: FRAME });
+    assert.strictEqual(r2.status, 401, "token 未知");
+  });
+  await test("audio-stream: 会话未启用 → 403（响应阶段拒绝，不消费体）", async () => {
+    const r = await fetch(BASE + "/api/audio/stream", {
+      method: "POST",
+      headers: { "X-Audio-Token": aTok, "X-Device-Name": encodeURIComponent("设备X"), "Content-Type": "application/octet-stream" },
+      body: FRAME
+    });
+    assert.strictEqual(r.status, 403);
+    const txt = await r.text();
+    assert.ok(txt.includes("未启用"), "detail 提示未启用: " + txt.slice(0, 80));
+  });
+  await test("audio-stream: 启用 → 200 建流 + 帧入环形 + GET 列设备（含中文设备名）", async () => {
+    const s = ac0.data.session;
+    const en = await api("PUT", "/api/sessions/" + aSid, {
+      name: s.name, protocol: s.protocol, continue_session: false,
+      protocol_config: {}, audio_remote: { enabled: true, preferred_device: "测试设备A" }
+    });
+    assert.strictEqual(en.status, 200);
+    assert.strictEqual(en.data.session.audio_remote.enabled, true);
+    assert.strictEqual(en.data.session.audio_remote.preferred_device, "测试设备A");
+    const st = await startAwaiting(aTok, "测试设备A");
+    assert.strictEqual(st.resp, 200, "先回 200（实测 " + st.resp + "）");
+    assert.strictEqual(st.respBody.stream, "started");
+    assert.strictEqual(st.respBody.device, "测试设备A", "URL 编码设备名已还原");
+    await pumpStream(st, 1.2);
+    const g = await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok));
+    const gd = await g.json();
+    assert.strictEqual(g.status, 200);
+    assert.strictEqual(gd.ok, true);
+    assert.strictEqual(gd.enabled, true);
+    assert.strictEqual(gd.streams.length, 1);
+    assert.strictEqual(gd.streams[0].device, "测试设备A");
+    assert.ok(gd.streams[0].bytes >= 6400, "帧已入环形（bytes=" + gd.streams[0].bytes + "）");
+    assert.ok(gd.streams[0].ms_since_last_frame < 500, "最近帧新鲜");
+    st.stop();
+    await sleep(300);
+    const g2 = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
+    assert.strictEqual(g2.streams.length, 0, "客户端停止后流已关闭");
+  });
+  await test("audio-stream: SSE started / data / stopped（均带 session_id）", async () => {
+    const c = await collectSse();
+    await sleep(200);
+    const st = await startAwaiting(aTok, "设备B");
+    assert.strictEqual(st.resp, 200);
+    const evStart = await c.wait("audio_stream", (d) => d.state === "started" && d.device === "设备B");
+    assert.strictEqual(evStart.data.session_id, aSid, "SSE 事件带 session_id");
+    await pumpStream(st, 2.2);
+    const evData = await c.wait("audio_stream", (d) => d.state === "data" && d.device === "设备B" && d.bytes > 0);
+    assert.ok(evData.data.bytes >= 6400);
+    st.stop();
+    const evStop = await c.wait("audio_stream", (d) => d.state === "stopped" && d.device === "设备B");
+    assert.strictEqual(evStop.data.session_id, aSid);
+    c.close();
+  });
+  await test("audio-capture: 推流中截取 → ASR → 自动提问（source=remote_audio）", async () => {
+    assert.strictEqual((await api("PUT", "/api/config", { asr: { url: ASR_BASE + "/v1", model: "mock-asr", timeout: 15 } })).status, 200);
+    const st = await startAwaiting(aTok, "捕获设备");
+    assert.strictEqual(st.resp, 200);
+    await pumpStream(st, 1.5);
+    const c = await collectSse();
+    await sleep(200);
+    const r = await api("POST", "/api/audio/capture", { token: aTok, device: "捕获设备", seconds: 5 });
+    assert.strictEqual(r.status, 200, "capture 应成功: " + JSON.stringify(r.data));
+    assert.strictEqual(r.data.ok, true);
+    assert.strictEqual(r.data.text, "语音识别测试成功", "mock ASR 文本");
+    assert.strictEqual(r.data.session_id, aSid);
+    assert.strictEqual(r.data.device, "捕获设备");
+    assert.ok(typeof r.data.duration_s === "number");
+    const ev = await c.wait("qa_start", (d) => d.id === r.data.qa_id);
+    assert.strictEqual(ev.data.source, "remote_audio");
+    assert.strictEqual(ev.data.question, "语音识别测试成功");
+    st.stop();
+    c.close();
+    await sleep(300);
+  });
+  await test("audio-capture: 无流 409 / 设备已停 409 / seconds 越界 400 / 错 token 401", async () => {
+    const r1 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 5 });
+    assert.strictEqual(r1.status, 409, "preferred 设备未在接收 → 409: " + JSON.stringify(r1.data));
+    const st = await startAwaiting(aTok, "旧设备");
+    assert.strictEqual(st.resp, 200);
+    await pumpStream(st, 0.5);
+    st.stop();
+    await sleep(300);
+    const r2 = await api("POST", "/api/audio/capture", { token: aTok, device: "旧设备", seconds: 5 });
+    assert.strictEqual(r2.status, 409, "设备流已关闭 → 409");
+    const r3 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 1 });
+    assert.strictEqual(r3.status, 400, "seconds < min");
+    const r4 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 999 });
+    assert.strictEqual(r4.status, 400, "seconds > max");
+    const r5 = await api("POST", "/api/audio/capture", { token: "kaasr_nope", seconds: 5 });
+    assert.strictEqual(r5.status, 401);
+  });
+  await test("audio-stream: 同会话双设备 + 指定设备 capture 隔离 + preferred 失效 409", async () => {
+    const st1 = await startAwaiting(aTok, "Dev-1");
+    const st2 = await startAwaiting(aTok, "Dev-2");
+    assert.strictEqual(st1.resp, 200);
+    assert.strictEqual(st2.resp, 200);
+    await pumpStream(st1, 1);
+    await pumpStream(st2, 1);
+    const g = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
+    assert.strictEqual(g.streams.length, 2, "两个设备流并存");
+    assert.deepStrictEqual(g.streams.map((x) => x.device).sort(), ["Dev-1", "Dev-2"]);
+    const c1 = await api("POST", "/api/audio/capture", { token: aTok, device: "Dev-1", seconds: 5 });
+    assert.strictEqual(c1.status, 200);
+    assert.strictEqual(c1.data.device, "Dev-1");
+    assert.strictEqual(c1.data.text, "语音识别测试成功");
+    // preferred_device（测试设备A）不在推流 → 不指定 device 应 409（多设备无法回退）
+    const c2 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 5 });
+    assert.strictEqual(c2.status, 409, "preferred 失效且多设备 → 409");
+    st1.stop();
+    st2.stop();
+    await sleep(300);
+  });
+  await test("audio-stream: 协议违例（坏帧）→ 仅断该流，其他流不受影响", async () => {
+    const good = await startAwaiting(aTok, "Good-Dev");
+    const bad = await startAwaiting(aTok, "Bad-Dev");
+    assert.strictEqual(good.resp, 200);
+    assert.strictEqual(bad.resp, 200);
+    await good.writeFrame(FRAME);
+    await bad.writeFrame(FRAME);
+    // 坏帧：len 正确但 payload 不是合法 Deflate
+    const badPayload = Buffer.from("this is not deflate data, definitely broken");
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(badPayload.length, 0);
+    await bad.writeFrame(Buffer.concat([head, badPayload]));
+    const t0 = Date.now();
+    while (!bad.closed && Date.now() - t0 < 5000) await sleep(50);
+    assert.ok(bad.closed, "坏流应被服务端断开");
+    await good.writeFrame(FRAME);
+    const g = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
+    assert.deepStrictEqual(g.streams.map((x) => x.device), ["Good-Dev"], "好流仍在，坏流已移除");
+    good.stop();
+    await sleep(300);
+  });
+  await test("audio-stream: 客户端崩溃断开（socket 断）→ 流自动清理", async () => {
+    const st = await startAwaiting(aTok, "Crash-Dev");
+    assert.strictEqual(st.resp, 200);
+    await pumpStream(st, 0.5);
+    st.destroy(); // 模拟客户端进程崩溃（非正常 end）
+    const t0 = Date.now();
+    let gone = false;
+    while (Date.now() - t0 < 5000) {
+      const g = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
+      if (!g.streams.some((x) => x.device === "Crash-Dev")) { gone = true; break; }
+      await sleep(150);
+    }
+    assert.ok(gone, "断连后流应被清理（req end / socket close 触发）");
+  });
+  await test("audio-stream: 删除会话 → 流清理 + token 失效 + 会话数恢复", async () => {
+    const st = await startAwaiting(aTok, "待删设备");
+    assert.strictEqual(st.resp, 200);
+    await pumpStream(st, 0.5);
+    st.destroy();
+    const del = await api("DELETE", "/api/sessions/" + aSid);
+    assert.strictEqual(del.status, 200);
+    const g = await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok));
+    assert.strictEqual(g.status, 401, "会话删除后 token 失效");
+    const list = await api("GET", "/api/sessions");
+    assert.strictEqual(list.data.sessions.length, aBaseCount, "会话数恢复基线（不干扰后续用例）");
+  });
+  await test("config: audio_stream 非法值 → 400（min>max / max_capture>buffer / 非数字）", async () => {
+    const r1 = await api("PUT", "/api/config", { audio_stream: { min_capture_s: 60, max_capture_s: 5 } });
+    assert.strictEqual(r1.status, 400, "min > max 应 400");
+    const r2 = await api("PUT", "/api/config", { audio_stream: { max_buffer_s: 10, max_capture_s: 60 } });
+    assert.strictEqual(r2.status, 400, "max_capture > max_buffer 应 400");
+    const r3 = await api("PUT", "/api/config", { audio_stream: { max_buffer_s: "abc" } });
+    assert.strictEqual(r3.status, 400, "非数字应 400");
+    assert.strictEqual((await api("PUT", "/api/config", { audio_stream: { max_buffer_s: 60 } })).status, 200);
+    assert.strictEqual((await api("PUT", "/api/config", { audio_stream: { max_buffer_s: 120, min_capture_s: 5, default_capture_s: 30, max_capture_s: 60 } })).status, 200);
+  });
+  await test("audio_stream.js 单测：帧解析器 / WAV 头 / 环形淘汰", async () => {
+    const am = require(path.join(ROOT, "lib/audio_stream.js"));
+    const mgr = new am.AudioStreamManager({
+      getConfig: () => ({ audio_stream: { max_buffer_s: 1, min_capture_s: 1, default_capture_s: 1, max_capture_s: 1 } }),
+      broadcast: null
+    });
+    let got = 0;
+    const parser = am.createFrameParser((pcm) => { got += pcm.length; });
+    const twoFrames = Buffer.concat([FRAME, FRAME]);
+    parser.push(twoFrames.subarray(0, FRAME.length + 3));
+    parser.push(twoFrames.subarray(FRAME.length + 3));
+    assert.strictEqual(got, 2 * 6400, "两帧各 6400B PCM");
+    const p2 = am.createFrameParser(() => {});
+    let threw = null;
+    const badHead = Buffer.concat([Buffer.from([0, 0, 0x10, 0]), Buffer.from("x".repeat(65536))]);
+    try { p2.push(badHead); } catch (e2) { threw = e2; }
+    assert.ok(threw && threw.protocol, "超长 len 应抛协议违例");
+    const p3 = am.createFrameParser(() => {});
+    const h3 = Buffer.alloc(4);
+    const junk = Buffer.from("junk-junk-junk");
+    h3.writeUInt32BE(junk.length, 0);
+    let threw3 = null;
+    try { p3.push(Buffer.concat([h3, junk])); } catch (e2) { threw3 = e2; }
+    assert.ok(threw3 && threw3.protocol, "坏 Deflate 应抛协议违例");
+    const wav = am.buildWav(Buffer.alloc(6400, 1));
+    assert.strictEqual(wav.length, 44 + 6400);
+    assert.strictEqual(wav.toString("ascii", 0, 4), "RIFF");
+    assert.strictEqual(wav.toString("ascii", 8, 12), "WAVE");
+    assert.strictEqual(wav.readUInt16LE(22), 1, "单声道");
+    assert.strictEqual(wav.readUInt32LE(24), 16000, "16kHz");
+    assert.strictEqual(wav.readUInt16LE(34), 16, "16bit");
+    assert.strictEqual(wav.readUInt32LE(40), 6400, "data 长度");
+    const r = mgr.startStream("s1", "d1");
+    for (let i = 0; i < 10; i++) mgr.feed("s1", "d1", Buffer.alloc(6400, 1));
+    assert.ok(r.st.ringBytes <= 32000 + 6400, "环形按字节上限淘汰（" + r.st.ringBytes + "）");
+    assert.ok(r.st.ringBytes >= 32000, "仍保留最近数据");
+    const pcm = mgr.capturePcm("s1", "d1", 1);
+    assert.ok(pcm && pcm.length <= 32000 && pcm.length >= 25600, "capture 最近 1s（" + (pcm ? pcm.length : 0) + "）");
+    assert.ok(mgr.isLive("s1", "d1", 5000), "最近帧新鲜");
+    assert.strictEqual(mgr.stopStream("s1", "d1"), true);
+    assert.strictEqual(mgr.stopStream("s1", "d1"), false, "幂等");
+    assert.ok(!mgr.hasStream("s1", "d1"));
+    mgr.close();
+  });
   await test("config PUT 非法值 → 400", async () => {
     const r = await api("PUT", "/api/config", { port: "abc" });
     assert.strictEqual(r.status, 400);

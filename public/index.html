@@ -165,6 +165,25 @@
       <textarea id="sd-snippet-body" rows="2" readonly class="mono" aria-label="body 值"></textarea>
     </div>
 
+    <label class="chk"><input id="sd-audio-enable" type="checkbox"> 启用电脑输出音频接收 <small>（asr-tool「持续推流」到本会话）</small></label>
+    <div id="sd-audio-extra">
+      <label>正在接收的设备 <small>（推流中时实时刷新）</small></label>
+      <div id="sd-audio-devices" class="audio-devices"><span class="audio-dev-empty">无</span></div>
+      <label>默认设备 <small>（「识别并提问」未指定设备时使用）</small></label>
+      <select id="sd-audio-device">
+        <option value="">（跟随正在接收的设备）</option>
+      </select>
+      <div class="audio-capture-row">
+        <span>识别最近</span>
+        <select id="sd-audio-seconds">
+          <option value="10">10 秒</option>
+          <option value="30" selected>30 秒</option>
+          <option value="60">60 秒</option>
+        </select>
+        <button id="sd-audio-capture" class="btn" type="button" disabled title="截取最近 N 秒推流音频 → ASR 识别 → 自动作为提问发送">🎧 识别并提问</button>
+      </div>
+    </div>
+
     <div class="drawer-inline-actions">
       <button id="sd-reset" class="btn" type="button" title="清空该会话的后端对话上下文（等同 asr-tool「清空」），已显示记录保留">重置会话（清空后端上下文）</button>
     </div>

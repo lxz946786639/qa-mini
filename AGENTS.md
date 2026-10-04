@@ -26,7 +26,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 116 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 128 项断言全绿，
    含 `node --check` 前端语法护栏）；
    测试用 `QA_MINI_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
@@ -40,7 +40,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 | `doc/02-配置说明.md` | config.json 全字段、会话级配置、迁移链、asr-tool 对接、环境变量、前端 localStorage |
 | `doc/03-部署说明.md` | docker-compose 部署/运维/备份/升级、systemd 附录、常见问题、安全建议 |
 | `doc/04-101服务器部署说明.md` | 172.16.30.101 实际部署记录（端口/目录/验证结果） |
-| `doc/05-功能模块工作量报价单.md` | 15 个功能模块 × 工作量（人天）× 金额报价、阶段计划、验收标准 |
+| `doc/05-功能模块工作量报价单.md` | 16 个功能模块 × 工作量（人天）× 金额报价、阶段计划、验收标准 |
 
 **修改 → 必须同步的文档映射**（命中即改，改完自检"文档描述与代码一致"）：
 
@@ -48,6 +48,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 |---|---|
 | `server.js` 增删改路由 / 请求响应字段 / 状态码语义 | 01 §3.3/§6 相关 + 02（如涉及配置）+ README「HTTP API」表 |
 | `lib/qa_runner.js` 协议请求/解析/超时/错误语义 / 会话状态字段 | 01 §4/§5 对应协议行；新协议 → 01+02+README 协议表 |
+| `lib/audio_stream.js` 音频流帧协议/环形缓冲/捕获语义 | 01 §3.5/§8 + 02 §1/§4.1 + README（HTTP API 表 + 持续推流模式） |
 | `lib/config.js` 存储 schema / 迁移逻辑 / 默认值 | 01 §6 表结构 + 02 §3 迁移链 + README 快速开始 |
 | `config.json` 字段 / 环境变量 | 02 §1/§5 字段表（逐字段：默认值/必填/生效方式） |
 | `docker/`（Dockerfile、compose、.dockerignore） | 03 对应章节（端口/卷/命令） |
@@ -68,6 +69,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 ```
 server.js        唯一入口：HTTP 路由 + SSE + 静态服务（勿拆成多服务）
 lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 asr-tool 同源）
+lib/audio_stream.js 电脑输出音频流（asr-tool 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/config.js    配置 + SQLite 存储（唯一允许碰 data/ 文件的模块）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 asr-tool 对齐
@@ -83,7 +85,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js lib/*.js public/app.js   # 语法
-npm test                                        # 116 项断言全绿
+npm test                                        # 128 项断言全绿
 # 前端改动：静态文件按请求读盘，浏览器刷新即生效，无需重启；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```

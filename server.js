@@ -20,6 +20,7 @@ const { SessionManager } = require("./lib/qa_runner");
 const { QaError } = require("./lib/sse");
 const { testProtocol } = require("./lib/protocol_test");
 const { AsrError, transcribe: asrTranscribe, asrProbe } = require("./lib/asr");
+const { AudioStreamManager, createFrameParser } = require("./lib/audio_stream");
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 
@@ -45,6 +46,12 @@ const manager = new SessionManager({
   getConfig: () => config,
   getSessions: () => sessions,
   saveAll: () => saveSessions(sessionsFile, sessions),
+  broadcast
+});
+
+// ---- 电脑输出音频流（asr-tool 持续推流 → 环形缓冲 → 按需识别提问）----
+const audioStreams = new AudioStreamManager({
+  getConfig: () => config,
   broadcast
 });
 
@@ -437,8 +444,173 @@ async function handleAsrTest(req, res) {
   });
 }
 
+// ---- /api/audio/stream：电脑输出音频推流（长连接 · chunked POST）----
+// 头：X-Audio-Token（会话推送 token，与 /api/push 同源鉴权）+ X-Device-Name（URL 编码输出设备名）
+// 体：[u32BE len][Deflate(PCM16LE 16kHz 单声道)] 帧流（asr-tool 每 200ms 一帧）
+// 校验通过后「先回 200 再持续读体」：流可持续数小时，若等读完才响应，
+// nginx 代理会先触发 proxy_read_timeout 断连（先响应后读体则响应即时到达上游侧）。
+// 客户端正常停止 = 结束 chunked 体（req "end"）；断网/崩溃 = socket "close"。
+// 协议违例（单帧超限 / 解压失败）→ 仅断开该设备流，不影响同会话其他流。
+async function handleAudioStream(req, res) {
+  const token = String(req.headers["x-audio-token"] || "").trim();
+  if (!token) return sendJSON(res, 401, { ok: false, detail: "缺少 X-Audio-Token 头" });
+  const session = manager.byToken(token);
+  if (!session) return sendJSON(res, 401, { ok: false, detail: "token 未知" });
+  if (!(session.audio_remote && session.audio_remote.enabled === true)) {
+    return sendJSON(res, 403, { ok: false, detail: "该会话未启用输出音频接收（会话设置 → 电脑输出音频 → 启用）" });
+  }
+  let device = String(req.headers["x-device-name"] || "").trim();
+  try {
+    device = decodeURIComponent(device);
+  } catch {
+    device = String(req.headers["x-device-name"] || "").trim();
+  }
+  if (!device) device = "unknown-device";
+  if (device.length > 128) device = device.slice(0, 128);
+
+  const started = audioStreams.startStream(session.id, device);
+  if (!started.ok) return sendJSON(res, 409, { ok: false, detail: started.error });
+
+  // 先响应，再继续读体
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store"
+  });
+  res.end(JSON.stringify({ ok: true, stream: "started", session_id: session.id, device }));
+
+  const parser = createFrameParser((pcm) => {
+    if (!audioStreams.feed(session.id, device, pcm)) {
+      // 流已被空闲清理/会话删除：停止继续读体
+      req.destroy();
+    }
+  });
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    audioStreams.stopStream(session.id, device); // SSE audio_stream stopped（幂等）
+    if (!req.readableEnded) {
+      try { req.destroy(); } catch {}
+    }
+  };
+  req.on("end", finish);
+  req.on("error", finish);
+  req.socket.on("close", finish);
+  try {
+    for await (const chunk of req) {
+      if (finished) break;
+      try {
+        parser.push(chunk);
+      } catch (e) {
+        if (e && e.protocol) {
+          console.error("[audio-stream] 协议违例，断开 " + session.id + "/" + device + ": " + e.message);
+        } else {
+          console.error("[audio-stream] 读取异常 " + session.id + "/" + device + ": " + (e && e.message || e));
+        }
+        finish();
+        break;
+      }
+    }
+  } catch (e) {
+    // 连接已断开（req.destroy 等）——按结束处理
+  }
+  finish();
+}
+
+// ---- /api/audio/capture：截取最近 N 秒推流 → ASR → 自动提问（source=remote_audio）----
+// body { token, device?, seconds? }；device 缺省 = 会话 audio_remote.preferred_device（唯一设备流时自动用之）
+async function handleAudioCapture(req, res) {
+  let body;
+  try {
+    body = await parseJSONBody(req);
+  } catch (e) {
+    return sendJSON(res, 400, { ok: false, detail: e.__badBody ? e.message : String(e.message || e) });
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
+  }
+  const token = typeof body.token === "string" ? body.token.trim() : "";
+  if (!token) return sendJSON(res, 401, { ok: false, detail: "token 必填" });
+  const session = manager.byToken(token);
+  if (!session) return sendJSON(res, 401, { ok: false, detail: "token 未知" });
+
+  const scfg = audioStreams.cfg();
+  let seconds = Number(body.seconds);
+  if (!Number.isFinite(seconds)) seconds = scfg.default_capture_s;
+  if (!Number.isFinite(seconds) || seconds < scfg.min_capture_s || seconds > scfg.max_capture_s) {
+    return sendJSON(res, 400, {
+      ok: false,
+      detail: "seconds 须在 " + scfg.min_capture_s + "-" + scfg.max_capture_s + " 之间（当前 " + seconds + "）"
+    });
+  }
+  const ar = session.audio_remote || {};
+  let device = typeof body.device === "string" ? body.device.trim() : "";
+  if (!device && typeof ar.preferred_device === "string") device = ar.preferred_device.trim();
+  if (!device) {
+    const list = audioStreams.listStreams(session.id);
+    if (list.length === 1) device = list[0].device;
+    else if (!list.length) return sendJSON(res, 409, { ok: false, detail: "该会话没有正在接收的音频设备（请先开始推流）" });
+    else return sendJSON(res, 400, { ok: false, detail: "该会话有多个推流设备，请指定 device（" + list.map((x) => x.device).join(" / ") + "）" });
+  }
+  if (!audioStreams.isLive(session.id, device, 5000)) {
+    return sendJSON(res, 409, { ok: false, detail: "设备未在接收音频（最近 5s 无数据帧）: " + device });
+  }
+  const a = asrSection();
+  if (!String(a.url || "").trim()) {
+    return sendJSON(res, 400, { ok: false, detail: "ASR 未配置（设置 → 语音输入）" });
+  }
+  const wav = audioStreams.captureWav(session.id, device, seconds);
+  if (!wav) return sendJSON(res, 409, { ok: false, detail: "环形缓冲中无音频数据" });
+
+  const t0 = Date.now();
+  let text;
+  try {
+    text = await asrTranscribe(wav, a, new AbortController().signal);
+  } catch (e2) {
+    const msg = e2 instanceof AsrError ? e2.message : ("识别请求异常: " + (e2 && e2.message || e2));
+    return sendJSON(res, 502, { ok: false, detail: "语音识别失败: " + msg });
+  }
+  if (!text || !text.trim()) {
+    return sendJSON(res, 422, { ok: false, detail: "（无声/无法识别）", text: "" });
+  }
+  text = text.trim();
+  let started;
+  try {
+    started = manager.runnerFor(session).start({
+      question: text,
+      source: "remote_audio",
+      newSession: !session.continue_session
+    });
+  } catch (e3) {
+    return sendJSON(res, 400, { ok: false, detail: e3 instanceof QaError ? e3.detail : String(e3.message || e3) });
+  }
+  return sendJSON(res, 200, {
+    ok: true,
+    text,
+    qa_id: started.id,
+    session_id: session.id,
+    device,
+    duration_s: Math.round((Date.now() - t0) / 100) / 10
+  });
+}
+
+// ---- GET /api/audio/stream?token=：该会话正在接收的设备列表（抽屉实时刷新用）----
+function handleGetAudioStreams(req, res, urlObj) {
+  const token = (urlObj.searchParams.get("token") || "").trim();
+  if (!token) return sendJSON(res, 401, { ok: false, detail: "token 必填" });
+  const session = manager.byToken(token);
+  if (!session) return sendJSON(res, 401, { ok: false, detail: "token 未知" });
+  return sendJSON(res, 200, {
+    ok: true,
+    session_id: session.id,
+    enabled: Boolean(session.audio_remote && session.audio_remote.enabled),
+    streams: audioStreams.listStreams(session.id)
+  });
+}
+
 function handleDeleteSession(res, id) {
   const ok = manager.remove(id);
+  if (ok) audioStreams.removeSession(id); // 会话删除 → 音频流全清
   return sendJSON(res, ok ? 200 : 404, { ok, detail: ok ? "已删除" : "会话不存在: " + id });
 }
 
@@ -804,6 +976,9 @@ const server = http.createServer(async (req, res) => {
       if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
       return await handleAsr(req, res);
     }
+    if (req.method === "POST" && p === "/api/audio/stream") return await handleAudioStream(req, res); // 长连接推流；凭据 = X-Audio-Token（handler 内校验）
+    if (req.method === "POST" && p === "/api/audio/capture") return await handleAudioCapture(req, res);   // 凭据 = body.token（handler 内校验）
+    if (req.method === "GET" && p === "/api/audio/stream") return handleGetAudioStreams(req, res, urlObj); // 凭据 = ?token=（handler 内校验）
     if (req.method === "POST" && p === "/api/push") return await handlePush(req, res, urlObj); // 凭据 = 会话推送 token（handler 内校验），与访问码无关
     if (req.method === "POST" && p === "/api/cancel") {
       if (!viewerOk(req, urlObj)) return sendJSON(res, 403, { ok: false, detail: "需要访问码" });
@@ -896,6 +1071,7 @@ server.listen(port, host, () => {
   console.log("  Web 界面:   http://" + (host === "0.0.0.0" ? "127.0.0.1" : host) + ":" + port + "/");
   console.log("  推送接口:   POST http://<本机IP>:" + port + "/api/push");
   console.log("              请求体需同时携带 token 与 session_id（在网页「会话设置」中复制 asr-tool 片段）");
+  console.log("  音频推流:   POST /api/audio/stream（asr-tool 持续推流；会话需启用「输出音频接收」）");
   console.log("  会话存储:   " + sessionsFile + "（SQLite）");
   console.log("  默认会话:   " + def.name + "（会话ID " + def.id + "）");
   console.log("  配置:       " + configFile);
