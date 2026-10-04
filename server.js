@@ -447,10 +447,13 @@ async function handleAsrTest(req, res) {
 // ---- /api/audio/stream：电脑输出音频推流（长连接 · chunked POST）----
 // 头：X-Audio-Token（会话推送 token，与 /api/push 同源鉴权）+ X-Device-Name（URL 编码输出设备名）
 // 体：[u32BE len][Deflate(PCM16LE 16kHz 单声道)] 帧流（asr-tool 每 200ms 一帧）
-// 校验通过后「先回 200 再持续读体」：流可持续数小时，若等读完才响应，
-// nginx 代理会先触发 proxy_read_timeout 断连（先响应后读体则响应即时到达上游侧）。
-// 客户端正常停止 = 结束 chunked 体（req "end"）；断网/崩溃 = socket "close"。
-// 协议违例（单帧超限 / 解压失败）→ 仅断开该设备流，不影响同会话其他流。
+// 响应语义（关键）：前置校验错误（401/403/409）仅凭请求头即时响应；
+// 成功路径必须在收完整体后回 200——nginx（proxy_request_buffering off）在上游
+// 响应完成时会截断客户端未发完的 body（实测：提前 200 导致后续帧全部丢失，
+// 详见 doc/03 §8），因此 200 携带流结束时的统计摘要 {bytes, frames}。
+// 流进行中的实时反馈走 SSE audio_stream 事件（started/data/stopped，均带 session_id）。
+// 客户端正常停止 = 结束 chunked 体（req "end"）；断网/崩溃 = socket "close" → 自动清理。
+// 协议违例（单帧超限 / 解压失败）→ 400，仅断开该设备流，不影响同会话其他流。
 async function handleAudioStream(req, res) {
   const token = String(req.headers["x-audio-token"] || "").trim();
   if (!token) return sendJSON(res, 401, { ok: false, detail: "缺少 X-Audio-Token 头" });
@@ -471,13 +474,6 @@ async function handleAudioStream(req, res) {
   const started = audioStreams.startStream(session.id, device);
   if (!started.ok) return sendJSON(res, 409, { ok: false, detail: started.error });
 
-  // 先响应，再继续读体
-  res.writeHead(200, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
-  });
-  res.end(JSON.stringify({ ok: true, stream: "started", session_id: session.id, device }));
-
   const parser = createFrameParser((pcm) => {
     if (!audioStreams.feed(session.id, device, pcm)) {
       // 流已被空闲清理/会话删除：停止继续读体
@@ -485,17 +481,34 @@ async function handleAudioStream(req, res) {
     }
   });
   let finished = false;
-  const finish = () => {
+  let protoErr = null;
+  const finish = (err) => {
     if (finished) return;
     finished = true;
+    if (err) protoErr = err;
+    const entry = (audioStreams.listStreams(session.id) || []).find((s) => s.device === device);
+    const bytes = entry ? entry.bytes : 0;
+    const frames = entry ? entry.frames : 0;
     audioStreams.stopStream(session.id, device); // SSE audio_stream stopped（幂等）
+    if (!res.headersSent) {
+      try {
+        sendJSON(res, protoErr ? 400 : 200, protoErr
+          ? { ok: false, detail: "帧格式错误: " + protoErr }
+          : { ok: true, stream: "stopped", session_id: session.id, device, bytes, frames });
+      } catch {
+        // 连接已断开，响应不可达——不影响清理
+      }
+    }
     if (!req.readableEnded) {
       try { req.destroy(); } catch {}
     }
   };
-  req.on("end", finish);
-  req.on("error", finish);
-  req.socket.on("close", finish);
+  req.on("end", () => finish());
+  req.on("error", (e) => {
+    console.error("[audio-stream] 读取异常 " + session.id + "/" + device + ": " + (e && e.message || e));
+    finish();
+  });
+  req.on("close", () => { if (!req.readableEnded) finish(); });
   try {
     for await (const chunk of req) {
       if (finished) break;
@@ -504,14 +517,15 @@ async function handleAudioStream(req, res) {
       } catch (e) {
         if (e && e.protocol) {
           console.error("[audio-stream] 协议违例，断开 " + session.id + "/" + device + ": " + e.message);
+          finish(e.message);
         } else {
           console.error("[audio-stream] 读取异常 " + session.id + "/" + device + ": " + (e && e.message || e));
+          finish();
         }
-        finish();
         break;
       }
     }
-  } catch (e) {
+  } catch {
     // 连接已断开（req.destroy 等）——按结束处理
   }
   finish();

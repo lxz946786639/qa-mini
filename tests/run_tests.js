@@ -976,12 +976,18 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     state.destroy = () => { state.stopped = true; try { req.destroy(); } catch {} };
     return state;
   }
-  // 首次 write 才会发出请求头 → 先写一帧再等响应
-  async function startAwaiting(token, device) {
+  // 响应语义：请求头到达即建流（SSE started）；200 在 body 结束（客户端 stop）后返回，
+  // 携带 {stream:"stopped", bytes, frames} 统计（nginx 截断约束，见 server.js handleAudioStream 注释）
+  async function startPumping(token, device) {
     const st = openStream(token, device);
-    await st.writeFrame(FRAME);
+    await st.writeFrame(FRAME); // 首次 write 发出请求头 → 服务端建流
+    await sleep(80);
+    return st;
+  }
+  async function stopAndAwait(st, ms = 5000) {
+    st.stop();
     const t0 = Date.now();
-    while (st.resp === null && Date.now() - t0 < 3000) await sleep(20);
+    while (st.resp === null && Date.now() - t0 < ms) await sleep(25);
     return st;
   }
   async function pumpStream(st, seconds) {
@@ -1021,10 +1027,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(en.status, 200);
     assert.strictEqual(en.data.session.audio_remote.enabled, true);
     assert.strictEqual(en.data.session.audio_remote.preferred_device, "测试设备A");
-    const st = await startAwaiting(aTok, "测试设备A");
-    assert.strictEqual(st.resp, 200, "先回 200（实测 " + st.resp + "）");
-    assert.strictEqual(st.respBody.stream, "started");
-    assert.strictEqual(st.respBody.device, "测试设备A", "URL 编码设备名已还原");
+    const st = await startPumping(aTok, "测试设备A");
     await pumpStream(st, 1.2);
     const g = await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok));
     const gd = await g.json();
@@ -1032,10 +1035,15 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(gd.ok, true);
     assert.strictEqual(gd.enabled, true);
     assert.strictEqual(gd.streams.length, 1);
-    assert.strictEqual(gd.streams[0].device, "测试设备A");
+    assert.strictEqual(gd.streams[0].device, "测试设备A", "URL 编码设备名已还原");
     assert.ok(gd.streams[0].bytes >= 6400, "帧已入环形（bytes=" + gd.streams[0].bytes + "）");
     assert.ok(gd.streams[0].ms_since_last_frame < 500, "最近帧新鲜");
-    st.stop();
+    await stopAndAwait(st);
+    assert.strictEqual(st.resp, 200, "流结束回 200（实测 " + st.resp + "）");
+    assert.strictEqual(st.respBody.stream, "stopped");
+    assert.strictEqual(st.respBody.device, "测试设备A");
+    assert.ok(st.respBody.bytes >= 6400, "200 携带统计 bytes（=" + st.respBody.bytes + "）");
+    assert.ok(st.respBody.frames >= 1, "200 携带统计 frames（=" + st.respBody.frames + "）");
     await sleep(300);
     const g2 = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
     assert.strictEqual(g2.streams.length, 0, "客户端停止后流已关闭");
@@ -1043,22 +1051,21 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   await test("audio-stream: SSE started / data / stopped（均带 session_id）", async () => {
     const c = await collectSse();
     await sleep(200);
-    const st = await startAwaiting(aTok, "设备B");
-    assert.strictEqual(st.resp, 200);
+    const st = await startPumping(aTok, "设备B");
     const evStart = await c.wait("audio_stream", (d) => d.state === "started" && d.device === "设备B");
     assert.strictEqual(evStart.data.session_id, aSid, "SSE 事件带 session_id");
     await pumpStream(st, 2.2);
     const evData = await c.wait("audio_stream", (d) => d.state === "data" && d.device === "设备B" && d.bytes > 0);
     assert.ok(evData.data.bytes >= 6400);
-    st.stop();
+    await stopAndAwait(st);
+    assert.strictEqual(st.resp, 200);
     const evStop = await c.wait("audio_stream", (d) => d.state === "stopped" && d.device === "设备B");
     assert.strictEqual(evStop.data.session_id, aSid);
     c.close();
   });
   await test("audio-capture: 推流中截取 → ASR → 自动提问（source=remote_audio）", async () => {
     assert.strictEqual((await api("PUT", "/api/config", { asr: { url: ASR_BASE + "/v1", model: "mock-asr", timeout: 15 } })).status, 200);
-    const st = await startAwaiting(aTok, "捕获设备");
-    assert.strictEqual(st.resp, 200);
+    const st = await startPumping(aTok, "捕获设备");
     await pumpStream(st, 1.5);
     const c = await collectSse();
     await sleep(200);
@@ -1072,17 +1079,18 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const ev = await c.wait("qa_start", (d) => d.id === r.data.qa_id);
     assert.strictEqual(ev.data.source, "remote_audio");
     assert.strictEqual(ev.data.question, "语音识别测试成功");
-    st.stop();
+    await stopAndAwait(st);
+    assert.strictEqual(st.resp, 200);
     c.close();
     await sleep(300);
   });
   await test("audio-capture: 无流 409 / 设备已停 409 / seconds 越界 400 / 错 token 401", async () => {
     const r1 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 5 });
     assert.strictEqual(r1.status, 409, "preferred 设备未在接收 → 409: " + JSON.stringify(r1.data));
-    const st = await startAwaiting(aTok, "旧设备");
-    assert.strictEqual(st.resp, 200);
+    const st = await startPumping(aTok, "旧设备");
     await pumpStream(st, 0.5);
-    st.stop();
+    await stopAndAwait(st);
+    assert.strictEqual(st.resp, 200);
     await sleep(300);
     const r2 = await api("POST", "/api/audio/capture", { token: aTok, device: "旧设备", seconds: 5 });
     assert.strictEqual(r2.status, 409, "设备流已关闭 → 409");
@@ -1094,10 +1102,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r5.status, 401);
   });
   await test("audio-stream: 同会话双设备 + 指定设备 capture 隔离 + preferred 失效 409", async () => {
-    const st1 = await startAwaiting(aTok, "Dev-1");
-    const st2 = await startAwaiting(aTok, "Dev-2");
-    assert.strictEqual(st1.resp, 200);
-    assert.strictEqual(st2.resp, 200);
+    const st1 = await startPumping(aTok, "Dev-1");
+    const st2 = await startPumping(aTok, "Dev-2");
     await pumpStream(st1, 1);
     await pumpStream(st2, 1);
     const g = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
@@ -1110,15 +1116,15 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // preferred_device（测试设备A）不在推流 → 不指定 device 应 409（多设备无法回退）
     const c2 = await api("POST", "/api/audio/capture", { token: aTok, seconds: 5 });
     assert.strictEqual(c2.status, 409, "preferred 失效且多设备 → 409");
-    st1.stop();
-    st2.stop();
+    await stopAndAwait(st1);
+    await stopAndAwait(st2);
+    assert.strictEqual(st1.resp, 200);
+    assert.strictEqual(st2.resp, 200);
     await sleep(300);
   });
   await test("audio-stream: 协议违例（坏帧）→ 仅断该流，其他流不受影响", async () => {
-    const good = await startAwaiting(aTok, "Good-Dev");
-    const bad = await startAwaiting(aTok, "Bad-Dev");
-    assert.strictEqual(good.resp, 200);
-    assert.strictEqual(bad.resp, 200);
+    const good = await startPumping(aTok, "Good-Dev");
+    const bad = await startPumping(aTok, "Bad-Dev");
     await good.writeFrame(FRAME);
     await bad.writeFrame(FRAME);
     // 坏帧：len 正确但 payload 不是合法 Deflate
@@ -1129,17 +1135,20 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const t0 = Date.now();
     while (!bad.closed && Date.now() - t0 < 5000) await sleep(50);
     assert.ok(bad.closed, "坏流应被服务端断开");
+    while (bad.resp === null && Date.now() - t0 < 5000) await sleep(50);
+    assert.strictEqual(bad.resp, 400, "协议违例应回 400（实测 " + bad.resp + "）");
+    assert.ok(String(bad.respBody.detail || "").includes("帧格式错误"), "400 detail: " + JSON.stringify(bad.respBody));
     await good.writeFrame(FRAME);
     const g = await (await fetch(BASE + "/api/audio/stream?token=" + encodeURIComponent(aTok))).json();
     assert.deepStrictEqual(g.streams.map((x) => x.device), ["Good-Dev"], "好流仍在，坏流已移除");
-    good.stop();
+    await stopAndAwait(good);
+    assert.strictEqual(good.resp, 200);
     await sleep(300);
   });
   await test("audio-stream: 客户端崩溃断开（socket 断）→ 流自动清理", async () => {
-    const st = await startAwaiting(aTok, "Crash-Dev");
-    assert.strictEqual(st.resp, 200);
+    const st = await startPumping(aTok, "Crash-Dev");
     await pumpStream(st, 0.5);
-    st.destroy(); // 模拟客户端进程崩溃（非正常 end）
+    st.destroy(); // 模拟客户端进程崩溃（非正常 end）——无响应，仅自动清理
     const t0 = Date.now();
     let gone = false;
     while (Date.now() - t0 < 5000) {
@@ -1150,8 +1159,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(gone, "断连后流应被清理（req end / socket close 触发）");
   });
   await test("audio-stream: 删除会话 → 流清理 + token 失效 + 会话数恢复", async () => {
-    const st = await startAwaiting(aTok, "待删设备");
-    assert.strictEqual(st.resp, 200);
+    const st = await startPumping(aTok, "待删设备");
     await pumpStream(st, 0.5);
     st.destroy();
     const del = await api("DELETE", "/api/sessions/" + aSid);

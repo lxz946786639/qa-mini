@@ -142,7 +142,7 @@ asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI �
 | POST | `/api/chat` | 网页提问。body `{session_id, question, context?}` → 202 `{ok, qa_id, session_id}` |
 | POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级）；客户端断开即中止对 ASR 的上游请求 |
 | POST | `/api/asr/test` | ASR 服务**测试连接**（管理）。body `{asr?: {url?, api_key?, model?, language?, timeout?}}`（表单草稿，留空回退已存值）→ 200 `{ok, detail, models, health}`（`ok=false` 时 detail = 模型不在服务列表等警告）；未配置 → 400；不可达 → 502 |
-| POST | `/api/audio/stream` | **电脑输出音频推流**（asr-tool 持续推流）。头 `X-Audio-Token`（会话推送 token，缺失/未知 401；会话未启用接收 403；同设备已有流 409）+ `X-Device-Name`（URL 编码设备名）；body = 连续帧 `[u32BE len][Deflate(PCM 16kHz 单声道)]`（200ms/帧）；长连接 chunked，先回 200 `{ok, stream:"started"}` 再读体；60s 空闲/协议违例/客户端断开 → 清理该设备流 |
+| POST | `/api/audio/stream` | **电脑输出音频推流**（asr-tool 持续推流）。头 `X-Audio-Token`（会话推送 token，缺失/未知 401；会话未启用接收 403；同设备已有流 409）+ `X-Device-Name`（URL 编码设备名）；body = 连续帧 `[u32BE len][Deflate(PCM 16kHz 单声道)]`（200ms/帧）；长连接 chunked，前置校验（401/403/409）即时响应，成功路径在收完整体后回 200 `{ok, stream:"stopped", bytes, frames}`（nginx 截断约束，见 doc/03 §8）；客户端结束 chunked 体 = 正常停止；60s 空闲/协议违例/客户端断开 → 清理该设备流 |
 | POST | `/api/audio/capture` | **识别并提问**。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
 | GET | `/api/audio/stream?token=` | 该会话正在接收的设备列表 `{ok, enabled, streams:[{device, bytes, frames, ms_since_last_frame}]}`（会话设置抽屉实时刷新用） |
 | GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at） |
