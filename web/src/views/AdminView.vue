@@ -3,23 +3,19 @@
 // 管理台（P6）：用户 / 智能体 / 访问码 / 审计日志。仅 admin 主体可访问。
 import { onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
 import AuditTab from "./admin/AuditTab.vue";
 import SystemTab from "./admin/SystemTab.vue";
+import AdminBootstrap from "../components/AdminBootstrap.vue";
 
 const auth = useAuthStore();
 const checked = ref(false);
-// 首启引导（对齐旧版 /admin 首屏）：admin 未初始化时给出「设置管理密码」表单
-// （POST /api/admin/login 初始化通道，成功后签发 ea_sid cookie）
+// 首启引导（对齐旧版 /admin 首屏）：admin 未初始化时（GET /api/status admin_set=false）
+// 显示「设置管理账号」表单（共享组件 AdminBootstrap，/login 首启访问同样展示）
 const adminSet = ref<boolean | null>(null);
-const bsUser = ref("admin");
-const bsPw = ref("");
-const bsPw2 = ref("");
-const bsBusy = ref(false);
 
 onMounted(async () => {
   await auth.me();
@@ -33,22 +29,9 @@ onMounted(async () => {
   checked.value = true;
 });
 
-async function bootstrap() {
-  if (bsPw.value.length < 4 || bsPw.value.length > 64) { ElMessage.warning("管理密码需 4-64 位字符"); return; }
-  if (bsPw.value !== bsPw2.value) { ElMessage.warning("两次输入的密码不一致"); return; }
-  bsBusy.value = true;
-  try {
-    const { ok, data } = await api<{ ok: boolean; initialized?: boolean; detail?: string }>("/api/admin/login", {
-      method: "POST",
-      body: { username: bsUser.value.trim() || "admin", password: bsPw.value }
-    });
-    if (ok && data.initialized) {
-      ElMessage.success("已初始化并登录");
-      await auth.me();
-    } else {
-      ElMessage.error(data.detail || "初始化失败");
-    }
-  } finally { bsBusy.value = false; }
+async function onBootstrapDone() {
+  // 初始化通道已签发 ea_sid cookie（以 admin 登录）→ 重新取主体进入管理台
+  await auth.me();
 }
 async function onLogout() {
   await auth.logout();
@@ -77,13 +60,8 @@ async function onLogout() {
       <div v-else-if="!auth.isAdmin" class="admin-deny">
         <template v-if="adminSet === false">
           <p>管理密码尚未初始化</p>
-          <p class="admin-dim">首次部署：设置管理密码后进入管理台（初始化通道，对齐旧版 /admin 首屏）。</p>
-          <div class="admin-bs">
-            <el-input v-model="bsUser" size="small" placeholder="管理员用户名（默认 admin）" />
-            <el-input v-model="bsPw" size="small" type="password" show-password placeholder="管理密码（4-64 位）" />
-            <el-input v-model="bsPw2" size="small" type="password" show-password placeholder="确认密码" />
-            <el-button type="primary" size="small" :loading="bsBusy" @click="bootstrap">初始化并进入</el-button>
-          </div>
+          <p class="admin-dim">首次部署：设置管理账号密码后进入管理台（初始化通道，对齐旧版 /admin 首屏）。</p>
+          <AdminBootstrap @done="onBootstrapDone" />
         </template>
         <template v-else>
           <p>当前身份无管理权限</p>

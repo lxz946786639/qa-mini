@@ -112,6 +112,11 @@ html.dark, :root {
 .login-brand { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; }
 .login-card h2 { margin: 14px 0 4px; font-size: 20px; }
 .login-err { margin: 12px 0 0; }
+.login-bs-hint { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin: 0 0 14px; }
+.login-bs-hint code { background: var(--bg-soft); padding: 0 4px; border-radius: 4px; font-size: 12px; }
+.login-wait { color: var(--text-dim); font-size: 13px; padding: 20px 0; }
+.admin-bs-form { display: flex; flex-direction: column; }
+.admin-bs-form .admin-bs-btn { width: 100%; }
 .login-btn { width: 100%; margin-top: 16px; }
 .login-back { display: block; text-align: center; margin-top: 14px; color: var(--text-dim); font-size: 13px; }
 .login-back:hover { color: var(--accent); }

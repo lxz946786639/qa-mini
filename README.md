@@ -225,7 +225,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 - **新代前端（v59 P4–P7，站点根）**：web/ 构建产物（Vue3 + Vite + TS + Element
   Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）直接作为
   站点根（P7 切根；旧 `/app/` 挂载与 `public/` 旧前端退役）。路由：`/` 落地页（智能体
-  选择器，`GET /api/agents`）+ `/login`（账号 / 6 位访问码 → `ea_sid` cookie）+
+  选择器，`GET /api/agents`）+ `/login`（账号 / 6 位访问码 → `ea_sid` cookie；
+  管理密码未初始化时先显示「初始化管理账号」表单，初始化后直接以 admin 进入）+
   `/agents/:code` 工作区（P5：按智能体过滤的「我的会话」+ 流式问答卡片 + SSE 实时
   事件 + 停止/复制/删除/重新生成）+ 语音输入（P5.5：🎤 麦克风 → /api/asr，60s/
   0.4s/1.5s 中间识别，自动发送开关）+ 电脑输出音频识别面板（P5.5：EchoScribe 持续
@@ -243,7 +244,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   | 旧功能 | 新位置 |
   |---|---|
   | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 管理台「系统设置」页签（协议全局默认 protocols / ASR + 测试连接 / 匿名访问开关） |
-  | 管理密码首次初始化（/admin 首屏输入即初始化） | `/admin` 管理台首启引导（管理密码未设置时显示「设置管理密码」表单，POST /api/admin/login 初始化通道） |
+  | 管理密码首次初始化（/admin 首屏输入即初始化） | `/admin` 管理台首启引导 + `/login` 首启表单（管理密码未设置时两处均显示「设置管理账号」表单，POST /api/admin/login 初始化通道，成功后直接以 admin 登录） |
   | 会话设置抽屉（token/会话ID/EchoScribe 片段/重置） | 工作区会话设置对话框（⋯ → 设置；管理视图含 token 回显/重新生成/toml 片段/重置后端上下文） |
   | 🎤 语音输入 / 🎧 电脑输出音频 / 多浏览器同步 / PWA | 工作区（P5.5 移植，见上条） |
   | 字号 / 内容宽度 / 行间距（localStorage） | 工作区顶栏「⚙ 显示」（localStorage 键沿用 echoanswer-font / -width / -line，旧偏好继续生效） |
