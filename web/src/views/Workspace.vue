@@ -24,6 +24,39 @@ const agentProto = ref("");
 const agentErr = ref("");
 const listLoading = ref(true);
 
+// P7.2 布局对齐旧版：左固定会话栏（252px）+ 主列（header / main / footer）；
+// 内容列宽沿用 --qa-maxw（窄 860 / 宽 1180 / 铺满，「⚙ 显示」记忆于 localStorage）
+const PROTO_NAMES: Record<string, string> = { openai: "OpenAI 兼容", dify: "编排引擎", generic: "第三方通用", ragflow: "知识引擎" };
+const sideCollapsed = ref(false); // 桌面：☰ 收起会话栏（旧版 .app.collapsed 语义）
+const sideOpen = ref(false);      // 窄屏 ≤720px：会话栏左滑出抽屉
+function toggleSide() {
+  if (window.matchMedia("(max-width: 720px)").matches) sideOpen.value = !sideOpen.value;
+  else sideCollapsed.value = !sideCollapsed.value;
+}
+function closeMobileSide() { sideOpen.value = false; }
+const runningCount = computed(() => cards.value.filter((c) => c.status === "running").length);
+const connText = computed(() => (sse.status.value === "open" ? "已连接" : sse.status.value === "error" ? "未连接" : "连接中…"));
+const connCls = computed(() => (sse.status.value === "open" ? "conn-on" : sse.status.value === "error" ? "conn-off" : "conn-cx"));
+const composerProto = computed(() => {
+  const s = currentSession.value;
+  if (!s) return "无会话";
+  const proto = PROTO_NAMES[s.protocol] || s.protocol || "";
+  return (proto ? proto + " · " : "") + (s.name || "未命名会话");
+});
+// 主题（对齐旧版：localStorage echoanswer-theme light/dark → <html> data-theme）
+const lightTheme = ref(false);
+function toggleTheme() {
+  lightTheme.value = !lightTheme.value;
+  if (lightTheme.value) document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+  try { localStorage.setItem("echoanswer-theme", lightTheme.value ? "light" : "dark"); } catch {}
+}
+(function initTheme() {
+  let t = "dark";
+  try { t = localStorage.getItem("echoanswer-theme") || "dark"; } catch {}
+  if (t === "light") { lightTheme.value = true; document.documentElement.setAttribute("data-theme", "light"); }
+})();
+
 interface Card extends RecordView { html: string; live: string; }
 const cards = ref<Card[]>([]);      // 展示序：旧→新（历史反转 + 在途追加）
 const input = ref("");
@@ -92,7 +125,11 @@ function applyPrefs() {
 const showAudio = ref(false);
 const audioPanel = ref<InstanceType<typeof AudioPanel> | null>(null);
 // 正在推流的会话（SSE audio_stream 事件维护：sid -> { n: 设备数, at: 最近事件 ms }）
-const audioStreamSessions = new Map<string, { n: number; at: number }>();
+// reactive Map：侧栏 🎧 徽章随事件更新（对齐旧版音频流会话徽标）
+const audioStreamSessions = reactive(new Map<string, { n: number; at: number }>());
+function audioN(sid: string): number {
+  return (audioStreamSessions.get(sid) || { n: 0 }).n;
+}
 function fmtDevName(d: any): string {
   d = String(d == null ? "" : d);
   return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
@@ -275,6 +312,7 @@ async function initSessions() {
 async function openSession(sid: string) {
   const ok = await sess.open(sid);
   if (ok) {
+    closeMobileSide();
     rebuildCards();
     const url = "/agents/" + encodeURIComponent(agentCode.value) + "?sid=" + sid;
     router.replace(url);
@@ -390,95 +428,107 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="landing">
-    <header class="topbar">
-      <div class="brand">
+  <div class="ws-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
+    <!-- 左侧会话栏（P7.2 对齐旧版 #sidebar：252px 全高左固定；≤720px 左滑出抽屉） -->
+    <aside class="ws-side">
+      <div class="ws-side-head">
+        <span class="ws-side-title">会话列表</span>
+        <span class="ws-side-actions">
+          <el-button size="small" type="primary" plain class="ws-side-new" @click="createSession">＋ 新建</el-button>
+          <button class="ws-side-close" title="关闭会话列表" @click="sideOpen = false">✕</button>
+        </span>
+      </div>
+      <div v-if="listLoading" class="ws-side-empty">加载中…</div>
+      <div v-else-if="!agentSessions.length" class="ws-side-empty">该智能体下还没有会话</div>
+      <ul v-else class="ws-sess-list">
+        <li
+          v-for="s in agentSessions"
+          :key="s.id"
+          :class="{ on: s.id === sess.currentSid }"
+          :title="s.name + ' · 会话ID ' + s.id"
+          @click="openSession(s.id); closeMobileSide()"
+        >
+          <div class="ws-sess-name">
+            <span class="ws-sess-title">{{ s.name || '未命名会话' }}</span>
+            <span v-if="s.active" class="ws-sess-live" title="有在途问答">●</span>
+            <span class="ws-sess-menu" @click.stop>
+              <el-dropdown trigger="click" @command="(cmd: string) => onSessCommand(cmd, s)">
+                <span class="ws-sess-ellipsis">⋯</span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="s.id === sess.currentSid" command="settings">设置</el-dropdown-item>
+                    <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                    <el-dropdown-item command="del" divided>删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </span>
+          </div>
+          <div class="ws-sess-meta">
+            <span class="ws-badge">{{ PROTO_NAMES[s.protocol] || s.protocol }}</span>
+            <span v-if="audioN(s.id) > 0" class="ws-badge ws-badge-audio" :title="'正在接收 ' + audioN(s.id) + ' 个电脑设备的输出音频'">🎧{{ audioN(s.id) }}</span>
+            <span class="ws-sess-time">{{ s.active > 0 ? '生成中…' : (s.last_at ? fmtTime(s.last_at) : fmtTime(s.updated_at)) }}</span>
+          </div>
+          <div v-if="s.last_question" class="ws-sess-last">{{ s.last_question }}</div>
+        </li>
+      </ul>
+      <div class="ws-side-foot">
+        <span class="conn" :class="connCls">{{ connText }}</span>
+      </div>
+    </aside>
+
+    <!-- 主列（对齐旧版 .main-col：header / main#chat / footer composer） -->
+    <div class="ws-col">
+      <header class="ws-head">
+        <button class="ws-head-menu" title="收起 / 展开会话列表" @click="toggleSide">☰</button>
         <router-link to="/" class="brand">
           <span class="brand-mark">回</span>
-          <span class="brand-text">EchoAnswer · 回响答</span>
+          <span class="brand-text">EchoAnswer</span>
+          <span class="ws-head-sub">回响答 · 语音问答 · 流式展示</span>
         </router-link>
-      </div>
-      <nav class="topnav">
-        <span class="agent-pill">{{ agentName }}<em>{{ agentProto }}</em></span>
-        <span class="sse-dot" :class="sseDot" title="SSE 连接状态"></span>
-        <el-popover placement="bottom-end" :width="300" trigger="click">
-          <template #reference>
-            <button class="prefs-btn" title="显示偏好（本地记忆）">⚙ 显示</button>
-          </template>
-          <div class="prefs-box">
-            <div class="prefs-row">
-              <label>字号</label>
-              <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
-                <el-option label="默认（15px）" value="default" />
-                <el-option label="大（18px）" value="large" />
-                <el-option label="自定义" value="custom" />
-              </el-select>
-              <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
+        <div class="ws-head-right">
+          <span class="agent-pill">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
+          <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
+          <el-popover placement="bottom-end" :width="300" trigger="click">
+            <template #reference>
+              <button class="prefs-btn" title="显示偏好（本地记忆）">⚙ 显示</button>
+            </template>
+            <div class="prefs-box">
+              <div class="prefs-row">
+                <label>字号</label>
+                <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
+                  <el-option label="默认（15px）" value="default" />
+                  <el-option label="大（18px）" value="large" />
+                  <el-option label="自定义" value="custom" />
+                </el-select>
+                <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
+              </div>
+              <div class="prefs-row">
+                <label>内容宽度</label>
+                <el-select v-model="widthMode" size="small" @change="applyPrefs">
+                  <el-option label="窄（860px）" value="narrow" />
+                  <el-option label="宽（1180px）" value="wide" />
+                  <el-option label="铺满" value="full" />
+                </el-select>
+              </div>
+              <div class="prefs-row">
+                <label>行间距</label>
+                <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
+                  <el-option label="默认" value="default" />
+                  <el-option label="窄（1.35）" value="narrow" />
+                  <el-option label="自定义" value="custom" />
+                </el-select>
+                <el-input-number v-if="lineState.mode === 'custom'" v-model="lineState.val" :min="1" :max="2.5" :step="0.05" :precision="2" size="small" controls-position="right" @change="applyPrefs" />
+              </div>
             </div>
-            <div class="prefs-row">
-              <label>内容宽度</label>
-              <el-select v-model="widthMode" size="small" @change="applyPrefs">
-                <el-option label="窄（860px）" value="narrow" />
-                <el-option label="宽（1180px）" value="wide" />
-                <el-option label="铺满" value="full" />
-              </el-select>
-            </div>
-            <div class="prefs-row">
-              <label>行间距</label>
-              <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
-                <el-option label="默认" value="default" />
-                <el-option label="窄（1.35）" value="narrow" />
-                <el-option label="自定义" value="custom" />
-              </el-select>
-              <el-input-number v-if="lineState.mode === 'custom'" v-model="lineState.val" :min="1" :max="2.5" :step="0.05" :precision="2" size="small" controls-position="right" @change="applyPrefs" />
-            </div>
-          </div>
-        </el-popover>
-        <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || "用户" }}</span>
-        <router-link v-else to="/login" class="topnav-link">登录</router-link>
-      </nav>
-    </header>
-
-    <div class="ws-layout">
-      <aside class="ws-side">
-        <div class="ws-side-head">
-          <span>会话（{{ agentSessions.length }}）</span>
-          <el-button size="small" type="primary" plain @click="createSession">＋ 新建</el-button>
+          </el-popover>
+          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme">{{ lightTheme ? '🌙' : '☀️' }}</button>
+          <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '用户' }}</span>
+          <router-link v-else to="/login" class="topnav-link">登录</router-link>
+          <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
+          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">管理台</router-link>
         </div>
-        <div v-if="listLoading" class="ws-side-empty">加载中…</div>
-        <div v-else-if="!agentSessions.length" class="ws-side-empty">
-          该智能体下还没有会话
-        </div>
-        <ul v-else class="ws-sess-list">
-          <li
-            v-for="s in agentSessions"
-            :key="s.id"
-            :class="{ on: s.id === sess.currentSid }"
-            @click="openSession(s.id)"
-          >
-            <div class="ws-sess-name">
-              <span class="ws-sess-title">{{ s.name || "未命名会话" }}</span>
-              <span v-if="s.active" class="ws-sess-live" title="有在途问答">●</span>
-              <span class="ws-sess-menu" @click.stop>
-                <el-dropdown trigger="click" @command="(cmd: string) => onSessCommand(cmd, s)">
-                  <span class="ws-sess-ellipsis">⋯</span>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item v-if="s.id === sess.currentSid" command="settings">设置</el-dropdown-item>
-                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                      <el-dropdown-item command="del" divided>删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </span>
-            </div>
-            <div class="ws-sess-meta">
-              <span class="ws-sess-last">{{ s.last_question ? "「" + s.last_question.slice(0, 18) + (s.last_question.length > 18 ? "…" : "」") : "空会话" }}</span>
-              <span class="ws-sess-time">{{ fmtTime(s.last_at || s.updated_at) }}</span>
-            </div>
-          </li>
-        </ul>
-      </aside>
+      </header>
 
       <main ref="chatEl" class="ws-main">
         <div v-if="agentErr" class="ws-err">{{ agentErr }}</div>
@@ -489,8 +539,10 @@ onBeforeUnmount(() => {
         </div>
         <template v-else>
           <div v-if="!cards.length" class="ws-empty-chat">
-            <p>这里还没有问答记录</p>
-            <p class="ws-empty-dim">输入问题，按 Enter 发送（Shift+Enter 换行）</p>
+            <h3>本会话暂无问答</h3>
+            <p>在下方输入问题，按 <code>Enter</code> 发送，答案实时流式显示；<br>或用 <b>EchoScribe 推送模式</b>把语音识别结果自动推送到本会话。</p>
+            <p v-if="currentSession" class="ws-empty-proto">当前会话：{{ composerProto }}</p>
+            <p class="ws-empty-dim">EchoScribe 对接：打开「会话设置」复制 echoscribe.toml 片段（token + 会话ID）。推送接口 <code>POST /api/push</code></p>
           </div>
           <div
             v-for="c in cards"
@@ -503,7 +555,7 @@ onBeforeUnmount(() => {
               <span class="q-text">{{ c.question }}</span>
               <span class="meta">
                 <em class="proto">{{ c.protocol_name || c.protocol || (c.status === 'running' ? '处理中' : '') }}</em>
-                <em class="src">{{ c.source === "push" ? "语音推送" : "网页" }}</em>
+                <em class="src">{{ c.source === 'push' ? '语音推送' : '网页' }}</em>
                 <em class="tm">{{ fmtTime(c.started_at) }}</em>
               </span>
             </div>
@@ -517,7 +569,7 @@ onBeforeUnmount(() => {
                 </template>
                 <template v-else>
                   <span class="st" :class="c.ok ? 'st-ok' : 'st-err'">
-                    {{ c.ok ? "完成" : (c.detail || "失败") }}
+                    {{ c.ok ? '完成' : (c.detail || '失败') }}
                     <template v-if="c.duration_s != null"> · {{ c.duration_s }}s</template>
                   </span>
                   <span class="st-btns">
@@ -532,40 +584,43 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </template>
+      </main>
 
-        <div class="ws-inputbar">
+      <footer class="ws-foot">
+        <div class="ws-composer">
           <AudioPanel
             v-if="showAudio"
             ref="audioPanel"
             :session="currentSession"
             @finalized="(t: string) => onVoiceFinal(t, '')"
           />
-          <div v-else-if="audioAvailable" class="ws-audiohint">
-            <el-button size="small" plain @click="openAudioPanel">🎧 音频识别（EchoScribe 持续推流）</el-button>
-          </div>
-          <div class="ws-microzone">
-            <button
-              class="mic-btn"
-              :class="{ rec: mic.st.value.recording, busy: mic.st.value.transcribing }"
-              :disabled="mic.st.value.transcribing"
-              :title="micTitle"
-              @click="mic.toggle()"
-            >{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? "…" : "🎤") }}</button>
-            <label class="autosend">
-              <input type="checkbox" v-model="mic.st.value.autosend" @change="saveAutosend" /> 识别后自动发送
-            </label>
-            <span v-if="mic.st.value.interim" class="mic-interim">{{ mic.st.value.interim }}</span>
-          </div>
           <textarea
             v-model="input"
             class="ws-input"
             rows="2"
-            placeholder="输入问题…（Enter 发送，Shift+Enter 换行；🎤 语音输入）"
+            placeholder="输入问题，Enter 发送，Shift+Enter 换行"
             @keydown.enter.exact.prevent="send"
           ></textarea>
-          <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
+          <div v-if="mic.st.value.interim" class="mic-interim">… {{ mic.st.value.interim }}</div>
+          <div class="ws-composer-bar">
+            <span class="ws-composer-proto" title="当前会话与协议（协议在「会话设置」中修改）">{{ composerProto }}</span>
+            <div class="ws-composer-actions">
+              <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）">
+                <input type="checkbox" v-model="mic.st.value.autosend" @change="saveAutosend"> 识别后自动发送
+              </label>
+              <button
+                class="mic-btn"
+                :class="{ rec: mic.st.value.recording, busy: mic.st.value.transcribing }"
+                :disabled="mic.st.value.transcribing"
+                :title="micTitle"
+                @click="mic.toggle()"
+              >{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? '…' : '🎤 语音') }}</button>
+              <button v-if="audioAvailable" class="mic-btn" title="音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频" @click="openAudioPanel">🎧 音频</button>
+              <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
+            </div>
+          </div>
         </div>
-      </main>
+      </footer>
     </div>
 
     <el-dialog v-model="settingsOpen" title="会话设置" width="620px" :close-on-click-modal="false">

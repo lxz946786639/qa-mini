@@ -93,9 +93,10 @@ lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:
 public/          （P7 已退役：旧纯静态前端目录已删除，能力全量迁移至 web/）
 web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
                  src/（views: Landing/Login/Workspace(P5 工作区 + P5.5 语音输入/
-                 音频识别/会话设置 + P7 显示偏好)/AdminView(P6 管理台：
-                 users/agents/codes/audit/sys 五页签 + P7 首启引导)；
-                 components: AudioPanel/SessionSettings；
+                 音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口)/
+                 AdminView(P6 管理台：users/agents/codes/audit/sys 五页签 + P7 首启引导；
+                 /login 首启表单同源组件)/Login(P7.1 首启引导)；
+                 components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic；
                  utils: markdown 先转义后解析）
                  + dist/（构建产物随仓库提交，根服务器以站点根提供）；npm 仅限本目录
