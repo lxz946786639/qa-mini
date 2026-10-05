@@ -21,6 +21,10 @@ const auth = useAuthStore();
 const sess = useSessionsStore();
 
 const agentCode = computed(() => String(route.params.code || ""));
+// 过滤用智能体 id（服务端会话归属键）：id ≠ code（播种/新建均为随机 id），
+// 必须取 /api/agents/:code 返回的 agent.id，不能用路由 code 直接比对（P7.7 修复：
+// 此前用 code 比对 sessions.agent_id(id) 导致侧栏恒空 + 每次进页面自动补建会话）
+const agentId = ref<string | null>(null);
 const agentName = ref("…");
 const agentProto = ref("");
 const agentErr = ref("");
@@ -150,7 +154,7 @@ async function onSettingsSaved() {
   if (sess.currentSid) { await sess.open(sess.currentSid); rebuildCards(); }
 }
 
-const agentSessions = computed(() => sess.agentSessions(agentCode.value));
+const agentSessions = computed(() => (agentId.value ? sess.agentSessions(agentId.value) : []));
 // SSE 连接状态徽标（sse 在下方顶层声明：useSse 注册组件生命周期）
 const sseDot = computed(() => ({
   "dot-open": sse.status.value === "open",
@@ -281,10 +285,11 @@ watch(() => sess.currentSid, () => { showAudio.value = false; });
 
 async function loadAgent() {
   listLoading.value = true;
-  const { ok, data } = await api<{ ok: boolean; agent?: { name: string; protocol: string }; detail?: string }>(
+  const { ok, data } = await api<{ ok: boolean; agent?: { id: string; name: string; protocol: string }; detail?: string }>(
     "/api/agents/" + encodeURIComponent(agentCode.value)
   );
   if (!ok) { agentErr.value = data.detail || "智能体不存在或已停用"; listLoading.value = false; return; }
+  agentId.value = data.agent?.id || null;
   agentName.value = data.agent?.name || agentCode.value;
   agentProto.value = data.agent?.protocol || "";
 }

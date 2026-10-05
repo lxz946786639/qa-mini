@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 147 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 148 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
@@ -111,7 +111,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 147 项断言全绿
+npm test                                        # 148 项断言全绿
 node tests/store_tests.js                       # 35 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health

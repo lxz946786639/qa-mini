@@ -665,6 +665,21 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await api("DELETE", "/api/sessions/ffffffff")).status, 404);
     assert.strictEqual((await api("POST", "/api/sessions/ffffffff/reset")).status, 404);
   });
+  await test("sessions: 智能体归属 id 语义（工作区侧栏过滤契约，P7.7）", async () => {
+    // 侧栏按 sessions.agent_id 过滤；会话归属键是 agent.id（播种/新建均为随机 id，≠ code）。
+    // 该契约一旦破坏（如改存 code），前端「该智能体下还没有会话」恒空 + 进页面自动补建。
+    const ag = await api("GET", "/api/agents/industry-brain");
+    assert.strictEqual(ag.status, 200);
+    assert.ok(ag.data.agent && ag.data.agent.id, "agent.id 有返回");
+    assert.strictEqual(ag.data.agent.code, "industry-brain");
+    const r = await api("POST", "/api/sessions", { name: "归属测试", agent_code: "industry-brain" });
+    assert.strictEqual(r.status, 201);
+    assert.strictEqual(r.data.session.agent_id, ag.data.agent.id, "sessions.agent_id = agent.id（非 code）");
+    const ag2 = await api("GET", "/api/agents/industry-brain");
+    assert.ok(ag2.data.sessions.some((x) => x.id === r.data.session.id), "智能体上下文含新会话");
+    assert.ok((await api("GET", "/api/sessions")).data.sessions.some((x) => x.id === r.data.session.id), "主列表含新会话");
+    assert.strictEqual((await api("DELETE", "/api/sessions/" + r.data.session.id)).status, 200, "清理");
+  });
 
   // ---------- push（token 定位 + session_id 校验） ----------
   await test("push: 未知 token → 401", async () => {
