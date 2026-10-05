@@ -4,6 +4,7 @@ config.json.bak-*
 data/
 
 # 日志与临时
+.cdp-tmp*/
 *.log
 server.log
 *.db
