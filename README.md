@@ -226,7 +226,9 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）。P4 =
   落地页（智能体选择器，`GET /api/agents`）+ `/app/login`（账号 / 6 位访问码 →
   `ea_sid` cookie）+ `/app/agents/:code` 工作区（P5：按智能体过滤的「我的会话」+
-  流式问答卡片 + SSE 实时事件 + 停止/复制/删除/重新生成）+ `/app/admin` 管理台
+  流式问答卡片 + SSE 实时事件 + 停止/复制/删除/重新生成 + 语音输入（🎤 麦克风 →
+  /api/asr，自动发送开关）+ 电脑输出音频识别面板（EchoScribe 持续推流，管理视图）
+  + 会话设置对话框（协议覆盖 / 音频接收 / 推送 token，P5.5））+ `/app/admin` 管理台
   （P6：用户管理 / 智能体管理 / 访问码 / 审计日志四页签，仅 admin 主体）；
   P7 根路径切换到新前端并退役 public/。开发：`cd web && npm install && npm run dev`
   （vite dev 代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`

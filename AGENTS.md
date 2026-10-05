@@ -89,9 +89,11 @@ lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:
                  sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志）
 public/          纯静态前端（现役，P7 退役）：index.html / app.js / icons.svg（图标 sprite）/ style.css
 web/             新代前端（v59 P4 起，独立 package）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
-                 src/（views: Landing/Login/Workspace(P5 工作区)/AdminView(P6 管理台：
-                 users/agents/codes/audit 四页签)；stores: auth/sessions；
-                 composables: useSse；utils: markdown 先转义后解析）
+                 src/（views: Landing/Login/Workspace(P5 工作区 + P5.5 语音输入/
+                 音频识别/会话设置)/AdminView(P6 管理台：users/agents/codes/audit
+                 四页签)；components: AudioPanel/SessionSettings；
+                 stores: auth/sessions；composables: useSse/useMic；
+                 utils: markdown 先转义后解析）
                  + dist/（构建产物随仓库提交，服务器挂载 /app/，P7 切根）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）

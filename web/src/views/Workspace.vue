@@ -1,13 +1,16 @@
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
+import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
+import AudioPanel from "../components/AudioPanel.vue";
+import SessionSettings from "../components/SessionSettings.vue";
 
 // 工作区（P5）：某智能体下「我的会话」列表 + 流式问答（SSE 按主体作用域投递）
 const route = useRoute();
@@ -26,6 +29,55 @@ const cards = ref<Card[]>([]);      // 展示序：旧→新（历史反转 + �
 const input = ref("");
 const sending = ref(false);
 const chatEl = ref<HTMLElement | null>(null);
+
+// ---- P5.5 语音输入（麦克风 → /api/asr，查看级）----
+const mic = useMic({
+  onFinal: (text, detail) => onVoiceFinal(text, detail),
+  onToast: (m) => ElMessage.warning(m)
+});
+const micTitle = computed(() => mic.title());
+function saveAutosend() {
+  try { localStorage.setItem("echoanswer-asr-autosend", mic.st.value.autosend ? "1" : "0"); } catch { /* 忽略 */ }
+}
+
+// ---- P5.5 电脑输出音频（EchoScribe 持续推流；管理视图 token 级）----
+const currentSession = computed(() => (sess.detail && sess.detail.session) || null);
+const audioAvailable = computed(() => {
+  const s = currentSession.value;
+  return !!s && !!s.token && s.audio_remote && s.audio_remote.enabled === true;
+});
+const showAudio = ref(false);
+const audioPanel = ref<InstanceType<typeof AudioPanel> | null>(null);
+// 正在推流的会话（SSE audio_stream 事件维护：sid -> { n: 设备数, at: 最近事件 ms }）
+const audioStreamSessions = new Map<string, { n: number; at: number }>();
+function fmtDevName(d: any): string {
+  d = String(d == null ? "" : d);
+  return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
+}
+async function openAudioPanel() {
+  if (showAudio.value) { showAudio.value = false; return; }
+  if (mic.st.value.recording || mic.st.value.transcribing) {
+    ElMessage.warning("语音/音频只能二选一：请先停止语音录音");
+    return;
+  }
+  showAudio.value = true;
+}
+
+// ---- P5.5 会话设置对话框 ----
+const settingsOpen = ref(false);
+function onSessCommand(cmd: string, s: any) {
+  if (cmd === "settings") { openSettings(); return; }
+  if (cmd === "rename") { renameSession(s.id, s.name); return; }
+  deleteSession(s.id, s.name || s.id);
+}
+function openSettings() {
+  if (!sess.detail) return;
+  settingsOpen.value = true;
+}
+async function onSettingsSaved() {
+  settingsOpen.value = false;
+  if (sess.currentSid) { await sess.open(sess.currentSid); rebuildCards(); }
+}
 
 const agentSessions = computed(() => sess.agentSessions(agentCode.value));
 // SSE 连接状态徽标（sse 在下方顶层声明：useSse 注册组件生命周期）
@@ -91,6 +143,56 @@ async function onListEvent(d: any) {
   sess.applySseList(d.sessions || []);
 }
 
+// 定稿（语音 / 音频共用）：「识别后自动发送」= 立即发送（输入框原文保留）；否则填入输入框待确认
+async function onVoiceFinal(text: string, detail: string) {
+  if (text && mic.st.value.autosend) {
+    const keep = input.value;
+    await sendQuestionOnly(text);
+    if (keep.trim()) input.value = keep;
+    ElMessage.success("已识别 " + text.length + " 字，自动发送");
+  } else if (text) {
+    const prev = input.value.replace(/\s+$/, "");
+    input.value = prev ? prev + " " + text : text;
+    ElMessage.success("已识别 " + text.length + " 字，请确认后发送");
+  } else {
+    ElMessage.info(detail || "未识别到语音");
+  }
+}
+function onAudioStreamEvent(d: any) {
+  if (!d || !d.session_id) return;
+  const now = Date.now();
+  const sid = String(d.session_id);
+  if (d.state === "started") {
+    const v = audioStreamSessions.get(sid) || { n: 0, at: now };
+    v.n += 1; v.at = now;
+    audioStreamSessions.set(sid, v);
+    if (sid === sess.currentSid) ElMessage.info("设备开始推流: " + fmtDevName(d.device));
+  } else if (d.state === "data") {
+    const v = audioStreamSessions.get(sid) || { n: 0, at: now };
+    if (v.n < 1) v.n = 1;
+    v.at = now;
+    audioStreamSessions.set(sid, v);
+  } else if (d.state === "stopped") {
+    const v = audioStreamSessions.get(sid);
+    if (v) {
+      v.n -= 1; v.at = now;
+      if (v.n <= 0) audioStreamSessions.delete(sid);
+      else audioStreamSessions.set(sid, v);
+    }
+    if (sid === sess.currentSid) ElMessage.info("设备停止推流: " + fmtDevName(d.device));
+  }
+  // 音频面板开着（当前会话）→ 设备增删时刷新下拉
+  if (showAudio.value && sid === sess.currentSid) audioPanel.value && audioPanel.value.refreshDevices();
+}
+function onAudioListenEvent(d: any) {
+  if (!d || String(d.session_id) !== sess.currentSid) return;
+  const p = audioPanel.value;
+  if (!p || !showAudio.value) return;
+  const cur = p.currentDevice ? p.currentDevice() : "";
+  if (d.device && d.device !== cur) return; // 只处理本面板所选设备
+  p.handleListenEvent(d);
+}
+
 // 顶层 SSE 订阅（setup 执行时注册生命周期；仅本主体可见会话的事件会送达）
 const sse = useSse({
   sessions: onListEvent,
@@ -98,8 +200,13 @@ const sse = useSse({
   delta: onDelta,
   done: onDone,
   record_removed: (d: any) => { if (String(d.session_id) === sess.currentSid) { sess.open(sess.currentSid).then(rebuildCards); } },
-  session_reset: (d: any) => { if (String(d.session_id) === sess.currentSid) { sess.open(sess.currentSid).then(rebuildCards); } }
+  session_reset: (d: any) => { if (String(d.session_id) === sess.currentSid) { sess.open(sess.currentSid).then(rebuildCards); } },
+  audio_stream: onAudioStreamEvent,
+  audio_listen: onAudioListenEvent
 });
+
+// 切会话：收起音频面板（面板内部 watch 会取消在途识别并清空状态）
+watch(() => sess.currentSid, () => { showAudio.value = false; });
 
 async function loadAgent() {
   listLoading.value = true;
@@ -277,10 +384,11 @@ onBeforeUnmount(() => {
               <span class="ws-sess-title">{{ s.name || "未命名会话" }}</span>
               <span v-if="s.active" class="ws-sess-live" title="有在途问答">●</span>
               <span class="ws-sess-menu" @click.stop>
-                <el-dropdown trigger="click" @command="(cmd: string) => cmd === 'rename' ? renameSession(s.id, s.name) : deleteSession(s.id, s.name || s.id)">
+                <el-dropdown trigger="click" @command="(cmd: string) => onSessCommand(cmd, s)">
                   <span class="ws-sess-ellipsis">⋯</span>
                   <template #dropdown>
                     <el-dropdown-menu>
+                      <el-dropdown-item v-if="s.id === sess.currentSid" command="settings">设置</el-dropdown-item>
                       <el-dropdown-item command="rename">重命名</el-dropdown-item>
                       <el-dropdown-item command="del" divided>删除</el-dropdown-item>
                     </el-dropdown-menu>
@@ -350,16 +458,42 @@ onBeforeUnmount(() => {
         </template>
 
         <div class="ws-inputbar">
+          <AudioPanel
+            v-if="showAudio"
+            ref="audioPanel"
+            :session="currentSession"
+            @finalized="(t: string) => onVoiceFinal(t, '')"
+          />
+          <div v-else-if="audioAvailable" class="ws-audiohint">
+            <el-button size="small" plain @click="openAudioPanel">🎧 音频识别（EchoScribe 持续推流）</el-button>
+          </div>
+          <div class="ws-microzone">
+            <button
+              class="mic-btn"
+              :class="{ rec: mic.st.value.recording, busy: mic.st.value.transcribing }"
+              :disabled="mic.st.value.transcribing"
+              :title="micTitle"
+              @click="mic.toggle()"
+            >{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? "…" : "🎤") }}</button>
+            <label class="autosend">
+              <input type="checkbox" v-model="mic.st.value.autosend" @change="saveAutosend" /> 识别后自动发送
+            </label>
+            <span v-if="mic.st.value.interim" class="mic-interim">{{ mic.st.value.interim }}</span>
+          </div>
           <textarea
             v-model="input"
             class="ws-input"
             rows="2"
-            placeholder="输入问题…（Enter 发送，Shift+Enter 换行）"
+            placeholder="输入问题…（Enter 发送，Shift+Enter 换行；🎤 语音输入）"
             @keydown.enter.exact.prevent="send"
           ></textarea>
           <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
         </div>
       </main>
     </div>
+
+    <el-dialog v-model="settingsOpen" title="会话设置" width="620px" :close-on-click-modal="false">
+      <SessionSettings :session="currentSession" :is-admin="auth.isAdmin" :open="settingsOpen" @saved="onSettingsSaved" />
+    </el-dialog>
   </div>
 </template>
