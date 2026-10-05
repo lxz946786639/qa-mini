@@ -26,8 +26,8 @@ EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 130 项断言全绿，
-   含 `node --check` 前端语法护栏）；
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 132 项断言全绿，
+   含 `node --check` 前端语法护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
 ## 3. 代码-文档同步规则（核心）
@@ -67,13 +67,21 @@ EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答
 ## 4. 目录与文件职责
 
 ```
-server.js        唯一入口：HTTP 路由 + SSE + 静态服务（勿拆成多服务）
+server.js        根入口（薄）：require server/app.js 启动（唯一入口，勿拆成多服务）
+server/          服务端模块化（P2）：app.js 启动装配 / context.js 启动上下文 /
+                 router.js 首中路由 / middleware.js 公共件 / services/（会话增量
+                 持久化 · SSE 总线 · 鉴权 · 访问码 · 音频监听 · 配置同步）/ routes/
+                 （按端点分组的路由模块）
 lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 EchoScribe 同源）
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
-lib/config.js    配置 + SQLite 存储（唯一允许碰 data/ 文件的模块）
+lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
+lib/config.js    配置加载/深合并/校验 + 旧 JSON 会话兼容（存储已迁 store.js）
+lib/migrations.js v1→v2 数据迁移（重命名/备份/播种/归属回填，user_version）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
+lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:sqlite：
+                 sessions/records/users/agents/访问码/审计日志）
 public/          纯静态前端：index.html / app.js / icons.svg（图标 sprite）/ style.css
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）
@@ -84,8 +92,9 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 ## 5. 本地验证流程（每次改动后）
 
 ```bash
-node --check server.js lib/*.js public/app.js   # 语法
-npm test                                        # 130 项断言全绿
+node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js public/app.js   # 语法
+npm test                                        # 132 项断言全绿
+node tests/store_tests.js                       # 35 项数据层单测全绿
 # 前端改动：静态文件按请求读盘，浏览器刷新即生效，无需重启；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```

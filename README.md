@@ -48,6 +48,7 @@ npm start            # 或 node server.js
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
   首次启动请在网页「⚙ 设置」填入后端 url/api_key/chat_id 并保存）
 - 会话：SQLite 数据库 data/echoanswer.db（Node 内置 node:sqlite，零依赖；
+  **旧库自动升级到 v2 schema：先备份 data/backup/，数据保留**，见 doc/02 §3）；
   首次运行自动创建「默认会话」，并迁移 config.json `push.token` 作为其 token ——
   旧 EchoScribe 配置无需改动；旧 data/sessions.json 会在首次运行时自动一次性
   迁入数据库，旧文件归档为 .bak-<时间戳>）
@@ -118,9 +119,9 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   （「启用电脑输出音频接收」开关 + 正在接收的设备信息，识别在提问框「🎧 音频」
   按钮，见上「持续推流模式」）；「重置会话」（先取消
   在途问答，再清空该会话后端上下文）、删除会话。
-- 会话数据持久化在 SQLite 数据库 data/echoanswer.db（sessions 表 + records 表；
-  token/会话ID/协议/后端会话状态/每会话最近 100 条历史）；
-  服务重启后会话与上下文保持。
+- 会话数据持久化在 SQLite 数据库 data/echoanswer.db（v2 schema：sessions 表 +
+  records 表 + users/agents/访问码/审计日志；token/会话ID/协议/后端会话状态/
+  每会话最近 100 条历史 + 用户/智能体归属列）；服务重启后会话与上下文保持。
 - 至少保留一个会话：删除最后一个会话时自动补建「默认会话」。
 - 同一会话 ID 的多个浏览器：任何一端（含 EchoScribe 推送）发起的问答，
   所有端同步实时显示；切换会话时按会话加载历史 + 在途问答。
@@ -291,7 +292,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**130 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**132 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -301,6 +302,8 @@ npm test           # node tests/run_tests.js
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
+- `tests/store_tests.js`：**35 项** v2 数据层单测（`node tests/store_tests.js`）：
+  会话 CRUD/桶语义/历史 100 上限/访问码状态机/管理员迁移/审计日志。
 - 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`
   指定会话存储目录（测试用它做隔离）。
