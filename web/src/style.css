@@ -39,14 +39,75 @@ body {
   line-height: 1.6;
 }
 #app { min-height: 100dvh; display: flex; flex-direction: column; }
-html.dark, :root {
+/* Element Plus 主题适配（P7.4）：把 EP 组件 CSS 变量完整映射到本项目色板，
+   深色/浅色各一套色调；对话框/表格/下拉/输入/标签/弹层按钮随之自动适配 */
+:root {
   --el-color-primary: var(--accent);
+  --el-color-primary-light-3: #74b8ff;
+  --el-color-primary-light-5: #9dcdff;
+  --el-color-primary-light-7: #c2e1ff;
+  --el-color-primary-light-8: #d8ecff;
+  --el-color-primary-light-9: rgba(77, 163, 255, 0.16);
+  --el-color-primary-dark-2: #3d82cc;
   --el-bg-color: var(--card);
-  --el-bg-color-overlay: var(--card-head);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--card);
   --el-text-color-primary: var(--text);
   --el-text-color-regular: var(--text);
+  --el-text-color-secondary: var(--text-dim);
+  --el-text-color-placeholder: var(--text-dim);
   --el-border-color: var(--border);
   --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-border-color-extra-light: var(--border);
+  --el-fill-color: var(--bg-soft);
+  --el-fill-color-light: var(--bg-soft);
+  --el-fill-color-lighter: var(--bg);
+  --el-fill-color-extra-light: var(--bg);
+  --el-fill-color-blank: var(--card);
+  --el-mask-color: rgba(0, 0, 0, 0.6);
+  --el-table-header-bg-color: var(--card-head);
+  --el-color-success-light-9: rgba(63, 185, 80, 0.16);
+  --el-color-success-light-8: rgba(63, 185, 80, 0.45);
+  --el-color-warning-light-9: rgba(210, 153, 34, 0.16);
+  --el-color-warning-light-8: rgba(210, 153, 34, 0.45);
+  --el-color-danger-light-9: rgba(248, 81, 73, 0.16);
+  --el-color-danger-light-8: rgba(248, 81, 73, 0.45);
+  --el-color-error-light-9: rgba(248, 81, 73, 0.16);
+  --el-color-error-light-8: rgba(248, 81, 73, 0.45);
+  --el-color-info: var(--text-dim);
+  --el-color-info-light-9: rgba(139, 152, 165, 0.16);
+  --el-color-info-light-8: rgba(139, 152, 165, 0.45);
+}
+:root[data-theme="light"] {
+  --el-color-primary-light-3: #5b8def;
+  --el-color-primary-light-5: #85a9f3;
+  --el-color-primary-light-7: #b0c7f9;
+  --el-color-primary-light-8: #c8dcfb;
+  --el-color-primary-light-9: rgba(37, 99, 235, 0.10);
+  --el-color-primary-dark-2: #1e4fc2;
+  --el-text-color-regular: #4b5563;
+  --el-text-color-placeholder: #a8abb2;
+  --el-border-color: #d3d9e2;
+  --el-border-color-light: #dfe4ec;
+  --el-border-color-lighter: #e7ebf1;
+  --el-border-color-extra-light: #eff2f6;
+  --el-fill-color: #eef1f5;
+  --el-fill-color-light: #f2f4f7;
+  --el-fill-color-lighter: #f6f8fa;
+  --el-fill-color-extra-light: #fafbfc;
+  --el-mask-color: rgba(0, 0, 0, 0.45);
+  --el-table-header-bg-color: #f5f7fa;
+  --el-color-success-light-9: rgba(21, 128, 61, 0.10);
+  --el-color-success-light-8: rgba(21, 128, 61, 0.28);
+  --el-color-warning-light-9: rgba(210, 153, 34, 0.12);
+  --el-color-warning-light-8: rgba(210, 153, 34, 0.35);
+  --el-color-danger-light-9: rgba(220, 38, 38, 0.10);
+  --el-color-danger-light-8: rgba(220, 38, 38, 0.30);
+  --el-color-error-light-9: rgba(220, 38, 38, 0.10);
+  --el-color-error-light-8: rgba(220, 38, 38, 0.30);
+  --el-color-info-light-9: rgba(103, 112, 125, 0.10);
+  --el-color-info-light-8: rgba(103, 112, 125, 0.28);
 }
 .landing { min-height: 100dvh; display: flex; flex-direction: column; }
 .topbar {
