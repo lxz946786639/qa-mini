@@ -149,7 +149,7 @@ async function testAsr() {
     </section>
 
     <section class="sys-sec">
-      <h4>语音输入（ASR · 网页 🎤 与电脑音频识别共用）</h4>
+      <h4>语音输入（ASR · 网页语音与电脑音频识别共用）</h4>
       <div class="sys-row">
         <label>服务地址 URL（OpenAI 兼容，空 = 停用）</label>
         <el-input v-model="form.asr.url"></el-input>

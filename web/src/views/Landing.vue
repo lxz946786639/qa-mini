@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { Microphone } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -113,7 +114,7 @@ onMounted(() => {
           :to="agentPath(a.code)"
           class="agent-card"
         >
-          <div class="agent-icon">{{ a.icon || "🎙️" }}</div>
+          <div class="agent-icon"><span v-if="a.icon">{{ a.icon }}</span><el-icon v-else class="agent-icon-ui"><Microphone /></el-icon></div>
           <div class="agent-body">
             <div class="agent-name">
               {{ a.name }}

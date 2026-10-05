@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, ArrowLeft } from "@element-plus/icons-vue";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
@@ -21,11 +22,11 @@ const { lightTheme, toggleTheme } = useTheme();
 
 // 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
 const MENU = [
-  { key: "users", icon: "👥", label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码）" },
-  { key: "agents", icon: "🤖", label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
-  { key: "codes", icon: "🔑", label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期；访问码主体共享会话桶" },
-  { key: "audit", icon: "📋", label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
-  { key: "sys", icon: "⚙️", label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
+  { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码）" },
+  { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
+  { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期；访问码主体共享会话桶" },
+  { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
+  { key: "sys", icon: Setting, label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
 ];
 const tab = ref("users");
 const activeMeta = computed(() => MENU.find((m) => m.key === tab.value) || MENU[0]);
@@ -73,23 +74,23 @@ async function onLogout() {
       </div>
       <ul class="adm-nav">
         <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" @click="tab = m.key">
-          <span class="adm-ic">{{ m.icon }}</span>{{ m.label }}
+          <el-icon class="adm-ic"><component :is="m.icon" /></el-icon>{{ m.label }}
         </li>
       </ul>
       <div class="adm-side-foot">
-        <router-link to="/" class="adm-home" @click="sideOpen = false">← 返回落地页</router-link>
+        <router-link to="/" class="adm-home" @click="sideOpen = false"><el-icon><ArrowLeft /></el-icon>返回落地页</router-link>
       </div>
     </aside>
 
     <div class="adm-col">
       <header class="adm-top">
-        <button class="ws-head-menu" title="收起 / 展开控制台导航" @click="toggleSide">☰</button>
+        <button class="ws-head-menu" title="收起 / 展开控制台导航" @click="toggleSide"><el-icon><Menu /></el-icon></button>
         <div class="adm-top-tt">
           <div class="adm-top-title">{{ activeMeta.label }}</div>
           <div class="adm-top-sub">{{ activeMeta.sub }}</div>
         </div>
         <div class="adm-top-right">
-          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme">{{ lightTheme ? '🌙' : '☀️' }}</button>
+          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
           <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '管理员' }}</span>
           <el-button v-if="auth.isAuthed" size="small" @click="onLogout">退出</el-button>
         </div>

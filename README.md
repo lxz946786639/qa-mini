@@ -235,7 +235,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   协议覆盖 / 音频接收 / 协议测试 / 推送 token 回显·重生成 / EchoScribe 片段 / 重置
   后端上下文，管理项仅 admin）+ 显示偏好（P7：字号 / 内容宽度 / 行间距，顶栏「⚙ 显示」，
   localStorage 键沿用旧版）+ 主题切换 ☀️/🌙（P7.4：Element Plus 组件变量全量映射项目色板，
-  深色/浅色双色调，对话框/表格/下拉/输入/标签全适配）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：用户 / 智能体 / 访问码 / 审计日志 /
+  深色/浅色双色调，对话框/表格/下拉/输入/标签全适配）+ 图标（P7.5：全站 emoji 换 Element Plus
+  图标库 @element-plus/icons-vue）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：用户 / 智能体 / 访问码 / 审计日志 /
   系统设置五页签，仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
   对齐旧版 /admin 首屏）。开发：`cd web && npm install && npm run dev`（vite dev
   代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`（构建产物随仓库

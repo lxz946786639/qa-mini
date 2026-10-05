@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Microphone } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -424,8 +425,8 @@ onBeforeUnmount(() => {
       <div class="ws-side-head">
         <span class="ws-side-title">会话列表</span>
         <span class="ws-side-actions">
-          <el-button size="small" type="primary" plain class="ws-side-new" @click="createSession">＋ 新建</el-button>
-          <button class="ws-side-close" title="关闭会话列表" @click="sideOpen = false">✕</button>
+          <el-button size="small" type="primary" plain class="ws-side-new" :icon="Plus" @click="createSession">新建</el-button>
+          <button class="ws-side-close" title="关闭会话列表" @click="sideOpen = false"><el-icon><Close /></el-icon></button>
         </span>
       </div>
       <div v-if="listLoading" class="ws-side-empty">加载中…</div>
@@ -440,10 +441,10 @@ onBeforeUnmount(() => {
         >
           <div class="ws-sess-name">
             <span class="ws-sess-title">{{ s.name || '未命名会话' }}</span>
-            <span v-if="s.active" class="ws-sess-live" title="有在途问答">●</span>
+            <span v-if="s.active" class="ws-sess-live-dot" title="有在途问答"></span>
             <span class="ws-sess-menu" @click.stop>
               <el-dropdown trigger="click" @command="(cmd: string) => onSessCommand(cmd, s)">
-                <span class="ws-sess-ellipsis">⋯</span>
+                <span class="ws-sess-ellipsis"><el-icon><MoreFilled /></el-icon></span>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item v-if="s.id === sess.currentSid" command="settings">设置</el-dropdown-item>
@@ -456,7 +457,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="ws-sess-meta">
             <span class="ws-badge">{{ PROTO_NAMES[s.protocol] || s.protocol }}</span>
-            <span v-if="audioN(s.id) > 0" class="ws-badge ws-badge-audio" :title="'正在接收 ' + audioN(s.id) + ' 个电脑设备的输出音频'">🎧{{ audioN(s.id) }}</span>
+            <span v-if="audioN(s.id) > 0" class="ws-badge ws-badge-audio" :title="'正在接收 ' + audioN(s.id) + ' 个电脑设备的输出音频'"><el-icon><Headset /></el-icon>{{ audioN(s.id) }}</span>
             <span class="ws-sess-time">{{ s.active > 0 ? '生成中…' : (s.last_at ? fmtTime(s.last_at) : fmtTime(s.updated_at)) }}</span>
           </div>
           <div v-if="s.last_question" class="ws-sess-last">{{ s.last_question }}</div>
@@ -470,7 +471,7 @@ onBeforeUnmount(() => {
     <!-- 主列（对齐旧版 .main-col：header / main#chat / footer composer） -->
     <div class="ws-col">
       <header class="ws-head">
-        <button class="ws-head-menu" title="收起 / 展开会话列表" @click="toggleSide">☰</button>
+        <button class="ws-head-menu" title="收起 / 展开会话列表" @click="toggleSide"><el-icon><Menu /></el-icon></button>
         <router-link to="/" class="brand">
           <span class="brand-mark">回</span>
           <span class="brand-text">EchoAnswer</span>
@@ -481,7 +482,7 @@ onBeforeUnmount(() => {
           <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
           <el-popover placement="bottom-end" :width="300" trigger="click">
             <template #reference>
-              <button class="prefs-btn" title="显示偏好（本地记忆）">⚙ 显示</button>
+              <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
             </template>
             <div class="prefs-box">
               <div class="prefs-row">
@@ -512,7 +513,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </el-popover>
-          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme">{{ lightTheme ? '🌙' : '☀️' }}</button>
+          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
           <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '用户' }}</span>
           <router-link v-else to="/login" class="topnav-link">登录</router-link>
           <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
@@ -604,8 +605,8 @@ onBeforeUnmount(() => {
                 :disabled="mic.st.value.transcribing"
                 :title="micTitle"
                 @click="mic.toggle()"
-              >{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? '…' : '🎤 语音') }}</button>
-              <button v-if="audioAvailable" class="mic-btn" title="音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频" @click="openAudioPanel">🎧 音频</button>
+              ><el-icon v-if="!mic.st.value.recording"><Microphone /></el-icon>{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? '识别中…' : '语音') }}</button>
+              <button v-if="audioAvailable" class="mic-btn" title="音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频" @click="openAudioPanel"><el-icon><Headset /></el-icon>音频</button>
               <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
             </div>
           </div>

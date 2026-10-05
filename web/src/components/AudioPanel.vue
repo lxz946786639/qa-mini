@@ -7,6 +7,7 @@
 // 仅管理视图（含 token）可用；会话须 audio_remote.enabled = true。
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { Headset } from "@element-plus/icons-vue";
 import { api } from "../api";
 
 const props = defineProps<{ session: any }>();
@@ -153,7 +154,7 @@ defineExpose({ handleListenEvent, refreshDevices, reset, currentDevice });
 <template>
   <div class="audio-panel">
     <div class="ap-row">
-      <span class="ap-title">🎧 电脑输出音频（EchoScribe 持续推流）</span>
+      <span class="ap-title"><el-icon><Headset /></el-icon>电脑输出音频（EchoScribe 持续推流）</span>
       <el-select v-model="device" size="small" :disabled="!streams.length" style="width: 240px">
         <el-option v-if="!streams.length" value="" label="无正在接收的设备" disabled />
         <el-option

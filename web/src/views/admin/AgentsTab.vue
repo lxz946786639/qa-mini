@@ -3,6 +3,7 @@
 // 智能体管理（P3 多智能体：每智能体一个协议；config 空字段 = 回退全局协议默认）
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { Microphone } from "@element-plus/icons-vue";
 import { api } from "../../api";
 
 interface Agent {
@@ -105,7 +106,7 @@ onMounted(load);
     </div>
     <el-table v-loading="loading" :data="agents">
       <el-table-column label="图标" width="70">
-        <template #default="{ row }"><span class="agent-ic">{{ row.icon || "🎙️" }}</span></template>
+        <template #default="{ row }"><span v-if="row.icon" class="agent-ic">{{ row.icon }}</span><el-icon v-else class="agent-ic agent-ic-ui"><Microphone /></el-icon></template>
       </el-table-column>
       <el-table-column label="名称" min-width="160">
         <template #default="{ row }">
@@ -149,7 +150,7 @@ onMounted(load);
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
         <el-form-item label="图标（表情符号，可空）">
-          <el-input v-model="form.icon" placeholder="🎙️" style="max-width: 120px" />
+          <el-input v-model="form.icon" placeholder="留空 = 默认图标" style="max-width: 120px" />
         </el-form-item>
         <el-form-item label="协议（每智能体一个）">
           <el-select v-model="form.protocol" :disabled="!!editing">
