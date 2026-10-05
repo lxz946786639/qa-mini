@@ -1,4 +1,4 @@
-# AGENTS.md — QA Mini AI 协作规范
+# AGENTS.md — EchoAnswer AI 协作规范
 
 本文件约束 AI 代理（及人类贡献者）在本仓库修改代码时的行为。**核心规则：
 任何影响对外行为/可配置项/部署形态的代码修改，必须在同一次改动中同步更新
@@ -6,7 +6,7 @@
 
 ## 1. 项目速览
 
-QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接收 EchoScribe（回响笔）
+EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接收 EchoScribe（回响笔）
 推送的识别文本，调用 openai/dify/generic/ragflow 四协议问答，多浏览器实时
 流式展示。架构细节见 `doc/01-项目设计文档.md`，勿凭记忆假设，改前先读源码。
 
@@ -28,7 +28,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
 8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 130 项断言全绿，
    含 `node --check` 前端语法护栏）；
-   测试用 `QA_MINI_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
+   测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
 ## 3. 代码-文档同步规则（核心）
 

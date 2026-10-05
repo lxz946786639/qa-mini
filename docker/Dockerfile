@@ -1,4 +1,4 @@
-# QA Mini — 零依赖 Node.js 服务（Node 24 内置 node:sqlite）
+# EchoAnswer — 零依赖 Node.js 服务（Node 24 内置 node:sqlite）
 FROM node:24-alpine
 
 ENV NODE_ENV=production

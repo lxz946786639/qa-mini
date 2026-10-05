@@ -1,11 +1,11 @@
 "use strict";
-// QA Mini 全量测试（零框架）：
+// EchoAnswer 全量测试（零框架）：
 //  [1] 四个协议客户端单测（mock 后端）
 //  [2] 服务器 API 全链路（真实 server.js + mock 后端，多会话）
 // 运行: node tests/run_tests.js   （或 npm test）
 
-process.env.QA_MINI_IDLE_TIMEOUT_MS = "400";
-process.env.QA_MINI_CONNECT_TIMEOUT_MS = "500";
+process.env.ECHOANSWER_IDLE_TIMEOUT_MS = "400";
+process.env.ECHOANSWER_CONNECT_TIMEOUT_MS = "500";
 
 const assert = require("assert");
 const fs = require("fs");
@@ -419,9 +419,9 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
 
   await test("config: 旧库迁移补 protocol_config 列（数据保留）", async () => {
-    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "qa-mini-mig-"));
+    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "echoanswer-mig-"));
     const { DatabaseSync } = require("node:sqlite");
-    const oldDb = new DatabaseSync(path.join(mdir, "qa-mini.db"));
+    const oldDb = new DatabaseSync(path.join(mdir, "echoanswer.db"));
     oldDb.exec(
       "CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL, protocol TEXT NOT NULL," +
       "  continue_session INTEGER NOT NULL DEFAULT 1, dify_conversation_id TEXT NOT NULL DEFAULT ''," +
@@ -438,8 +438,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
       " VALUES ('old1', '旧会话', 'kaasr_old123', 'openai', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 0)"
     );
     oldDb.close();
-    const prevDataDir = process.env.QA_MINI_DATA_DIR;
-    process.env.QA_MINI_DATA_DIR = mdir;
+    const prevDataDir = process.env.ECHOANSWER_DATA_DIR;
+    process.env.ECHOANSWER_DATA_DIR = mdir;
     try {
       const cfgmod = require(path.join(ROOT, "lib/config"));
       const { sessions } = cfgmod.loadSessions(null);
@@ -449,14 +449,76 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
       assert.strictEqual(sessions[0].token, "kaasr_old123", "旧行数据保留");
       assert.deepStrictEqual(sessions[0].protocol_config, {}, "迁移后默认空覆盖");
     } finally {
-      process.env.QA_MINI_DATA_DIR = prevDataDir;
+      process.env.ECHOANSWER_DATA_DIR = prevDataDir;
       try { fs.rmSync(mdir, { recursive: true, force: true }); } catch {}
     }
   });
 
+  await test("storage: 旧库 qa-mini.db 自动重命名 echoanswer.db（数据保留）", async () => {
+    const { spawnSync } = require("child_process");
+    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "echoanswer-legacy-"));
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(path.join(mdir, "qa-mini.db"));
+    db.exec(
+      "CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL, protocol TEXT NOT NULL," +
+      "  continue_session INTEGER NOT NULL DEFAULT 1, protocol_config TEXT NOT NULL DEFAULT '{}'," +
+      "  audio_remote TEXT NOT NULL DEFAULT '{}', dify_conversation_id TEXT NOT NULL DEFAULT ''," +
+      "  ragflow_session_id TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, pos INTEGER NOT NULL DEFAULT 0);"
+    );
+    db.exec(
+      "INSERT INTO sessions (id, name, token, protocol, created_at, updated_at)" +
+      " VALUES ('lg1', '旧会话', 'kaasr_legacy1', 'ragflow', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    );
+    db.close();
+    const out = spawnSync(
+      process.execPath,
+      ["-e", "const c = require(process.env.EA_CFG); const r = c.loadSessions(null);" +
+        " console.log(JSON.stringify({ n: r.sessions.length, t: r.sessions[0] && r.sessions[0].token," +
+        " fresh: require('fs').existsSync(process.env.EA_FRESH), old: require('fs').existsSync(process.env.EA_OLD) }))"],
+      {
+        cwd: ROOT, encoding: "utf-8",
+        env: Object.assign({}, process.env, {
+          EA_CFG: path.join(ROOT, "lib", "config.js"),
+          ECHOANSWER_DATA_DIR: mdir,
+          EA_FRESH: path.join(mdir, "echoanswer.db"),
+          EA_OLD: path.join(mdir, "qa-mini.db")
+        })
+      }
+    );
+    const r = JSON.parse(out.stdout.trim().split("\n").pop());
+    assert.strictEqual(r.n, 1, "会话保留");
+    assert.strictEqual(r.t, "kaasr_legacy1", "行数据保留");
+    assert.ok(r.fresh, "echoanswer.db 已生成");
+    assert.ok(!r.old, "旧库已重命名");
+    try { fs.rmSync(mdir, { recursive: true, force: true }); } catch {}
+  });
+
+  await test("config: 旧环境变量 QA_MINI_DATA_DIR 兼容", async () => {
+    const { spawnSync } = require("child_process");
+    const mdir = fs.mkdtempSync(path.join(os.tmpdir(), "echoanswer-lenv-"));
+    const out = spawnSync(
+      process.execPath,
+      ["-e", "const c = require(process.env.EA_CFG); const r = c.loadSessions(null);" +
+        " console.log(JSON.stringify({ n: r.sessions.length, f: require('fs').existsSync(process.env.EA_DB) }))"],
+      {
+        cwd: ROOT, encoding: "utf-8",
+        env: Object.assign({}, process.env, {
+          EA_CFG: path.join(ROOT, "lib", "config.js"),
+          ECHOANSWER_DATA_DIR: "",
+          QA_MINI_DATA_DIR: mdir,
+          EA_DB: path.join(mdir, "echoanswer.db")
+        })
+      }
+    );
+    const r = JSON.parse(out.stdout.trim().split("\n").pop());
+    assert.ok(r.n >= 1, "默认会话建立");
+    assert.ok(r.f, "库落在旧 env 指定目录");
+    try { fs.rmSync(mdir, { recursive: true, force: true }); } catch {}
+  });
+
   // ---------- [2] 服务器 API（多会话） ----------
   console.log("\n[2] 服务器 API 全链路（多会话）");
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "qa-mini-test-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "echoanswer-test-"));
   const cfgPath = path.join(tmpDir, "config.json");
   const dataDir = path.join(tmpDir, "data");
   fs.writeFileSync(cfgPath, JSON.stringify({
@@ -475,8 +537,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   const serverProc = spawn(process.execPath, [path.join(ROOT, "server.js")], {
     cwd: ROOT,
     env: Object.assign({}, process.env, {
-      QA_MINI_CONFIG: cfgPath,
-      QA_MINI_DATA_DIR: dataDir,
+      ECHOANSWER_CONFIG: cfgPath,
+      ECHOANSWER_DATA_DIR: dataDir,
       PORT: String(TEST_PORT),
       HOST: "127.0.0.1"
     }),
@@ -506,7 +568,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   await test("静态 UI 可访问", async () => {
     const r = await fetch(BASE + "/");
     const html = await r.text();
-    assert.ok(html.includes("QA Mini"));
+    assert.ok(html.includes("EchoAnswer"));
     assert.ok(html.includes("session-list"));
   });
   await test("未知 API → 404", async () => {
@@ -528,7 +590,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v48"), "CACHE 版本常量");
+    assert.ok(txt.includes("echoanswer-v49"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");

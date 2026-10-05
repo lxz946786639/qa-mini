@@ -174,7 +174,7 @@ function ragflowServer() {
       m.created[cid] = m.created[cid] || new Set();
       m.created[cid].add("sess-1");
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ code: 0, message: "", data: { id: "sess-1", name: body.name || "qa-mini" } }));
+      return res.end(JSON.stringify({ code: 0, message: "", data: { id: "sess-1", name: body.name || "echoanswer" } }));
     }
 
     if (isNew) {
@@ -319,7 +319,7 @@ function asrServer() {
         res.writeHead(400, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ error: "missing file/model field" }));
       }
-      // delay_ms>0：模拟慢推理；期间客户端（qa-mini 服务端）断开 → aborted 计数
+      // delay_ms>0：模拟慢推理；期间客户端（echoanswer 服务端）断开 → aborted 计数
       // （res 未写完时 socket close = 客户端断开；正常完成不计数）
       let aborted = false;
       const onClose = () => { if (!res.writableFinished) { aborted = true; MOCKS.asr.aborts++; } };

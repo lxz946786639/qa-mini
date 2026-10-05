@@ -1,7 +1,7 @@
 {
-  "name": "QA Mini",
-  "short_name": "QA Mini",
-  "description": "EchoScribe 语音问答 · 多会话实时流式展示",
+  "name": "EchoAnswer",
+  "short_name": "EchoAnswer",
+  "description": "EchoAnswer 语音问答 · 多会话实时流式展示",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",

@@ -1,9 +1,9 @@
 "use strict";
 // 本机真实后端 E2E（RAGFlow 127.0.0.1:9380）：多会话推送 + 网页提问 + 会话续接
 // 运行: node tests/e2e_local.js   （需 8787 服务已启动）
-// 指定默认会话 token：环境变量 QA_MINI_E2E_TOKEN；不指定则自动取第一个会话
+// 指定默认会话 token：环境变量 ECHOANSWER_E2E_TOKEN；不指定则自动取第一个会话
 const BASE = "http://127.0.0.1:8787";
-const KNOWN_TOKEN = process.env.QA_MINI_E2E_TOKEN || "";
+const KNOWN_TOKEN = process.env.ECHOANSWER_E2E_TOKEN || process.env.QA_MINI_E2E_TOKEN || ""; // v58：旧变量名兼容
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(method, p, body) {
@@ -33,7 +33,7 @@ async function waitDone(qaId, timeoutMs) {
   const h = await api("GET", "/api/health");
   console.log("[1] health:", h.status, JSON.stringify(h.data));
   const html = await (await fetch(BASE + "/")).text();
-  console.log("[1] UI:", html.length, "bytes | 标题:", html.includes("QA Mini"), "| 会话侧栏:", html.includes("session-list"), "| 会话抽屉:", html.includes("session-drawer"));
+  console.log("[1] UI:", html.length, "bytes | 标题:", html.includes("EchoAnswer"), "| 会话侧栏:", html.includes("session-list"), "| 会话抽屉:", html.includes("session-drawer"));
 
   // 2) 取默认会话（token 由旧 config.push 迁移而来）
   const sl = await api("GET", "/api/sessions");

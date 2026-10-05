@@ -1,9 +1,13 @@
-# QA Mini — Web 端语音问答展示
+# EchoAnswer — Web 端语音问答展示
 
 Node.js + HTML 实现的 Web 端便捷聊天/问答展示项目，对接 **EchoScribe（回响笔）**
 （原名 asr-live，仓库 github.com/bumblebee-code-gh/asr-tool，dev 分支）的四种问答协议，并提供 HTTP 接口
 接收 EchoScribe **推送模式**发来的语音识别文本，以该文本为提问调用对应协议的问答，
 在浏览器中**实时流式**展示答案（Markdown 渲染）。
+
+> **命名**：英文主名 **EchoAnswer**，中文名「回响答」，产品全称「EchoAnswer（问答智能体）」；
+> 原名 **QA Mini**（v58 整体改名 2026-10-05）。分工：EchoScribe（回响笔）采集转写 →
+> EchoAnswer（回响答）问答展示。
 
 **多会话**：左侧会话列表，每个会话有独立的 **token**、**会话 ID**、协议与问答历史。
 EchoScribe 推送时同时携带 token 与 session_id 定位会话；同一会话 ID 在多个浏览器
@@ -14,7 +18,7 @@ EchoScribe (桌面端, 推送模式)
   采集停止 → POST /api/push {"token":"kaasr_…","session_id":"…","text":"识别文本"}
                         │
                         ▼
-┌─────────────────── QA Mini (本服务, Node.js 零依赖) ───────────────────┐
+┌─────────────────── EchoAnswer (本服务, Node.js 零依赖) ───────────────────┐
 │  /api/push  token 定位会话 + session_id 校验 → 以 text 为提问           │
 │  /api/chat  网页提问（session_id 必填）                                  │
 │        └→ 每会话独立 QA 编排（会话续接/历史/取消）                        │
@@ -43,7 +47,7 @@ npm start            # 或 node server.js
 - 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
   首次启动请在网页「⚙ 设置」填入后端 url/api_key/chat_id 并保存）
-- 会话：SQLite 数据库 data/qa-mini.db（Node 内置 node:sqlite，零依赖；
+- 会话：SQLite 数据库 data/echoanswer.db（Node 内置 node:sqlite，零依赖；
   首次运行自动创建「默认会话」，并迁移 config.json `push.token` 作为其 token ——
   旧 EchoScribe 配置无需改动；旧 data/sessions.json 会在首次运行时自动一次性
   迁入数据库，旧文件归档为 .bak-<时间戳>）
@@ -114,7 +118,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   （「启用电脑输出音频接收」开关 + 正在接收的设备信息，识别在提问框「🎧 音频」
   按钮，见上「持续推流模式」）；「重置会话」（先取消
   在途问答，再清空该会话后端上下文）、删除会话。
-- 会话数据持久化在 SQLite 数据库 data/qa-mini.db（sessions 表 + records 表；
+- 会话数据持久化在 SQLite 数据库 data/echoanswer.db（sessions 表 + records 表；
   token/会话ID/协议/后端会话状态/每会话最近 100 条历史）；
   服务重启后会话与上下文保持。
 - 至少保留一个会话：删除最后一个会话时自动补建「默认会话」。
@@ -179,13 +183,13 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   "port": 8787,
   "host": "0.0.0.0",
   "push": {
-    "token": "kaasr_…",          // 首次启动时迁移为「默认会话」的 token（之后在 data/qa-mini.db 中管理）
+    "token": "kaasr_…",          // 首次启动时迁移为「默认会话」的 token（之后在 data/echoanswer.db 中管理）
     "protocol": "ragflow",
     "continue_session": true
   },
   "protocols": {
     "openai":  { "url": "", "api_key": "", "model": "" },
-    "dify":    { "url": "", "api_key": "", "user": "qa-mini" },
+    "dify":    { "url": "", "api_key": "", "user": "EchoAnswer" },
     "generic": { "url": "", "api_key": "", "body": "{\"question\":\"{question}\"}" },
     "ragflow": { "url": "", "api_key": "", "chat_id": "" }
   },
@@ -297,8 +301,8 @@ npm test           # node tests/run_tests.js
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
-- 环境变量 `QA_MINI_IDLE_TIMEOUT_MS` / `QA_MINI_CONNECT_TIMEOUT_MS`
-  可在测试中缩短超时（生产默认 60000 / 10000）；`QA_MINI_DATA_DIR`
+- 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
+  可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`
   指定会话存储目录（测试用它做隔离）。
 - `tests/e2e_local.js`：先 `npm start` 起服务，再运行 `node tests/e2e_local.js`，
   用真实 RAGFlow（127.0.0.1:9380）走 推送（token+session_id）→追问→网页提问→
@@ -315,5 +319,5 @@ npm test           # node tests/run_tests.js
   profile 自签入口，见 doc/03 §8）或本机 127.0.0.1/localhost 访问。识别质量
   取决于所配置 ASR 服务；单次录音上限 60s、<0.4s 丢弃。
 - `/api/config` 与 `/api/sessions` 无鉴权（局域网自用）；暴露公网请自行加反向代理鉴权。
-- 本目录 config.json / data/qa-mini.db（及 sessions.json.bak-* 归档）内含本机真实 API Key 与推送 token，
+- 本目录 config.json / data/echoanswer.db（及 sessions.json.bak-* 归档）内含本机真实 API Key 与推送 token，
   请勿提交到公开仓库。

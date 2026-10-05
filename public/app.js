@@ -1,9 +1,22 @@
 "use strict";
-// QA Mini 前端（多会话版）：
+// EchoAnswer 前端（多会话版）：
 //  - 左侧会话列表（新建/切换）；每会话独立 token / 会话ID / 协议 / 历史
 //  - EventSource /api/events：事件均带 session_id，同一会话多浏览器同步实时输出
 //  - 提问 POST /api/chat {session_id, question}（乐观建卡，按 会话+问题 合并）
 //  - 内置极简 Markdown 渲染（先转义再应用子集，防 XSS）
+
+// ---------- v58 改名 localStorage 兼容迁移（qa-mini-* → echoanswer-*，一次性复制旧值） ----------
+(function migrateLegacyKeys() {
+  const P = ["theme", "font", "width", "line", "sidebar", "admin", "access", "asr-autosend"];
+  for (const k of P) {
+    try {
+      const n = "echoanswer-" + k, o = "qa-mini-" + k;
+      if (localStorage.getItem(n) === null && localStorage.getItem(o) !== null) {
+        localStorage.setItem(n, localStorage.getItem(o));
+      }
+    } catch {}
+  }
+})();
 
 // ---------- Markdown ----------
 // 轻量 SVG 图标（自托管 sprite /icons.svg，Lucide 风格 2px 描边）
@@ -134,8 +147,8 @@ function readAuthToken(k) {
   } catch {}
   return "";
 }
-function getAdminToken() { return readAuthToken("qa-mini-admin"); }
-function getAccessToken() { return readAuthToken("qa-mini-access"); }
+function getAdminToken() { return readAuthToken("echoanswer-admin"); }
+function getAccessToken() { return readAuthToken("echoanswer-access"); }
 function setAuth(k, token, expiresAtIso) {
   try { localStorage.setItem(k, JSON.stringify({ token, expires_at: Date.parse(expiresAtIso) })); } catch {}
 }
@@ -211,7 +224,7 @@ const mqNarrow = window.matchMedia("(max-width: 1024px)");
 let desktopCollapsed = false;
 let tabletExpanded = false;
 let mobileSessOpen = false;
-try { desktopCollapsed = localStorage.getItem("qa-mini-sidebar") === "1"; } catch {}
+try { desktopCollapsed = localStorage.getItem("echoanswer-sidebar") === "1"; } catch {}
 function applySidebar() {
   const mobile = mqMobile.matches;
   const narrow = mqNarrow.matches;
@@ -240,7 +253,7 @@ function closeMobileSess() {
 // ---------- 主题（深色 / 浅色，本地记忆；index.html 内联脚本先行避免闪烁） ----------
 let themeMode = "dark";
 try {
-  const t = localStorage.getItem("qa-mini-theme");
+  const t = localStorage.getItem("echoanswer-theme");
   if (t === "light" || t === "dark") themeMode = t;
 } catch {}
 function applyTheme() {
@@ -295,7 +308,7 @@ function sourceBadge(source) {
 const FONT_SIZES = { default: 15, large: 18 };
 let fontState = { mode: "default", px: 15 };
 try {
-  const raw = localStorage.getItem("qa-mini-font");
+  const raw = localStorage.getItem("echoanswer-font");
   if (raw) {
     const f = JSON.parse(raw);
     if (f && ["default", "large", "custom"].indexOf(f.mode) >= 0) fontState = f;
@@ -311,14 +324,14 @@ function applyFont() {
     p.value = fontState.px;
     p.classList.toggle("hidden", fontState.mode !== "custom");
   }
-  try { localStorage.setItem("qa-mini-font", JSON.stringify(fontState)); } catch {}
+  try { localStorage.setItem("echoanswer-font", JSON.stringify(fontState)); } catch {}
 }
 
 // ---------- 内容宽度（窄 / 宽 / 铺满，本地持久化） ----------
 const WIDTH_MODES = ["narrow", "wide", "full"];
 let widthMode = "narrow";
 try {
-  const rw = localStorage.getItem("qa-mini-width");
+  const rw = localStorage.getItem("echoanswer-width");
   if (rw && WIDTH_MODES.indexOf(rw) >= 0) widthMode = rw;
 } catch {}
 function applyWidthMode() {
@@ -334,7 +347,7 @@ applyWidthMode();
 const LINE_PRESETS = { narrow: 1.35 };
 let lineState = { mode: "default", val: 1.65 };
 try {
-  const rl = localStorage.getItem("qa-mini-line");
+  const rl = localStorage.getItem("echoanswer-line");
   if (rl) {
     const l = JSON.parse(rl);
     if (l && ["default", "narrow", "custom"].indexOf(l.mode) >= 0) lineState = l;
@@ -352,7 +365,7 @@ function applyLineMode() {
     p.value = lineState.val;
     p.classList.toggle("hidden", lineState.mode !== "custom");
   }
-  try { localStorage.setItem("qa-mini-line", JSON.stringify(lineState)); } catch {}
+  try { localStorage.setItem("echoanswer-line", JSON.stringify(lineState)); } catch {}
 }
 applyLineMode();
 
@@ -1435,12 +1448,12 @@ async function probeAuthOnSSEError() {
     }
     if (ADMIN_ROUTE) {
       if (r.status === 401) {
-        try { localStorage.removeItem("qa-mini-admin"); } catch {}
+        try { localStorage.removeItem("echoanswer-admin"); } catch {}
         if (es) { es.close(); es = null; }
         showAdminGate();
       }
     } else if (r.status === 403) {
-      try { localStorage.removeItem("qa-mini-access"); } catch {}
+      try { localStorage.removeItem("echoanswer-access"); } catch {}
       if (es) { es.close(); es = null; }
       showAccessGate();
     }
@@ -1861,7 +1874,7 @@ async function saveSettings() {
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
 const ASR_PARTIAL_S = 1.5; // 对齐 EchoScribe partial_interval_s：中间识别周期（前缀重提）
-const ASR_AUTOSEND_KEY = "qa-mini-asr-autosend"; // 识别定稿后是否立即发送（默认勾选 = 立即发送；取消勾选 = 确认后再发）
+const ASR_AUTOSEND_KEY = "echoanswer-asr-autosend"; // 识别定稿后是否立即发送（默认勾选 = 立即发送；取消勾选 = 确认后再发）
 function asrAutosend() {
   try {
     const v = localStorage.getItem(ASR_AUTOSEND_KEY);
@@ -2122,7 +2135,7 @@ function onAdminGateSubmit(e) {
   e.preventDefault();
   api("POST", "/api/admin/login", { password: $("admin-pw").value }).then((r) => {
     if (r.status === 200 && r.data && r.data.ok) {
-      setAuth("qa-mini-admin", r.data.token, r.data.expires_at);
+      setAuth("echoanswer-admin", r.data.token, r.data.expires_at);
       hideGates();
       unlockApp();
       updateAdminUI();
@@ -2140,7 +2153,7 @@ function onAccessGateSubmit(e) {
   e.preventDefault();
   api("POST", "/api/access/login", { code: $("access-code").value.trim() }).then((r) => {
     if (r.status === 200 && r.data && r.data.ok) {
-      if (!r.data.anonymous) setAuth("qa-mini-access", r.data.token, r.data.expires_at);
+      if (!r.data.anonymous) setAuth("echoanswer-access", r.data.token, r.data.expires_at);
       hideGates();
       unlockApp();
       updateAdminUI();
@@ -2193,7 +2206,7 @@ function bootApp() {
       tabletExpanded = !tabletExpanded; // 平板/窄屏：手动展开（不持久化）
     } else {
       desktopCollapsed = !desktopCollapsed;
-      try { localStorage.setItem("qa-mini-sidebar", desktopCollapsed ? "1" : "0"); } catch {}
+      try { localStorage.setItem("echoanswer-sidebar", desktopCollapsed ? "1" : "0"); } catch {}
     }
     applySidebar();
   });
@@ -2201,7 +2214,7 @@ function bootApp() {
   applyTheme();
   $("btn-theme").addEventListener("click", () => {
     themeMode = themeMode === "dark" ? "light" : "dark";
-    try { localStorage.setItem("qa-mini-theme", themeMode); } catch {}
+    try { localStorage.setItem("echoanswer-theme", themeMode); } catch {}
     applyTheme();
   });
   mqNarrow.addEventListener("change", (e) => {
@@ -2215,7 +2228,7 @@ function bootApp() {
   $("width-mode").addEventListener("change", () => {
   widthMode = $("width-mode").value;
   applyWidthMode();
-  try { localStorage.setItem("qa-mini-width", widthMode); } catch {}
+  try { localStorage.setItem("echoanswer-width", widthMode); } catch {}
 });
 
 $("font-mode").addEventListener("change", () => {

@@ -1,5 +1,5 @@
 "use strict";
-// QA Mini 服务器（零依赖 · 多会话版）：
+// EchoAnswer 服务器（零依赖 · 多会话版）：
 //  - 静态 UI（public/）
 //  - 会话：/api/sessions 增删改查 + 重置；每会话独立 token / 会话ID / 协议 / 历史
 //  - EchoScribe 推送：POST /api/push { token, session_id?, text }（token 定位会话，
@@ -1228,7 +1228,7 @@ const host = process.env.HOST || config.host || "0.0.0.0";
 server.listen(port, host, () => {
   const def = sessions[0];
   console.log("==================================================");
-  console.log("  QA Mini 已启动（多会话）");
+  console.log("  EchoAnswer 已启动（多会话）");
   console.log("  Web 界面:   http://" + (host === "0.0.0.0" ? "127.0.0.1" : host) + ":" + port + "/");
   console.log("  推送接口:   POST http://<本机IP>:" + port + "/api/push");
   console.log("              请求体需同时携带 token 与 session_id（在网页「会话设置」中复制 EchoScribe 片段）");
