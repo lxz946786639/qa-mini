@@ -2099,6 +2099,11 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((await r.text()).includes('<div id="app">'));
   });
+  await test("p6: 管理台 /app/admin 走 SPA fallback", async () => {
+    const r = await fetch(BASE + "/app/admin");
+    assert.strictEqual(r.status, 200);
+    assert.ok((await r.text()).includes('<div id="app">'));
+  });
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);

@@ -7,6 +7,7 @@ export const router = createRouter({
     { path: "/", name: "landing", component: () => import("./views/Landing.vue") },
     { path: "/login", name: "login", component: () => import("./views/Login.vue") },
     { path: "/agents/:code", name: "workspace", component: () => import("./views/Workspace.vue") },
+    { path: "/admin", name: "admin", component: () => import("./views/AdminView.vue") },
     { path: "/:pathMatch(.*)*", redirect: "/" }
   ]
 });

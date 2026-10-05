@@ -226,7 +226,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）。P4 =
   落地页（智能体选择器，`GET /api/agents`）+ `/app/login`（账号 / 6 位访问码 →
   `ea_sid` cookie）+ `/app/agents/:code` 工作区（P5：按智能体过滤的「我的会话」+
-  流式问答卡片 + SSE 实时事件 + 停止/复制/删除/重新生成）；P6 `/admin` 管理台；
+  流式问答卡片 + SSE 实时事件 + 停止/复制/删除/重新生成）+ `/app/admin` 管理台
+  （P6：用户管理 / 智能体管理 / 访问码 / 审计日志四页签，仅 admin 主体）；
   P7 根路径切换到新前端并退役 public/。开发：`cd web && npm install && npm run dev`
   （vite dev 代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`
   （构建产物随仓库提交，服务器直接挂载，部署不跑前端构建）。
@@ -318,7 +319,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**146 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**147 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、

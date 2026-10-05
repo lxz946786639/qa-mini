@@ -255,3 +255,29 @@ html.dark, :root {
 .dot-open { background: var(--green); }
 .dot-err { background: var(--red); }
 .dot-cx { background: #d29922; }
+
+/* ---------- P6 管理台 ---------- */
+.admin-badge {
+  font-size: 11px; color: var(--accent); border: 1px solid var(--accent-soft);
+  background: var(--accent-soft); border-radius: 4px; padding: 1px 6px; margin-left: 8px;
+  font-weight: 600;
+}
+.admin-main {
+  flex: 1; width: 100%; max-width: 1280px; margin: 0 auto;
+  padding: 20px 22px 30px; min-height: 0;
+}
+.admin-wait, .admin-deny { color: var(--text-dim); text-align: center; margin-top: 80px; }
+.admin-deny { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.admin-dim { font-size: 13px; }
+.admin-tabs { border-radius: var(--radius); overflow: hidden; }
+.tab-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
+}
+.tab-note { color: var(--text-dim); font-size: 13px; }
+.tab-more { margin-top: 12px; text-align: center; }
+.agent-ic { font-size: 20px; }
+.sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.dim { color: var(--text-dim); font-size: 13px; }
+.danger { color: var(--red); }
+.code-gen { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
