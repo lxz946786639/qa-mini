@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 148 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 149 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
@@ -92,14 +92,16 @@ lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:
                  sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志）
 public/          （P7 已退役：旧纯静态前端目录已删除，能力全量迁移至 web/）
 web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
-                 src/（views: Landing/Login/Workspace(P5 工作区 + P5.5 语音输入/
+                 src/（views: Landing(P8 官网首页四区块：Hero/智能体选择/产品矩阵/工作流，
+                 landing.css --lp-* 双主题 + 内联 SVG + IO 渐入)/Login/Workspace(P5 工作区 + P5.5 语音输入/
                  音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口)/
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
                  users/agents/codes/audit/sys 五模块 + P7 首启引导；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
-                 utils: markdown 先转义后解析）
+                 utils: markdown 先转义后解析；landing.css P8 首页双主题变量）
+                 根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
                  + dist/（构建产物随仓库提交，根服务器以站点根提供）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）
@@ -111,7 +113,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 148 项断言全绿
+npm test                                        # 149 项断言全绿
 node tests/store_tests.js                       # 35 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health

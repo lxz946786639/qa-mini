@@ -109,12 +109,6 @@ body {
   --el-color-info-light-9: rgba(103, 112, 125, 0.10);
   --el-color-info-light-8: rgba(103, 112, 125, 0.28);
 }
-.landing { min-height: 100dvh; display: flex; flex-direction: column; }
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 22px; border-bottom: 1px solid var(--border);
-  background: var(--bg-soft); position: sticky; top: 0; z-index: 10;
-}
 .brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; color: var(--text); }
 .brand-mark {
   display: inline-flex; align-items: center; justify-content: center;
@@ -123,9 +117,6 @@ body {
   font-size: 14px; font-weight: 700;
 }
 .brand-text { font-weight: 600; letter-spacing: 0.2px; }
-.topnav { display: flex; align-items: center; gap: 12px; }
-.topnav-link { color: var(--text-dim); text-decoration: none; font-size: 14px; }
-.topnav-link:hover { color: var(--accent); }
 .user-chip {
   font-size: 13px; color: var(--text);
   background: var(--card); border: 1px solid var(--border);
@@ -133,35 +124,6 @@ body {
 }
 .user-chip em { color: var(--accent); font-style: normal; margin-left: 4px; font-size: 12px; }
 
-.main { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 34px 22px 20px; }
-.hero { margin: 8px 0 22px; }
-.hero h1 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
-.hero p { margin: 0; color: var(--text-dim); font-size: 14px; }
-.guest-bar { margin-bottom: 18px; }
-.grid {
-  display: grid; gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-}
-.agent-card-sk { background: var(--card); border-radius: var(--radius); }
-.grid-err { max-width: 520px; }
-.agent-card {
-  display: flex; flex-direction: column; gap: 10px;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px;
-  text-decoration: none; color: var(--text);
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.agent-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-.agent-icon { font-size: 30px; line-height: 1; display: flex; align-items: center; }
-.agent-icon-ui { font-size: 30px; color: var(--accent); }
-.agent-body { flex: 1; }
-.agent-name { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
-.proto-tag { margin-left: auto; }
-.agent-desc { color: var(--text-dim); font-size: 13px; margin-top: 4px; min-height: 20px; }
-.agent-go { color: var(--accent); font-size: 13px; }
-.empty { text-align: center; color: var(--text-dim); padding: 60px 0; }
-.empty-dim { font-size: 13px; }
-.foot { text-align: center; color: var(--text-dim); font-size: 12px; padding: 14px 0 20px; }
 .login-page {
   min-height: 100dvh; display: flex; align-items: center; justify-content: center;
   padding: 24px; background: var(--bg);

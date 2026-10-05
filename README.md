@@ -43,7 +43,7 @@ npm start            # 或 node server.js
 
 启动后：
 
-- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；落地页 → 智能体 → 工作区）
+- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；P8 官网首页四区块：Hero / 智能体选择 / 产品矩阵 / 工作流 → 智能体 → 工作区；项目文档 /doc/<文件名>.md）
 - 控制台：http://127.0.0.1:8787/admin（仅 admin；管理密码未初始化时显示首启设置表单）
 - 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
@@ -224,8 +224,11 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 
 - **新代前端（v59 P4–P7，站点根）**：web/ 构建产物（Vue3 + Vite + TS + Element
   Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）直接作为
-  站点根（P7 切根；旧 `/app/` 挂载与 `public/` 旧前端退役）。路由：`/` 落地页（智能体
-  选择器，`GET /api/agents`）+ `/login`（账号 / 6 位访问码 → `ea_sid` cookie；
+  站点根（P7 切根；旧 `/app/` 挂载与 `public/` 旧前端退役）。路由：`/` 官网首页（P8 四区块：
+  Hero / 智能体选择（`GET /api/agents` 真实卡 + 示例卡补齐）/ 产品矩阵（EchoScribe ×
+  EchoAnswer）/ 完整工作流（四步）；landing.css `--lp-*` 双主题 + IO 滚动渐入；
+  主题首访跟随系统、手动切换持久化）+ `/doc/<文件名>.md` 项目文档静态路由 +
+  `/login`（账号 / 6 位访问码 → `ea_sid` cookie；
   管理密码未初始化时先显示「初始化管理账号」表单，初始化后直接以 admin 进入）+
   `/agents/:code` 工作区（P5：按智能体过滤的「我的会话」+ 流式问答卡片 + SSE 实时
   事件 + 停止/复制/删除/重新生成；P7.2 布局对齐旧版：左固定会话栏 252px + 主列
@@ -274,7 +277,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**148 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**149 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、

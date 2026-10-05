@@ -617,6 +617,18 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const r = await fetch(BASE + "/..%2fserver.js");
     assert.ok(r.status === 403 || r.status === 404, "got " + r.status);
   });
+  await test("P8: /doc 静态文档路由（首页文档入口：白名单 .md + 防穿越）", async () => {
+    const r1 = await fetch(BASE + "/doc/" + encodeURIComponent("01-项目设计文档.md"));
+    assert.strictEqual(r1.status, 200, "现有文档 200");
+    assert.ok((r1.headers.get("content-type") || "").includes("text/markdown"), "content-type text/markdown");
+    assert.ok((await r1.text()).includes("EchoAnswer"), "内容为项目文档");
+    const r2 = await fetch(BASE + "/doc/" + encodeURIComponent("不存在.md"));
+    assert.strictEqual(r2.status, 404, "不存在的文档 404");
+    const r3 = await fetch(BASE + "/doc/..%2f..%2fAGENTS.md");
+    assert.strictEqual(r3.status, 404, "目录穿越 404, got " + r3.status);
+    const r4 = await fetch(BASE + "/doc/README.md");
+    assert.strictEqual(r4.status, 404, "doc/ 之外文件 404, got " + r4.status);
+  });
 
   // ---------- 会话建立 ----------
   let defId, sDifyId, sGenericId, sOpenaiId, sRag2Id, sThrowId, sRag2TokenOld, sOpenaiTokenOld;
