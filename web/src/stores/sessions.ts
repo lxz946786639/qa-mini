@@ -59,9 +59,16 @@ export const useSessionsStore = defineStore("sessions", {
     },
     async open(sid: string) {
       this.currentSid = sid;
-      const { ok, data } = await api<Detail>("/api/sessions/" + encodeURIComponent(sid));
-      if (ok) this.detail = data;
-      else this.detail = null;
+      // 服务端 full() 形态：{ session: { ...视图, history: RecordView[] }, running: RecordView[] }
+      // —— history 嵌套在 session 内（P7.8 修复：此前误按顶层 detail.history 读取，
+      // 恒 undefined → 有历史的会话主区也一直显示「本会话暂无问答」）
+      const { ok, data } = await api<{
+        session: SessionView & { history?: RecordView[]; token?: string; protocol_config?: any };
+        running?: RecordView[];
+      }>("/api/sessions/" + encodeURIComponent(sid));
+      if (ok && data && data.session) {
+        this.detail = { session: data.session, history: data.session.history || [], running: data.running || [] };
+      } else this.detail = null;
       return ok;
     },
     async create(agentCode: string, name?: string) {
