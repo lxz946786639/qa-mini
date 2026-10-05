@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
@@ -46,6 +46,49 @@ const audioAvailable = computed(() => {
   const s = currentSession.value;
   return !!s && !!s.token && s.audio_remote && s.audio_remote.enabled === true;
 });
+// ---------- 显示偏好（P7 移植自旧前端；localStorage 键沿用 echoanswer-font/-width/-line） ----------
+const FONT_SIZES: Record<string, number> = { default: 15, large: 18 };
+const fontState = reactive<{ mode: string; px: number }>({
+  mode: "default",
+  px: 15
+});
+const widthMode = ref("narrow");
+const lineState = reactive<{ mode: string; val: number }>({
+  mode: "default",
+  val: 1.65
+});
+function applyPrefs() {
+  const root = document.documentElement;
+  const size = fontState.mode === "custom" ? Math.min(28, Math.max(12, Math.round(fontState.px || 15))) : (FONT_SIZES[fontState.mode] || 15);
+  root.style.setProperty("--qa-size", size + "px");
+  root.classList.remove("qa-w-narrow", "qa-w-wide", "qa-w-full");
+  root.classList.add("qa-w-" + widthMode.value);
+  if (lineState.mode === "custom") root.style.setProperty("--qa-line", String(Math.min(2.5, Math.max(1, lineState.val || 1.65))));
+  else if (lineState.mode === "narrow") root.style.setProperty("--qa-line", "1.35");
+  else root.style.removeProperty("--qa-line");
+  try {
+    localStorage.setItem("echoanswer-font", JSON.stringify(fontState));
+    localStorage.setItem("echoanswer-width", widthMode.value);
+    localStorage.setItem("echoanswer-line", JSON.stringify(lineState));
+  } catch {}
+}
+(function loadPrefs() {
+  try {
+    const raw = localStorage.getItem("echoanswer-font");
+    if (raw) {
+      const f = JSON.parse(raw);
+      if (f && ["default", "large", "custom"].includes(f.mode)) { fontState.mode = f.mode; if (typeof f.px === "number") fontState.px = f.px; }
+    }
+    const rw = localStorage.getItem("echoanswer-width");
+    if (rw && ["narrow", "wide", "full"].includes(rw)) widthMode.value = rw;
+    const rl = localStorage.getItem("echoanswer-line");
+    if (rl) {
+      const l = JSON.parse(rl);
+      if (l && ["default", "narrow", "custom"].includes(l.mode)) { lineState.mode = l.mode; if (typeof l.val === "number") lineState.val = l.val; }
+    }
+  } catch {}
+  applyPrefs();
+})();
 const showAudio = ref(false);
 const audioPanel = ref<InstanceType<typeof AudioPanel> | null>(null);
 // 正在推流的会话（SSE audio_stream 事件维护：sid -> { n: 设备数, at: 最近事件 ms }）
@@ -358,6 +401,39 @@ onBeforeUnmount(() => {
       <nav class="topnav">
         <span class="agent-pill">{{ agentName }}<em>{{ agentProto }}</em></span>
         <span class="sse-dot" :class="sseDot" title="SSE 连接状态"></span>
+        <el-popover placement="bottom-end" :width="300" trigger="click">
+          <template #reference>
+            <button class="prefs-btn" title="显示偏好（本地记忆）">⚙ 显示</button>
+          </template>
+          <div class="prefs-box">
+            <div class="prefs-row">
+              <label>字号</label>
+              <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
+                <el-option label="默认（15px）" value="default" />
+                <el-option label="大（18px）" value="large" />
+                <el-option label="自定义" value="custom" />
+              </el-select>
+              <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
+            </div>
+            <div class="prefs-row">
+              <label>内容宽度</label>
+              <el-select v-model="widthMode" size="small" @change="applyPrefs">
+                <el-option label="窄（860px）" value="narrow" />
+                <el-option label="宽（1180px）" value="wide" />
+                <el-option label="铺满" value="full" />
+              </el-select>
+            </div>
+            <div class="prefs-row">
+              <label>行间距</label>
+              <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
+                <el-option label="默认" value="default" />
+                <el-option label="窄（1.35）" value="narrow" />
+                <el-option label="自定义" value="custom" />
+              </el-select>
+              <el-input-number v-if="lineState.mode === 'custom'" v-model="lineState.val" :min="1" :max="2.5" :step="0.05" :precision="2" size="small" controls-position="right" @change="applyPrefs" />
+            </div>
+          </div>
+        </el-popover>
         <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || "用户" }}</span>
         <router-link v-else to="/login" class="topnav-link">登录</router-link>
       </nav>

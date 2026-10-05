@@ -55,8 +55,7 @@ function buildContext() {
     dbFile: mig.dbFile,
     store,
     cfgmod,
-    publicDir: path.join(__dirname, "..", "public"),
-    webDist: path.join(__dirname, "..", "web", "dist"), // v59 P4：新代前端构建产物（挂载 /app/；P7 切根）
+    webDist: path.join(__dirname, "..", "web", "dist"), // v59 P7：新代前端构建产物（站点根；旧 public/ 已退役）
     migration: mig
   };
   applyDbConfig(ctx);

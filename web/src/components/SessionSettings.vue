@@ -5,7 +5,7 @@
 // 会话级协议覆盖（protocol_config，留空 = 回退全局）/ 协议测试（管理）/
 // 推送 token（管理：回显 + 重新生成 + EchoScribe 对接片段）。
 import { computed, reactive, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
 
 const PROTOCOLS = [
@@ -117,6 +117,18 @@ async function regenToken() {
   if (r.ok) { ElMessage.success("推送 token 已重新生成"); emit("saved"); }
   else ElMessage.error(r.data.detail || "操作失败");
 }
+// 会话重置（管理，对齐旧抽屉「重置」）：清后端多轮上下文（ragflow_session_id /
+// dify_conversation_id + 在途取消），下次提问重建。
+async function resetSession() {
+  const s = props.session;
+  if (!s) return;
+  try {
+    await ElMessageBox.confirm("重置将清除本会话的后端多轮上下文（在途问答一并取消），下次提问重建会话。继续？", "重置会话", { type: "warning", confirmButtonText: "重置", cancelButtonText: "取消" });
+  } catch { return; }
+  const { ok, data } = await api<{ ok: boolean; detail?: string }>("/api/sessions/" + encodeURIComponent(s.id) + "/reset", { method: "POST", body: {} });
+  if (ok) ElMessage.success(data.detail || "会话已重置");
+  else ElMessage.error(data.detail || "重置失败");
+}
 const snippet = computed(() => {
   const s = props.session;
   if (!s || !s.token) return "";
@@ -185,6 +197,10 @@ function copyText(t: string) {
         <el-form-item label="echoscribe.toml 片段（只读）">
           <pre class="ss-pre">{{ snippet }}</pre>
           <el-button size="small" @click="copyText(snippet)">复制片段</el-button>
+        </el-form-item>
+        <el-form-item>
+          <el-button size="small" plain @click="resetSession">重置会话后端上下文</el-button>
+          <span class="ss-warn">清除 RAGFlow/Dify 多轮会话（在途问答一并取消），下次提问重建</span>
         </el-form-item>
       </template>
     </el-form>

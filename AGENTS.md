@@ -6,22 +6,25 @@
 
 ## 1. 项目速览
 
-EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接收 EchoScribe（回响笔）
+EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓库提交，P7 起即站点根）
+的 Web 语音问答展示服务。接收 EchoScribe（回响笔）
 推送的识别文本，调用 openai/dify/generic/ragflow 四协议问答，多浏览器实时
 流式展示。架构细节见 `doc/01-项目设计文档.md`，勿凭记忆假设，改前先读源码。
 
 ## 2. 硬性技术约束（违反即错）
 
 1. **零 npm 依赖（根项目）**：Node 后端只用内置模块（http/fs/crypto/path/
-   node:sqlite）；**严禁**给根项目 `npm install` 新包。现役前端 public/ 保持
-   纯静态（无框架无构建：index.html / app.js / icons.svg / style.css）。
-   **唯一例外**：`web/` 新代前端（v59 P4 起，用户批准的架构）是独立 package
+   node:sqlite）；**严禁**给根项目 `npm install` 新包。旧前端 `public/` 已于 P7
+   退役（目录删除，能力全量迁移至 web/）。
+   **唯一前端**：`web/` 新代前端（v59 P4 起，用户批准的架构）是独立 package
    （自带 package.json：Vue3+Vite+TS+Element Plus+Pinia+PWA）——npm 只在
-   `web/` 内使用；`web/dist` 构建产物随仓库提交，根服务器直接挂载于 `/app/`
-   （零依赖），部署不跑前端构建。
+   `web/` 内使用；`web/dist` 构建产物随仓库提交，根服务器以其为**站点根**
+   （P7 切根，零依赖；SPA fallback 无扩展名 → index.html，/api/* 未命中 404），
+   部署不跑前端构建。
 2. **Node ≥ 18（建议 24）**：会话存储依赖 `node:sqlite`（DatabaseSync，
    同步 API）——不要改成异步驱动，不要引入 better-sqlite3。
-3. **SSE 事件必须带 `session_id`**：新增广播事件时同步前端 `app.js` 处理。
+3. **SSE 事件必须带 `session_id`**：新增广播事件时同步前端 `web/src`
+   （Workspace `useSse` 事件映射）处理。
 4. **历史上限 100 条/会话**（环形，新→旧）；改动持久化逻辑必须保持
    `saveAll` 事务整表重写语义或等效一致性。
 5. **兼容性红线**：`/api/push` 只带 token（无 session_id）必须继续可用；
@@ -31,7 +34,7 @@ EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
 8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 147 项断言全绿，
-   含 `node --check` 前端语法护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
 ## 3. 代码-文档同步规则（核心）
@@ -57,7 +60,7 @@ EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答
 | `config.json` 字段 / 环境变量 | 02 §1/§5 字段表（逐字段：默认值/必填/生效方式） |
 | `docker/`（Dockerfile、compose、.dockerignore） | 03 对应章节（端口/卷/命令） |
 | 部署到 172.16.30.101 的任何变更（端口/目录/方式） | 04 对应记录段落（日期 + 操作 + 验证结果） |
-| `public/` 用户可见功能（UI 入口/交互/快捷键/断点） | 01 §7 前端设计；用户文档口径同时更新 README「Web 界面」 |
+| `web/src` 用户可见功能（UI 入口/交互/快捷键/断点） | 01 §7 前端设计；用户文档口径同时更新 README「Web 界面」 |
 | `tests/` 新增测试形态 | 01 §8 测试小节（数量/覆盖点） |
 | README 与 doc 冲突时 | **以代码为准**，同次改动内修正文档 |
 
@@ -87,14 +90,15 @@ lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与
 lib/sse.js       QaError（协议错误载体）
 lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:sqlite：
                  sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志）
-public/          纯静态前端（现役，P7 退役）：index.html / app.js / icons.svg（图标 sprite）/ style.css
-web/             新代前端（v59 P4 起，独立 package）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
+public/          （P7 已退役：旧纯静态前端目录已删除，能力全量迁移至 web/）
+web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
                  src/（views: Landing/Login/Workspace(P5 工作区 + P5.5 语音输入/
-                 音频识别/会话设置)/AdminView(P6 管理台：users/agents/codes/audit
-                 四页签)；components: AudioPanel/SessionSettings；
+                 音频识别/会话设置 + P7 显示偏好)/AdminView(P6 管理台：
+                 users/agents/codes/audit/sys 五页签 + P7 首启引导)；
+                 components: AudioPanel/SessionSettings；
                  stores: auth/sessions；composables: useSse/useMic；
                  utils: markdown 先转义后解析）
-                 + dist/（构建产物随仓库提交，服务器挂载 /app/，P7 切根）；npm 仅限本目录
+                 + dist/（构建产物随仓库提交，根服务器以站点根提供）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）
 doc/             项目文档（本规范守护对象）
@@ -104,10 +108,10 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 ## 5. 本地验证流程（每次改动后）
 
 ```bash
-node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js public/app.js   # 语法
+node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
 npm test                                        # 147 项断言全绿
 node tests/store_tests.js                       # 35 项数据层单测全绿
-# 前端改动：静态文件按请求读盘，浏览器刷新即生效，无需重启；
+# 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```
 

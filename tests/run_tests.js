@@ -566,11 +566,13 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(r.data.protocols.includes("ragflow"));
     assert.strictEqual(r.data.sessions, 1);
   });
-  await test("静态 UI 可访问", async () => {
+  await test("根路径 = 新代前端（P7 切根：Vue 壳 + 构建产物）", async () => {
     const r = await fetch(BASE + "/");
+    assert.strictEqual(r.status, 200);
     const html = await r.text();
-    assert.ok(html.includes("EchoAnswer"));
-    assert.ok(html.includes("session-list"));
+    assert.ok(html.includes('<div id="app">'), "Vue 挂载点");
+    assert.ok(html.includes("assets/index-"), "引用构建产物 bundle");
+    assert.ok(html.includes("EchoAnswer"), "标题");
   });
   await test("未知 API → 404", async () => {
     const r = await api("GET", "/api/nope");
@@ -586,18 +588,20 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(mf.icons.some((i) => i.sizes === "192x192" && i.purpose === "any"), "192 any");
     assert.ok(mf.icons.some((i) => i.purpose === "maskable"), "maskable");
   });
-  await test("PWA: sw.js 可访问且含缓存版本", async () => {
+  await test("PWA: sw.js 可访问且为 workbox 产物（P7：旧 CACHE 常量护栏替换）", async () => {
     const r = await fetch(BASE + "/sw.js");
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("echoanswer-v49"), "CACHE 版本常量");
+    assert.ok(txt.includes("workbox"), "workbox generateSW 产物");
   });
-  await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
-    const { spawnSync } = require("child_process");
-    for (const f of [path.join(ROOT, "public/app.js"), path.join(ROOT, "public/sw.js")]) {
-      const r = spawnSync(process.execPath, ["--check", f], { encoding: "utf8" });
-      assert.strictEqual(r.status, 0, "node --check " + path.basename(f) + "：" + (r.stderr || "").slice(0, 200));
+  await test("前端构建产物完整性：index.html 引用 bundle + sw/manifest/registerSW/图标齐备（防缺件上线）", async () => {
+    const fs2 = require("fs");
+    const dist = path.join(ROOT, "web", "dist");
+    const html = fs2.readFileSync(path.join(dist, "index.html"), "utf8");
+    assert.ok(html.includes("assets/index-"), "index.html 引用主 bundle");
+    for (const ff of ["sw.js", "registerSW.js", "manifest.webmanifest", "icons/icon-192.png"]) {
+      assert.ok(fs2.existsSync(path.join(dist, ff)), "dist 含 " + ff);
     }
   });
   await test("PWA: 图标均为有效 PNG", async () => {
@@ -2055,30 +2059,23 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const me2 = await jarFetch(jar, "GET", "/api/auth/me");
     assert.ok(!me2.data.principal || me2.data.principal.kind !== "code", "码失效后 cookie 不再是 code 主体");
   });
-  await test("p4: /app/ 新前端挂载（HTML 壳/PWA 产物/SPA fallback/404）", async () => {
-    const r1 = await fetch(BASE + "/app/");
-    assert.strictEqual(r1.status, 200, "GET /app/ → 200");
-    const html = await r1.text();
-    assert.ok(html.includes('<div id="app">'), "Vue 挂载点");
-    assert.ok(html.includes("/app/assets/"), "资源按 base /app/ 生成");
-    const mf = await api("GET", "/app/manifest.webmanifest");
+  await test("p4/p7: 根 PWA 产物（manifest scope / + workbox sw + SPA fallback + 缺失资源 404）", async () => {
+    const mf = await api("GET", "/manifest.webmanifest");
     assert.strictEqual(mf.status, 200, "manifest 可访问");
-    assert.strictEqual(mf.data.start_url, "/app/");
-    assert.strictEqual(mf.data.scope, "/app/");
-    const sw = await (await fetch(BASE + "/app/sw.js")).text();
+    assert.strictEqual(mf.data.start_url, "/");
+    assert.strictEqual(mf.data.scope, "/");
+    const sw = await (await fetch(BASE + "/sw.js")).text();
     assert.ok(sw.includes("workbox"), "SW 为 workbox generateSW 产物");
-    const r2 = await fetch(BASE + "/app/login");
+    const r2 = await fetch(BASE + "/login");
     assert.strictEqual(r2.status, 200, "SPA fallback 200");
     assert.ok((await r2.text()).includes('<div id="app">'), "无扩展名路径回 index.html");
-    assert.strictEqual((await fetch(BASE + "/app/assets/nope-404.js")).status, 404, "缺失资源 404（不回 fallback）");
+    assert.strictEqual((await fetch(BASE + "/assets/nope-404.js")).status, 404, "缺失资源 404（不回 fallback）");
   });
-  await test("p4: 根路径仍为现役前端（/ 与 /app 互不干扰）", async () => {
-    const root = await (await fetch(BASE + "/")).text();
-    assert.ok(root.includes("session-list"), "根路径 = 现役界面（session-list）");
-    assert.ok(!root.includes('<div id="app">'), "根路径不是新前端壳");
+  await test("p7: /app/ 旧挂载退役（回根壳由 vue-router 重定向；无 /app 资源）", async () => {
     const r = await fetch(BASE + "/app");
-    assert.strictEqual(r.status, 200, "/app（无尾斜杠）进入新前端");
-    assert.ok((await r.text()).includes('<div id="app">'));
+    assert.strictEqual(r.status, 200, "遗留路径不 5xx（SPA fallback）");
+    assert.ok((await r.text()).includes('<div id="app">'), "Vue 壳");
+    assert.strictEqual((await fetch(BASE + "/app/assets/nope.js")).status, 404, "无 /app/assets 资源");
   });
   await test("p5: 会话列表携带 agent_id（新前端工作区按智能体过滤依赖）", async () => {
     const ag = await api("GET", "/api/agents");
@@ -2094,13 +2091,13 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(legacy, "启动默认会话存在");
     assert.strictEqual(legacy.agent_id, brain.id, "默认会话归属 industry-brain");
   });
-  await test("p5: 工作区路由 /app/agents/:code 走 SPA fallback", async () => {
-    const r = await fetch(BASE + "/app/agents/industry-brain");
+  await test("p5: 工作区路由 /agents/:code 走 SPA fallback（P7 切根后）", async () => {
+    const r = await fetch(BASE + "/agents/industry-brain");
     assert.strictEqual(r.status, 200);
     assert.ok((await r.text()).includes('<div id="app">'));
   });
-  await test("p6: 管理台 /app/admin 走 SPA fallback", async () => {
-    const r = await fetch(BASE + "/app/admin");
+  await test("p6: 管理台 /admin 走 SPA fallback（P7 切根后）", async () => {
+    const r = await fetch(BASE + "/admin");
     assert.strictEqual(r.status, 200);
     assert.ok((await r.text()).includes('<div id="app">'));
   });

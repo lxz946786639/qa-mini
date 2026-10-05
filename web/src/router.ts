@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 
 // history 模式：服务器对 /app/ 下未知路径做 SPA fallback（回 index.html）
 export const router = createRouter({
-  history: createWebHistory("/app/"),
+  history: createWebHistory(), // P7：站点根
   routes: [
     { path: "/", name: "landing", component: () => import("./views/Landing.vue") },
     { path: "/login", name: "login", component: () => import("./views/Login.vue") },

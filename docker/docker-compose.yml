@@ -6,7 +6,7 @@
 services:
   echoanswer:
     build:
-      context: ..                # 项目根（server.js / lib / public）
+      context: ..                # 项目根（server.js / lib / web/dist）
       dockerfile: docker/Dockerfile
     image: echoanswer:latest
     container_name: echoanswer

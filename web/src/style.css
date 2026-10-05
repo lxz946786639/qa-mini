@@ -167,11 +167,25 @@ html.dark, :root {
 }
 .ws-sess-time { color: var(--text-dim); font-size: 11px; flex: none; }
 
+/* 显示偏好（P7 移植）：内容宽度档位 + 字号/行距变量（Workspace「⚙ 显示」） */
+:root { --qa-maxw: 860px; }
+:root.qa-w-wide { --qa-maxw: 1180px; }
+:root.qa-w-full { --qa-maxw: 100%; }
 .ws-main {
   flex: 1; min-width: 0; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; padding: 18px 22px 0;
   scroll-behavior: auto; /* 滚动由 JS 显式驱动（对齐旧版语义） */
+  max-width: var(--qa-maxw); width: 100%; margin: 0 auto;
 }
+.prefs-btn {
+  background: none; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--text-dim); font-size: 13px; padding: 3px 10px; cursor: pointer;
+  font-family: inherit;
+}
+.prefs-btn:hover { color: var(--accent); border-color: var(--accent); }
+.prefs-box .prefs-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.prefs-box .prefs-row label { width: 62px; flex: none; font-size: 13px; color: var(--text-dim); }
+.prefs-box .el-select { width: 148px; flex: none; }
 .ws-empty-main { text-align: center; color: var(--text-dim); margin-top: 80px; }
 .ws-empty-main .login-back { display: inline-block; }
 .ws-empty-chat { text-align: center; color: var(--text-dim); margin-top: 40px; }
@@ -194,12 +208,13 @@ html.dark, :root {
 }
 .tag-q { background: var(--accent-soft); color: var(--accent); }
 .tag-a { background: var(--bg-soft); color: var(--text-dim); }
-.q-text { font-size: 14.5px; white-space: pre-wrap; word-break: break-word; }
+.q-text { font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.55); white-space: pre-wrap; word-break: break-word; }
 .meta { margin-left: 8px; font-style: normal; font-size: 11px; color: var(--text-dim); }
 .meta em { font-style: normal; margin-left: 8px; }
 .meta .src { opacity: 0.8; }
 
-.a-body { font-size: 14.5px; word-break: break-word; }
+.a-body { font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.65); word-break: break-word; }
+.a-body p, .a-body li { line-height: var(--qa-line, inherit); }
 .a-status {
   display: flex; align-items: center; gap: 10px;
   border-top: 1px dashed var(--border); margin-top: 8px; padding-top: 7px;
@@ -281,6 +296,17 @@ html.dark, :root {
 .dim { color: var(--text-dim); font-size: 13px; }
 .danger { color: var(--red); }
 .code-gen { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+
+/* ---------- P7 管理台首启引导 + 系统设置 ---------- */
+.admin-bs { display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: 100%; }
+.sys-wrap { max-width: 780px; }
+.sys-sec { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.sys-sec:last-child { border-bottom: none; margin-bottom: 0; }
+.sys-sec h4 { margin: 0 0 8px; font-size: 14px; }
+.sys-proto { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px 2px; margin-bottom: 10px; }
+.sys-proto-name { font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
+.sys-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.sys-row label { width: 240px; flex: none; font-size: 13px; color: var(--text-dim); }
 
 /* ---------- P5.5 语音输入 / 音频面板 / 会话设置 ---------- */
 .ws-inputbar { flex-wrap: wrap; }

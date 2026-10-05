@@ -1,0 +1,14 @@
+# 不进镜像：运行时数据 / 密钥 / 开发依赖 / 文档
+config.json
+data/
+*.log
+.git/
+doc/
+tests/
+web/node_modules/
+node_modules/
+web/src/
+web/*.ts
+web/package*.json
+web/index.html
+web/.gitignore
