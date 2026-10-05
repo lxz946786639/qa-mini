@@ -2080,6 +2080,25 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200, "/app（无尾斜杠）进入新前端");
     assert.ok((await r.text()).includes('<div id="app">'));
   });
+  await test("p5: 会话列表携带 agent_id（新前端工作区按智能体过滤依赖）", async () => {
+    const ag = await api("GET", "/api/agents");
+    assert.strictEqual(ag.status, 200);
+    const brain = (ag.data.agents || []).find((a) => a.code === "industry-brain");
+    assert.ok(brain, "播种智能体 industry-brain 存在");
+    const ls = await api("GET", "/api/sessions");
+    assert.strictEqual(ls.status, 200);
+    const items = ls.data.sessions || [];
+    assert.ok(items.length >= 1, "至少 1 个会话");
+    for (const v of items) assert.ok("agent_id" in v, "会话视图含 agent_id 字段");
+    const legacy = items.find((v) => v.name === "默认会话");
+    assert.ok(legacy, "启动默认会话存在");
+    assert.strictEqual(legacy.agent_id, brain.id, "默认会话归属 industry-brain");
+  });
+  await test("p5: 工作区路由 /app/agents/:code 走 SPA fallback", async () => {
+    const r = await fetch(BASE + "/app/agents/industry-brain");
+    assert.strictEqual(r.status, 200);
+    assert.ok((await r.text()).includes('<div id="app">'));
+  });
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);

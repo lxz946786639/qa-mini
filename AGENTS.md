@@ -30,7 +30,7 @@ EchoAnswer（回响答）：零依赖 Node.js + 原生前端的 Web 语音问答
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 144 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 146 项断言全绿，
    含 `node --check` 前端语法护栏）+ `node tests/store_tests.js`（v2 数据层 35 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
@@ -89,8 +89,9 @@ lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:
                  sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志）
 public/          纯静态前端（现役，P7 退役）：index.html / app.js / icons.svg（图标 sprite）/ style.css
 web/             新代前端（v59 P4 起，独立 package）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
-                 src/（views: Landing/Login/Workspace，stores/auth）+ dist/（构建产物随仓库提交，
-                 服务器挂载 /app/，P7 切根）；npm 仅限本目录
+                 src/（views: Landing/Login/Workspace(P5 工作区：会话列表+流式问答+SSE)；
+                 stores: auth/sessions；composables: useSse；utils: markdown 先转义后解析）
+                 + dist/（构建产物随仓库提交，服务器挂载 /app/，P7 切根）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
 docker/          容器化定义（Dockerfile / docker-compose.yml / tls 可选 https sidecar）
 doc/             项目文档（本规范守护对象）
@@ -101,7 +102,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js public/app.js   # 语法
-npm test                                        # 144 项断言全绿
+npm test                                        # 146 项断言全绿
 node tests/store_tests.js                       # 35 项数据层单测全绿
 # 前端改动：静态文件按请求读盘，浏览器刷新即生效，无需重启；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
