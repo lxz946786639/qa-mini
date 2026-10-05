@@ -1,0 +1,25 @@
+{
+  "name": "echoanswer-web",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "EchoAnswer 新代前端（Vue3 + Vite + TS + Element Plus + Pinia + PWA）。独立包：仅 web/ 使用 npm，根项目 Node 后端保持零依赖；构建产物 web/dist 由零依赖 Node 服务器挂载于 /app/。",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "element-plus": "^2.9.7",
+    "pinia": "^3.0.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.0",
+    "vite-plugin-pwa": "^1.0.1"
+  }
+}

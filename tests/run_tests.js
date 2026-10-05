@@ -2055,6 +2055,31 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const me2 = await jarFetch(jar, "GET", "/api/auth/me");
     assert.ok(!me2.data.principal || me2.data.principal.kind !== "code", "码失效后 cookie 不再是 code 主体");
   });
+  await test("p4: /app/ 新前端挂载（HTML 壳/PWA 产物/SPA fallback/404）", async () => {
+    const r1 = await fetch(BASE + "/app/");
+    assert.strictEqual(r1.status, 200, "GET /app/ → 200");
+    const html = await r1.text();
+    assert.ok(html.includes('<div id="app">'), "Vue 挂载点");
+    assert.ok(html.includes("/app/assets/"), "资源按 base /app/ 生成");
+    const mf = await api("GET", "/app/manifest.webmanifest");
+    assert.strictEqual(mf.status, 200, "manifest 可访问");
+    assert.strictEqual(mf.data.start_url, "/app/");
+    assert.strictEqual(mf.data.scope, "/app/");
+    const sw = await (await fetch(BASE + "/app/sw.js")).text();
+    assert.ok(sw.includes("workbox"), "SW 为 workbox generateSW 产物");
+    const r2 = await fetch(BASE + "/app/login");
+    assert.strictEqual(r2.status, 200, "SPA fallback 200");
+    assert.ok((await r2.text()).includes('<div id="app">'), "无扩展名路径回 index.html");
+    assert.strictEqual((await fetch(BASE + "/app/assets/nope-404.js")).status, 404, "缺失资源 404（不回 fallback）");
+  });
+  await test("p4: 根路径仍为现役前端（/ 与 /app 互不干扰）", async () => {
+    const root = await (await fetch(BASE + "/")).text();
+    assert.ok(root.includes("session-list"), "根路径 = 现役界面（session-list）");
+    assert.ok(!root.includes('<div id="app">'), "根路径不是新前端壳");
+    const r = await fetch(BASE + "/app");
+    assert.strictEqual(r.status, 200, "/app（无尾斜杠）进入新前端");
+    assert.ok((await r.text()).includes('<div id="app">'));
+  });
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);

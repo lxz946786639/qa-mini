@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1216" />
+    <meta name="description" content="EchoAnswer 回响答 —— 多用户、多智能体 AI 语音问答平台" />
+    <title>EchoAnswer · 回响答</title>
+    <script>
+      // 主题防闪烁：本地记忆优先（与旧版一致：dark 默认）
+      try {
+        var t = localStorage.getItem("echoanswer-theme");
+        if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>EchoAnswer 需要启用 JavaScript。</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

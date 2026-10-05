@@ -1,0 +1,2 @@
+node_modules/
+# dist 构建产物随仓库提交（零依赖服务器直接挂载 web/dist，部署不跑前端构建）

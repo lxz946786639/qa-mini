@@ -56,6 +56,7 @@ function buildContext() {
     store,
     cfgmod,
     publicDir: path.join(__dirname, "..", "public"),
+    webDist: path.join(__dirname, "..", "web", "dist"), // v59 P4：新代前端构建产物（挂载 /app/；P7 切根）
     migration: mig
   };
   applyDbConfig(ctx);

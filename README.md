@@ -43,7 +43,8 @@ npm start            # 或 node server.js
 
 启动后：
 
-- Web 界面：http://127.0.0.1:8787/
+- Web 界面：http://127.0.0.1:8787/（现役界面）
+- 新代前端（v59 P4）：http://127.0.0.1:8787/app/（落地页 + 登录；智能体工作区 P5 起逐步接管，见 doc/01 §7）
 - 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
   首次启动请在网页「⚙ 设置」填入后端 url/api_key/chat_id 并保存）
@@ -221,6 +222,14 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 
 ## Web 界面
 
+- **新代前端（v59 P4 起）**：`/app/` 挂载 web/ 构建产物（Vue3 + Vite + TS + Element
+  Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）。P4 =
+  落地页（智能体选择器，`GET /api/agents`）+ `/app/login`（账号 / 6 位访问码 →
+  `ea_sid` cookie）；P5 工作区（私有会话/聊天/语音）；P6 `/admin` 管理台；P7 根路径
+  切换到新前端并退役 public/。开发：`cd web && npm install && npm run dev`
+  （vite dev 代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`
+  （构建产物随仓库提交，服务器直接挂载，部署不跑前端构建）。
+- **现役界面（/ 根路径）**：
 - **访问控制**：右上角「会话设置 / ⚙ 设置」默认隐藏；URL 加 `/admin` + 管理密码
   登录后显示（管理密码首次输入即初始化，之后可在设置中修改）。设置 → 安全 可关闭
   匿名访问，关闭后打开应用需 6 位访问码：**可生成多个，每个码独立有效时长**（默认 8h，
@@ -308,7 +317,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**142 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**144 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
