@@ -11,12 +11,17 @@ import { Headset } from "@element-plus/icons-vue";
 import { api } from "../api";
 
 const props = defineProps<{ session: any }>();
-const emit = defineEmits<{ (e: "finalized", text: string): void; (e: "toast", msg: string): void }>();
+const emit = defineEmits<{
+  (e: "finalized", text: string): void;
+  (e: "toast", msg: string): void;
+  (e: "state", listening: boolean): void; // P7.10：识别状态外抛（Workspace 按钮「识别中…」+ 语音/音频互斥）
+}>();
 
 const S = props.session; // { id, token, audio_remote: { enabled, preferred_device } }
 
 const device = ref("");
 const listening = ref(false);
+function setListening(v: boolean) { listening.value = v; emit("state", v); }
 const busy = ref(false);
 const interim = ref("");
 const streams = ref<any[]>([]);
@@ -42,12 +47,15 @@ async function refreshDevices() {
     );
     if (r.ok) streams.value = r.data.streams || [];
   } catch { streams.value = []; }
+  // P7.10：供调用方提示「无正在接收的设备」
+  if (!s || !s.token) return streams.value;
   // 保留当前选择；非直播设备禁用（沿用旧语义）
   const prev = device.value;
   const liveList = streams.value.filter((x) => x.ms_since_last_frame != null && x.ms_since_last_frame < 5000);
   const stillOk = streams.value.some((x) => x.device === prev) &&
     (liveList.some((x) => x.device === prev) || !liveList.length);
   device.value = stillOk ? prev : (liveList[0] || streams.value[0] || { device: "" }).device;
+  return streams.value;
 }
 
 async function start() {
@@ -59,7 +67,7 @@ async function start() {
   try {
     const r = await api("/api/audio/listen", { body: { token: s.token, device: device.value } });
     if (r.ok) {
-      listening.value = true;
+      setListening(true);
       interim.value = "识别中…";
     } else ElMessage.error("开始识别失败: " + (r.data.detail || ("HTTP " + r.status)));
   } catch (e: any) {
@@ -68,7 +76,7 @@ async function start() {
 }
 async function stop() {
   if (!listening.value) return;
-  listening.value = false; // 先行上锁：服务端 SSE stopped 事件不重复定稿
+  setListening(false); // 先行上锁：服务端 SSE stopped 事件不重复定稿
   const s = props.session;
   if (!s) return;
   try {
@@ -83,7 +91,7 @@ async function stop() {
 }
 async function cancelListen() {
   if (!listening.value) return;
-  listening.value = false;
+  setListening(false);
   const s = props.session;
   if (!s) return;
   try {
@@ -99,13 +107,13 @@ async function restart() {
   try {
     await api("/api/audio/listen/cancel", { body: { token: s.token, device: device.value } });
   } catch { /* 忽略 */ }
-  listening.value = false;
+  setListening(false);
   interim.value = "";
   await start();
 }
 async function finalize(text: string) {
   interim.value = "";
-  listening.value = false;
+  setListening(false);
   const t = (text || "").trim();
   if (!t) { ElMessage.info("未识别到语音"); return; }
   emit("finalized", t);
@@ -121,11 +129,11 @@ function handleListenEvent(d: any) {
     finalize(d.text || "");
   } else if (d.state === "cancelled") {
     if (!listening.value) return;
-    listening.value = false;
+    setListening(false);
     interim.value = "";
   } else if (d.state === "stream_stopped") {
     if (listening.value) {
-      listening.value = false;
+      setListening(false);
       ElMessage.warning("音频推流已结束，识别自动停止");
       finalize(d.text || "");
       refreshDevices();
@@ -139,7 +147,7 @@ function reset() {
   if (listening.value && s) {
     api("/api/audio/listen/cancel", { body: { token: s.token, device: device.value } }).catch(() => {});
   }
-  listening.value = false;
+  setListening(false);
   interim.value = "";
   device.value = "";
   streams.value = [];
@@ -148,7 +156,8 @@ onMounted(refreshDevices);
 onBeforeUnmount(reset);
 watch(() => props.session && props.session.id, reset);
 function currentDevice() { return device.value; }
-defineExpose({ handleListenEvent, refreshDevices, reset, currentDevice });
+function isListening() { return listening.value; }
+defineExpose({ handleListenEvent, refreshDevices, reset, currentDevice, isListening });
 </script>
 
 <template>

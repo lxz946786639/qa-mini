@@ -63,17 +63,17 @@ const mic = useMic({
   onFinal: (text, detail) => onVoiceFinal(text, detail),
   onToast: (m) => ElMessage.warning(m)
 });
-const micTitle = computed(() => mic.title());
+const micTitle = computed(() => (showAudio.value
+  ? "音频模式进行中（语音/音频只能二选一）：点「音频」关闭后可用"
+  : mic.title()));
 function saveAutosend() {
   try { localStorage.setItem("echoanswer-asr-autosend", mic.st.value.autosend ? "1" : "0"); } catch { /* 忽略 */ }
 }
 
 // ---- P5.5 电脑输出音频（EchoScribe 持续推流；管理视图 token 级）----
 const currentSession = computed(() => (sess.detail && sess.detail.session) || null);
-const audioAvailable = computed(() => {
-  const s = currentSession.value;
-  return !!s && !!s.token && s.audio_remote && s.audio_remote.enabled === true;
-});
+// P7.10 对齐旧版：提问框「音频」入口常显，前置条件不满足时点击提示（不再整钮隐藏）
+const audioListening = ref(false);
 // ---------- 显示偏好（P7 移植自旧前端；localStorage 键沿用 echoanswer-font/-width/-line） ----------
 const FONT_SIZES: Record<string, number> = { default: 15, large: 18 };
 const fontState = reactive<{ mode: string; px: number }>({
@@ -129,13 +129,36 @@ function fmtDevName(d: any): string {
   d = String(d == null ? "" : d);
   return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
 }
+// P7.10 对齐旧版 onRmtAudioToggle：常显入口 + 前置条件 toast
 async function openAudioPanel() {
   if (showAudio.value) { showAudio.value = false; return; }
   if (mic.st.value.recording || mic.st.value.transcribing) {
     ElMessage.warning("语音/音频只能二选一：请先停止语音录音");
     return;
   }
+  const s = currentSession.value;
+  if (!s || !s.token) {
+    ElMessage.warning("查看模式：音频识别不可用（需 EchoScribe 对接）");
+    return;
+  }
+  if (!s.audio_remote || s.audio_remote.enabled !== true) {
+    ElMessage.warning("本会话未启用「电脑输出音频接收」（会话设置 → 启用）");
+    return;
+  }
   showAudio.value = true;
+  await nextTick();
+  const streams = await audioPanel.value?.refreshDevices();
+  if (streams && streams.length === 0) {
+    ElMessage.info("无正在接收的设备（请先在 EchoScribe 点「开始推流」）");
+  }
+}
+// P7.10 语音/音频互斥（对齐旧版）：音频面板打开时禁止开始录音
+function onMicClick() {
+  if (showAudio.value) {
+    ElMessage.warning("音频模式进行中：语音/音频只能二选一（先点「音频」关闭）");
+    return;
+  }
+  mic.toggle();
 }
 
 // ---- P5.5 会话设置对话框 ----
@@ -595,6 +618,7 @@ onBeforeUnmount(() => {
             ref="audioPanel"
             :session="currentSession"
             @finalized="(t: string) => onVoiceFinal(t, '')"
+            @state="(l: boolean) => (audioListening = l)"
           />
           <textarea
             v-model="input"
@@ -613,11 +637,17 @@ onBeforeUnmount(() => {
               <button
                 class="mic-btn"
                 :class="{ rec: mic.st.value.recording, busy: mic.st.value.transcribing }"
-                :disabled="mic.st.value.transcribing"
+                :disabled="mic.st.value.transcribing || showAudio"
                 :title="micTitle"
-                @click="mic.toggle()"
+                @click="onMicClick"
               ><el-icon v-if="!mic.st.value.recording"><Microphone /></el-icon>{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? '识别中…' : '语音') }}</button>
-              <button v-if="audioAvailable" class="mic-btn" title="音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频" @click="openAudioPanel"><el-icon><Headset /></el-icon>音频</button>
+              <button
+                class="mic-btn"
+                :class="{ on: showAudio && !audioListening, listening: audioListening }"
+                :disabled="audioListening"
+                :title="audioListening ? '识别进行中：请用上方面板「停止识别 / 重新开始 / 取消」' : '音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频'"
+                @click="openAudioPanel"
+              ><el-icon><Headset /></el-icon>{{ audioListening ? '识别中…' : '音频' }}</button>
               <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
             </div>
           </div>

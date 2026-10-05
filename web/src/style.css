@@ -484,6 +484,8 @@ body {
   animation: mic-pulse 1.2s ease-in-out infinite;
 }
 .mic-btn.busy { border-color: #d29922; color: #d29922; }
+.mic-btn.on { border-color: var(--accent); color: var(--accent); } /* P7.10：音频面板已展开 */
+.mic-btn.listening { border-color: var(--green); color: var(--green); animation: mic-pulse 1.2s ease-in-out infinite; }
 @keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.35); } 50% { box-shadow: 0 0 0 5px rgba(255, 77, 79, 0); } }
 /* 语音中间识别预览行（… 前缀；不落盘、不入输入框，停止后清除，对齐旧版 .mic-interim） */
 .mic-interim {
