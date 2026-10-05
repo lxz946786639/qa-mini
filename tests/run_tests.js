@@ -528,7 +528,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").includes("javascript"));
     const txt = await r.text();
-    assert.ok(txt.includes("qa-mini-v47"), "CACHE 版本常量");
+    assert.ok(txt.includes("qa-mini-v48"), "CACHE 版本常量");
   });
   await test("前端语法护栏：node --check 通过 app.js / sw.js（防止语法错误上线）", async () => {
     const { spawnSync } = require("child_process");
@@ -924,7 +924,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
 
 
-  // ---------- 电脑输出音频流（asr-tool 持续推流：chunked POST + Deflate 帧） ----------
+  // ---------- 电脑输出音频流（EchoScribe 持续推流：chunked POST + Deflate 帧） ----------
   // 帧协议：[u32BE len][Deflate(PCM16LE 16kHz 单声道)]；正常帧 = 200ms = 6400B
   // 本节自建专用会话（不依赖前面会话状态），末尾删除恢复基线
   const zlib = require("zlib");

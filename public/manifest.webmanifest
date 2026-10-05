@@ -1,7 +1,7 @@
 {
   "name": "QA Mini",
   "short_name": "QA Mini",
-  "description": "asr-tool 语音问答 · 多会话实时流式展示",
+  "description": "EchoScribe 语音问答 · 多会话实时流式展示",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",

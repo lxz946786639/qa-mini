@@ -6,7 +6,7 @@
 
 ## 1. 项目速览
 
-QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接收 asr-tool
+QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接收 EchoScribe（回响笔）
 推送的识别文本，调用 openai/dify/generic/ragflow 四协议问答，多浏览器实时
 流式展示。架构细节见 `doc/01-项目设计文档.md`，勿凭记忆假设，改前先读源码。
 
@@ -22,7 +22,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
    `saveAll` 事务整表重写语义或等效一致性。
 5. **兼容性红线**：`/api/push` 只带 token（无 session_id）必须继续可用；
    至少保留 1 个会话（删光自动补建「默认会话」）；`PUT /api/config` 保持深合并。
-6. 协议客户端行为与 asr-tool 对齐（超时 10s 连接 / 60s 块间空闲；错误文案
+6. 协议客户端行为与 EchoScribe 对齐（超时 10s 连接 / 60s 块间空闲；错误文案
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
@@ -37,7 +37,7 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 | 文档 | 覆盖范围 |
 |---|---|
 | `doc/01-项目设计文档.md` | 架构、目录结构、会话模型、问答流程、协议设计、存储 schema、前端设计、测试与安全 |
-| `doc/02-配置说明.md` | config.json 全字段、会话级配置、迁移链、asr-tool 对接、环境变量、前端 localStorage |
+| `doc/02-配置说明.md` | config.json 全字段、会话级配置、迁移链、EchoScribe 对接、环境变量、前端 localStorage |
 | `doc/03-部署说明.md` | docker-compose 部署/运维/备份/升级、systemd 附录、常见问题、安全建议 |
 | `doc/04-101服务器部署说明.md` | 172.16.30.101 实际部署记录（端口/目录/验证结果） |
 | `doc/05-功能模块工作量报价单.md` | 16 个功能模块 × 工作量（人天）× 金额报价、阶段计划、验收标准 |
@@ -68,11 +68,11 @@ QA Mini：零依赖 Node.js + 原生前端的 Web 语音问答展示服务。接
 
 ```
 server.js        唯一入口：HTTP 路由 + SSE + 静态服务（勿拆成多服务）
-lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 asr-tool 同源）
-lib/audio_stream.js 电脑输出音频流（asr-tool 持续推流）：帧解析 + 会话×设备环形缓冲
+lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 EchoScribe 同源）
+lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/config.js    配置 + SQLite 存储（唯一允许碰 data/ 文件的模块）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
-lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 asr-tool 对齐
+lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
 public/          纯静态前端：index.html / app.js / icons.svg（图标 sprite）/ style.css
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）

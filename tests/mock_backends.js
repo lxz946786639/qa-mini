@@ -1,5 +1,5 @@
 "use strict";
-// 本地 mock 协议服务（对齐 asr-tool tests/ 的 mock 思路）：
+// 本地 mock 协议服务（对齐 EchoScribe tests/ 的 mock 思路）：
 //  18701 openai   — SSE delta 流 / text 兼容 / 500 / 非法 SSE / slow(keepalive) / stall(无 keepalive)
 //  18702 dify     — 全事件流 / conversation_id / error 事件 / 401 / 空 answer / slow / GET /parameters（探活）
 //  18703 ragflow  — 新路径 delta / 思考区 / 引用 / data:true；legacy 404 回退 + cumulative + ##0$$；
@@ -293,7 +293,7 @@ function genericServer() {
   return srv;
 }
 
-// ---------- asr mock（OpenAI 兼容 ASR 服务，与 asr-tool 对接形态一致） ----------
+// ---------- asr mock（OpenAI 兼容 ASR 服务，与 EchoScribe 对接形态一致） ----------
 function asrServer() {
   const srv = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://127.0.0.1");

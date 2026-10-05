@@ -1,16 +1,16 @@
 # QA Mini — Web 端语音问答展示
 
-Node.js + HTML 实现的 Web 端便捷聊天/问答展示项目，对接 **asr-tool**（asr-live，
-github.com/bumblebee-code-gh/asr-tool dev 分支）的四种问答协议，并提供 HTTP 接口
-接收 asr-tool **推送模式**发来的语音识别文本，以该文本为提问调用对应协议的问答，
+Node.js + HTML 实现的 Web 端便捷聊天/问答展示项目，对接 **EchoScribe（回响笔）**
+（原名 asr-live，仓库 github.com/bumblebee-code-gh/asr-tool，dev 分支）的四种问答协议，并提供 HTTP 接口
+接收 EchoScribe **推送模式**发来的语音识别文本，以该文本为提问调用对应协议的问答，
 在浏览器中**实时流式**展示答案（Markdown 渲染）。
 
 **多会话**：左侧会话列表，每个会话有独立的 **token**、**会话 ID**、协议与问答历史。
-asr-tool 推送时同时携带 token 与 session_id 定位会话；同一会话 ID 在多个浏览器
+EchoScribe 推送时同时携带 token 与 session_id 定位会话；同一会话 ID 在多个浏览器
 打开时，问题与答案**实时同步**流式显示。
 
 ```
-asr-tool (桌面端, 推送模式)
+EchoScribe (桌面端, 推送模式)
   采集停止 → POST /api/push {"token":"kaasr_…","session_id":"…","text":"识别文本"}
                         │
                         ▼
@@ -40,12 +40,12 @@ npm start            # 或 node server.js
 启动后：
 
 - Web 界面：http://127.0.0.1:8787/
-- 推送接口：`POST http://<本机IP>:8787/api/push`（asr-tool 填这里）
+- 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
   首次启动请在网页「⚙ 设置」填入后端 url/api_key/chat_id 并保存）
 - 会话：SQLite 数据库 data/qa-mini.db（Node 内置 node:sqlite，零依赖；
   首次运行自动创建「默认会话」，并迁移 config.json `push.token` 作为其 token ——
-  旧 asr-tool 配置无需改动；旧 data/sessions.json 会在首次运行时自动一次性
+  旧 EchoScribe 配置无需改动；旧 data/sessions.json 会在首次运行时自动一次性
   迁入数据库，旧文件归档为 .bak-<时间戳>）
 
 ## 文档
@@ -53,15 +53,15 @@ npm start            # 或 node server.js
 | 文档 | 内容 |
 |---|---|
 | [doc/01-项目设计文档](./doc/01-项目设计文档.md) | 架构 / 会话模型 / 协议设计 / 存储 schema / 前端设计 / 测试与安全 |
-| [doc/02-配置说明](./doc/02-配置说明.md) | config.json 全字段 / 会话级配置 / asr-tool 对接 / 环境变量 |
+| [doc/02-配置说明](./doc/02-配置说明.md) | config.json 全字段 / 会话级配置 / EchoScribe 对接 / 环境变量 |
 | [doc/03-部署说明](./doc/03-部署说明.md) | docker-compose 部署（推荐）/ 运维 / 备份 / 升级 / 常见问题 |
 | [doc/04-101服务器部署说明](./doc/04-101服务器部署说明.md) | 172.16.30.101 实际部署记录（端口 8790） |
 | [doc/05-功能模块工作量报价单](./doc/05-功能模块工作量报价单.md) | 按功能模块报价（人天/金额）、阶段计划、验收标准 |
 | [AGENTS.md](./AGENTS.md) | AI 协作规范：代码修改必须同步更新 doc/ 文档
 
-## asr-tool 对接（零代码改动）
+## EchoScribe 对接（零代码改动）
 
-asr-tool 的「第三方接口」配置（config.toml `[third_party]`）改为**推送模式**，
+EchoScribe 的「第三方接口」配置（echoscribe.toml `[third_party]`）改为**推送模式**，
 把识别文本推送到本服务即可（本服务收到后自动发起问答并在网页展示）：
 
 ```
@@ -69,18 +69,18 @@ asr-tool 的「第三方接口」配置（config.toml `[third_party]`）改为**
 url = "http://127.0.0.1:8787/api/push"     # 本服务的推送接口（局域网用本机 IP）
 body = "{\"token\":\"kaasr_791b…\",\"session_id\":\"8b14dd80\"}"
 auto_send = true            # 停止采集后自动推送
-qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool 自己发问、不会推送）
+qa_enabled = false          # 必须是推送模式（问答模式下 EchoScribe 自己发问、不会推送）
 ```
 
 说明：
 
-- 请求体 = asr-tool 的 `{**body, "text": 识别文本}`。本服务用 `token` **定位会话**
+- 请求体 = EchoScribe 的 `{**body, "text": 识别文本}`。本服务用 `token` **定位会话**
   （未知 token → 401）；若请求体带 `session_id`，必须与该会话 ID 一致（否则 400）。
   只带 token 不带 session_id 也兼容（按 token 所在会话执行）。
 - token / 会话ID 在网页「**会话设置**」中查看与复制（含可直接粘贴的
-  config.toml 片段）；重生成 token 后需同步更新 asr-tool 的 body。
-- 默认 202 立即返回（asr-tool 视为成功），答案经 /api/events 广播到网页。
-- 若希望 asr-tool 同步拿到答案，用 `POST /api/push?sync=true`
+  echoscribe.toml 片段）；重生成 token 后需同步更新 EchoScribe 的 body。
+- 默认 202 立即返回（EchoScribe 视为成功），答案经 /api/events 广播到网页。
+- 若希望 EchoScribe 同步拿到答案，用 `POST /api/push?sync=true`
   （阻塞至完成，上限 28s，返回 `{ok, answer}`）。
 - 每个会话可独立选择协议（ragflow/dify/openai/generic）与是否「续接会话」
   （语音追问带上下文），还可在「会话设置」里单独配置该协议的 url/key 等字段
@@ -89,13 +89,13 @@ qa_enabled = false          # 必须是推送模式（问答模式下 asr-tool �
 
 ### 持续推流模式（电脑输出音频 → 识别并自动提问）
 
-asr-tool 另有「**持续推流**」：捕获指定**输出设备**（WASAPI 回环，如 ToDesk 虚拟
+EchoScribe 另有「**持续推流**」：捕获指定**输出设备**（WASAPI 回环，如 ToDesk 虚拟
 声卡）的音频，持续推给本服务（复用既有端口/TLS sidecar，**不新增端口**；帧协议
 `[u32BE len][Deflate(PCM 16kHz 单声道)]`，200ms/帧，无损压缩；设备头为
 「6位设备码 · 端点名称」，同名虚拟声卡跨机器可区分）。服务端按会话×设备环形
 缓存（默认 120s），网页「会话设置」勾选「启用电脑输出音频接收」后，**提问框区**
 点「**🎧 音频**」按钮展开设备下拉（与「语音」输入互斥，二选一）→ 交互对齐
-asr-tool：「开始识别」实时显示中间识别 →「停止识别」定稿（自动发送或填入输入框）/
+EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定稿（自动发送或填入输入框）/
 「重新开始」（丢弃并立即重开）/「取消」（丢弃）。另有一键 API
 `/api/audio/capture`（截取最近 N 秒 → ASR → 自动提问，来源徽标「🎧 电脑音频」）。
 多设备可并存（≤8/会话），断线自动重连。详见 doc/01 §3.5/§7、doc/02 §4.1。
@@ -108,9 +108,9 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
   占位符只显示全局是否已配置（不显示明文），留空保存 = 回退全局默认；
   「测试连接」用当前填写值（留空项回退全局）探测后端，**有修改时须测试
   通过才能保存**；全部清空回退全局无需测试；**修改接口基址/Key/Chat ID 会
-  自动重置该会话的后端上下文**（下次提问重建）、续接开关；asr-tool 相关字段
-  （会话 ID 只读+复制、token 只读+复制+重生成、config.toml 片段与 body 值只读+复制）
-  默认折叠在「asr-tool 对接（推送模式）」区块，点击展开；**电脑输出音频**
+  自动重置该会话的后端上下文**（下次提问重建）、续接开关；EchoScribe 相关字段
+  （会话 ID 只读+复制、token 只读+复制+重生成、echoscribe.toml 片段与 body 值只读+复制）
+  默认折叠在「EchoScribe 对接（推送模式）」区块，点击展开；**电脑输出音频**
   （「启用电脑输出音频接收」开关 + 正在接收的设备信息，识别在提问框「🎧 音频」
   按钮，见上「持续推流模式」）；「重置会话」（先取消
   在途问答，再清空该会话后端上下文）、删除会话。
@@ -118,10 +118,10 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
   token/会话ID/协议/后端会话状态/每会话最近 100 条历史）；
   服务重启后会话与上下文保持。
 - 至少保留一个会话：删除最后一个会话时自动补建「默认会话」。
-- 同一会话 ID 的多个浏览器：任何一端（含 asr-tool 推送）发起的问答，
+- 同一会话 ID 的多个浏览器：任何一端（含 EchoScribe 推送）发起的问答，
   所有端同步实时显示；切换会话时按会话加载历史 + 在途问答。
 
-## 四种问答协议（与 asr-tool 行为一致）
+## 四种问答协议（与 EchoScribe 行为一致）
 
 | 协议 | 配置字段 | 请求 | 响应解析 |
 |---|---|---|---|
@@ -133,7 +133,7 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
 界面显示名对外隐藏：`dify` → 「编排引擎」、`ragflow` → 「知识引擎」（协议 key、
 配置字段、API 参数均不变；错误提示同步使用隐藏名称）。
 
-通用规则（与 asr-tool 一致）：超时 10s 连接 / 60s 块间空闲（长答案不受总时长限制）；
+通用规则（与 EchoScribe 一致）：超时 10s 连接 / 60s 块间空闲（长答案不受总时长限制）；
 非 2xx → 状态码 + 响应体截断 200 字符；SSE 非法 JSON → 「SSE 解析失败」（已流出内容保留）；
 取消 → 保留部分答案「已取消」；空回答 → 「完成（空回答）」。
 
@@ -141,11 +141,11 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/push` | **asr-tool 推送接口**。body=`{token, session_id?, text}`；token 定位会话（未知 401）；带 session_id 时校验一致（不匹配 400）；text 非空（否则 400）。默认 202 `{ok, qa_id, session_id}` 异步执行；`?sync=true` 阻塞至完成（上限 28s）返回 `{ok, answer, detail}`。**鉴权 = token 本身**（高熵随机凭证），开启访问码后也无需另带访问码 |
+| POST | `/api/push` | **EchoScribe 推送接口**。body=`{token, session_id?, text}`；token 定位会话（未知 401）；带 session_id 时校验一致（不匹配 400）；text 非空（否则 400）。默认 202 `{ok, qa_id, session_id}` 异步执行；`?sync=true` 阻塞至完成（上限 28s）返回 `{ok, answer, detail}`。**鉴权 = token 本身**（高熵随机凭证），开启访问码后也无需另带访问码 |
 | POST | `/api/chat` | 网页提问。body `{session_id, question, context?}` → 202 `{ok, qa_id, session_id}` |
 | POST | `/api/asr` | **网页语音输入**：请求体 = 原始 WAV 字节（16-bit PCM，≤10MB，超限 413）→ 200 `{ok, text, duration_s}`（text = 识别文本；未识别到内容时为空字符串）。未配置 ASR 或非 WAV → 400；上游失败 → 502。权限同 `/api/chat`（查看级）；客户端断开即中止对 ASR 的上游请求 |
 | POST | `/api/asr/test` | ASR 服务**测试连接**（管理）。body `{asr?: {url?, api_key?, model?, language?, timeout?}}`（表单草稿，留空回退已存值）→ 200 `{ok, detail, models, health}`（`ok=false` 时 detail = 模型不在服务列表等警告）；未配置 → 400；不可达 → 502 |
-| POST | `/api/audio/stream` | **电脑输出音频推流**（asr-tool 持续推流）。头 `X-Audio-Token`（会话推送 token，缺失/未知 401；会话未启用接收 403；同设备已有流 409）+ `X-Device-Name`（URL 编码设备名）；body = 连续帧 `[u32BE len][Deflate(PCM 16kHz 单声道)]`（200ms/帧）；长连接 chunked，前置校验（401/403/409）即时响应，成功路径在收完整体后回 200 `{ok, stream:"stopped", bytes, frames}`（nginx 截断约束，见 doc/03 §8）；客户端结束 chunked 体 = 正常停止；60s 空闲/协议违例/客户端断开 → 清理该设备流 |
+| POST | `/api/audio/stream` | **电脑输出音频推流**（EchoScribe 持续推流）。头 `X-Audio-Token`（会话推送 token，缺失/未知 401；会话未启用接收 403；同设备已有流 409）+ `X-Device-Name`（URL 编码设备名）；body = 连续帧 `[u32BE len][Deflate(PCM 16kHz 单声道)]`（200ms/帧）；长连接 chunked，前置校验（401/403/409）即时响应，成功路径在收完整体后回 200 `{ok, stream:"stopped", bytes, frames}`（nginx 截断约束，见 doc/03 §8）；客户端结束 chunked 体 = 正常停止；60s 空闲/协议违例/客户端断开 → 清理该设备流 |
 | POST | `/api/audio/listen`（+ `/stop`、`/cancel`） | **实时识别**（提问框「音频」按钮）。body `{token, device?}`：开始监听，每 2.5s 全段重提一次，SSE `audio_listen`（partial/stopped/cancelled/stream_stopped，均带 session_id）；`/stop` 定稿返回 `{ok, text, elapsed_s}`；`/cancel` 丢弃。同设备已有任务 409，设备未接收 409，ASR 未配置 400 |
 | POST | `/api/audio/capture` | **识别并提问**（一键 API）。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
 | GET | `/api/audio/stream?token=` | 该会话正在接收的设备列表 `{ok, enabled, streams:[{device, bytes, frames, ms_since_last_frame}]}`（会话设置抽屉实时刷新用） |
@@ -154,7 +154,7 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖 / 电脑输出音频 `{enabled, preferred_device}`） |
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」） |
-| POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 asr-tool「清空」） |
+| POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 EchoScribe「清空」） |
 | POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿，留空项回退全局）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
 | DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除） |
 | GET | `/api/events` | SSE 广播（EventSource 自动重连）：连接即推 `sessions` 列表 → `qa_start`/`delta`/`done`（均带 session_id）/`sessions`（列表变更）/`session_reset`/`config` |
@@ -237,22 +237,22 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
 - **语音输入（麦克风 → 文字）**：提问框区「🎤 语音」按钮（图标 + 文字）——点击开始
   录音（红底脉冲 + 秒数计时，**60s 自动停止**；<0.4s 丢弃不送识别）。录音中每 1.5s
   重提「段首→当前」音频前缀做**中间识别**，以 `…` 前缀实时显示在提问框上方预览行
-  （asr-tool 同源流式体验；忙则跳过；**中间结果不入输入框**）。再点停止 →
+  （EchoScribe 同源流式体验；忙则跳过；**中间结果不入输入框**）。再点停止 →
   浏览器把 16kHz WAV（整段）上传 `/api/asr`，服务端转发「⚙ 设置 → 语音输入」里配置的
-  **OpenAI 兼容 ASR 服务**（与 asr-tool 同源：`/audio/transcriptions`，404/405/400 自动
+  **OpenAI 兼容 ASR 服务**（与 EchoScribe 同源：`/audio/transcriptions`，404/405/400 自动
   回退 `/chat/completions` base64 音频），识别结果**填入输入框待确认发送（不自动
   提问）**；composer 区「识别后自动发送」勾选（本地偏好，**默认勾选**）——定稿结果
   **立即发送**（输入框已有文本保留）；取消勾选则恢复填入输入框待确认。音频源固定
   为默认麦克风（浏览器无法选择输出扬声器回环；从系统播放取声请用立体声混音/虚拟
-  声卡，或 asr-tool「持续推流」把 PC 输出音频推给本服务，见「持续推流模式」）。
+  声卡，或 EchoScribe「持续推流」把 PC 输出音频推给本服务，见「持续推流模式」）。
   麦克风需**安全上下文**：`http://<IP>` 访问时浏览器禁止录音，按钮自动
   禁用并 tooltip 说明（需 https，见 doc/03 §8 的 compose `tls` profile 自签入口，
   或本机 127.0.0.1/localhost 访问）。
-- **电脑输出音频（asr-tool 持续推流）**：「会话设置」抽屉内启用开关 + 正在接收
+- **电脑输出音频（EchoScribe 持续推流）**：「会话设置」抽屉内启用开关 + 正在接收
   的设备信息（`6位设备码 · 端点名称`/累计字节/最近帧距今，绿点 = 直播中，SSE
-  实时刷新；同名虚拟声卡跨机器推流按码区分来源，旧版 asr-tool 发设备序号时列表
+  实时刷新；同名虚拟声卡跨机器推流按码区分来源，旧版 EchoScribe 发设备序号时列表
   标注「（旧版序号编码）」）；**识别交互在提问框区**：「🎧 音频」按钮（i-headphones
-  图标）展开紧凑面板（设备下拉 + 操作按钮，与「语音」互斥），交互对齐 asr-tool：
+  图标）展开紧凑面板（设备下拉 + 操作按钮，与「语音」互斥），交互对齐 EchoScribe：
   「开始识别」（待机）/「停止识别（定稿）/ 重新开始 / 取消」（识别中），中间识别
   实时预览（… 前缀，面板内），定稿按「识别后自动发送」直接提问或填入输入框（同「语音」）；
   切换会话自动收起面板并取消在途任务；
@@ -271,7 +271,7 @@ asr-tool：「开始识别」实时显示中间识别 →「停止识别」定�
   上滑阅读时右下角出现「↓ 最新」浮钮，点击平滑回底。
 - 底部：当前会话协议徽标 + 提问框（Enter 发送 / Shift+Enter 换行）+ 语音（🎤 麦克风
   输入）/ 发送 / 停止。
-- 顶部：在途答案计数、「会话设置」（token/会话ID/asr-tool 片段/重置/删除）、「⚙ 设置」。
+- 顶部：在途答案计数、「会话设置」（token/会话ID/EchoScribe 片段/重置/删除）、「⚙ 设置」。
 - 多浏览器同步：所有事件经 /api/events 广播并带 session_id，其他浏览器发起的提问
   与语音推送同样实时显示；切换会话时按会话恢复历史 + 在途问答。
 - 卡片操作行的停止按钮可单独停止该问答；底部「停止」取消最新在途问答。
@@ -307,7 +307,7 @@ npm test           # node tests/run_tests.js
 ## 已知限制
 
 - 同一会话并发多个问答时，后端会话 ID 为后完成者生效（语音场景天然串行，一般无影响）。
-- 继承 asr-tool 已知限制：RAGFlow `legacy: true` 时 think 标签不剥离；
+- 继承 EchoScribe 已知限制：RAGFlow `legacy: true` 时 think 标签不剥离；
   cumulative 极端情形 LCP 差分可能少量丢字/重复；Dify Chatflow Human Input 节点
   的流会挂起（表现为 60s 块间超时）。
 - **语音输入依赖浏览器麦克风**：`http://<IP>`（非 127.0.0.1）属非安全上下文，

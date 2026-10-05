@@ -2,7 +2,7 @@
 // QA Mini 服务器（零依赖 · 多会话版）：
 //  - 静态 UI（public/）
 //  - 会话：/api/sessions 增删改查 + 重置；每会话独立 token / 会话ID / 协议 / 历史
-//  - asr-tool 推送：POST /api/push { token, session_id?, text }（token 定位会话，
+//  - EchoScribe 推送：POST /api/push { token, session_id?, text }（token 定位会话，
 //    带 session_id 时校验一致性）
 //  - 网页提问：POST /api/chat { session_id, question }
 //  - /api/events：SSE 广播（全部事件带 session_id；连接即推 sessions 列表）
@@ -49,7 +49,7 @@ const manager = new SessionManager({
   broadcast
 });
 
-// ---- 电脑输出音频流（asr-tool 持续推流 → 环形缓冲 → 按需识别提问）----
+// ---- 电脑输出音频流（EchoScribe 持续推流 → 环形缓冲 → 按需识别提问）----
 const audioStreams = new AudioStreamManager({
   getConfig: () => config,
   broadcast
@@ -249,7 +249,7 @@ function serveStatic(res, rel) {
   });
 }
 
-// 带超时上限的 Promise（?sync=true 推送用，上限 28s，留 2s 给 asr-tool 的 30s 超时）
+// 带超时上限的 Promise（?sync=true 推送用，上限 28s，留 2s 给 EchoScribe 的 30s 超时）
 function withTimeout(promise, ms, onExpire) {
   return new Promise((resolve) => {
     const t = setTimeout(() => resolve(onExpire()), ms);
@@ -446,7 +446,7 @@ async function handleAsrTest(req, res) {
 
 // ---- /api/audio/stream：电脑输出音频推流（长连接 · chunked POST）----
 // 头：X-Audio-Token（会话推送 token，与 /api/push 同源鉴权）+ X-Device-Name（URL 编码输出设备名）
-// 体：[u32BE len][Deflate(PCM16LE 16kHz 单声道)] 帧流（asr-tool 每 200ms 一帧）
+// 体：[u32BE len][Deflate(PCM16LE 16kHz 单声道)] 帧流（EchoScribe 每 200ms 一帧）
 // 响应语义（关键）：前置校验错误（401/403/409）仅凭请求头即时响应；
 // 成功路径必须在收完整体后回 200——nginx（proxy_request_buffering off）在上游
 // 响应完成时会截断客户端未发完的 body（实测：提前 200 导致后续帧全部丢失，
@@ -608,9 +608,9 @@ async function handleAudioCapture(req, res) {
   });
 }
 
-// ---- /api/audio/listen（+/stop /+cancel）：推流音频「实时识别」（对齐 asr-tool 交互）----
+// ---- /api/audio/listen（+/stop /+cancel）：推流音频「实时识别」（对齐 EchoScribe 交互）----
 // start：body { token, device? } → 建立监听任务，每 LISTEN_POLL_MS 把「开始→当前」全段
-//        重提一次（对齐 asr-tool「段进行中」中间识别语义），SSE audio_listen
+//        重提一次（对齐 EchoScribe「段进行中」中间识别语义），SSE audio_listen
 //        {session_id, device, state:"partial", text, elapsed_s} 广播定稿前预览；
 // stop：  停止并做最后一次全段识别，返回定稿 {ok, text, elapsed_s}；
 // cancel：丢弃（不做最终识别），广播 state:"cancelled"；
@@ -680,7 +680,7 @@ async function resolveListenDevice(token, body) {
   if (!device) {
     const list = audioStreams.listStreams(session.id);
     if (list.length === 1) device = list[0].device;
-    else if (!list.length) return { err: [409, { ok: false, detail: "该会话没有正在接收的音频设备（请先在 asr-tool 开始推流）" }] };
+    else if (!list.length) return { err: [409, { ok: false, detail: "该会话没有正在接收的音频设备（请先在 EchoScribe 开始推流）" }] };
     else return { err: [400, { ok: false, detail: "该会话有多个推流设备，请指定 device（" + list.map((x) => x.device).join(" / ") + "）" }] };
   }
   if (!audioStreams.isLive(session.id, device, 5000)) {
@@ -777,8 +777,8 @@ function handleResetSession(res, id) {
   return sendJSON(res, ok ? 200 : 404, { ok, detail: ok ? "会话已重置" : "会话不存在: " + id });
 }
 
-// ---- /api/push：asr-tool 推送接口 ----
-// 请求体 = { token, session_id?, text }（可携带 asr-tool body 的其他字段）。
+// ---- /api/push：EchoScribe 推送接口 ----
+// 请求体 = { token, session_id?, text }（可携带 EchoScribe body 的其他字段）。
 // token 定位会话；带 session_id 时校验一致。默认 202 异步；?sync=true 阻塞（上限 28s）。
 async function handlePush(req, res, urlObj) {
   let body;
@@ -791,7 +791,7 @@ async function handlePush(req, res, urlObj) {
     return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
   }
   // 推送鉴权 = 会话推送 token 本身（48 位随机高熵凭证，持有即授权），
-  // 无需再叠加访问码：asr-tool 请求体已配好 token，访问码失效/换码不影响推送。
+  // 无需再叠加访问码：EchoScribe 请求体已配好 token，访问码失效/换码不影响推送。
   const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) return sendJSON(res, 401, { ok: false, detail: "token 必填" });
   const session = manager.byToken(token);
@@ -1231,8 +1231,8 @@ server.listen(port, host, () => {
   console.log("  QA Mini 已启动（多会话）");
   console.log("  Web 界面:   http://" + (host === "0.0.0.0" ? "127.0.0.1" : host) + ":" + port + "/");
   console.log("  推送接口:   POST http://<本机IP>:" + port + "/api/push");
-  console.log("              请求体需同时携带 token 与 session_id（在网页「会话设置」中复制 asr-tool 片段）");
-  console.log("  音频推流:   POST /api/audio/stream（asr-tool 持续推流；会话需启用「输出音频接收」）");
+  console.log("              请求体需同时携带 token 与 session_id（在网页「会话设置」中复制 EchoScribe 片段）");
+  console.log("  音频推流:   POST /api/audio/stream（EchoScribe 持续推流；会话需启用「输出音频接收」）");
   console.log("  会话存储:   " + sessionsFile + "（SQLite）");
   console.log("  默认会话:   " + def.name + "（会话ID " + def.id + "）");
   console.log("  配置:       " + configFile);

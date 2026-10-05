@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>QA Mini · 语音问答展示</title>
-<meta name="description" content="asr-tool 语音问答 · 多会话实时流式展示">
+<meta name="description" content="EchoScribe 语音问答 · 多会话实时流式展示">
 <meta name="theme-color" id="meta-theme" content="#0f1216">
 <!-- PWA -->
 <link rel="manifest" href="/manifest.webmanifest">
@@ -47,7 +47,7 @@
       <div class="title">
         <span class="logo"><svg class="logo-icon" aria-hidden="true"><use href="/icons.svg#i-bot"></use></svg></span>
         <span class="name">QA Mini</span>
-        <span class="sub">asr-tool 语音问答 · 流式展示</span>
+        <span class="sub">EchoScribe 语音问答 · 流式展示</span>
       </div>
       <div class="header-right">
         <span id="active-count" class="active-pill hidden"></span>
@@ -75,7 +75,7 @@
           </select>
           <input id="line-val" type="number" min="1" max="2.5" step="0.05" value="1.65" title="自定义行间距（1.00–2.50）">
         </div>
-        <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / asr-tool 对接（/admin + 管理密码后可见）">会话设置</button>
+        <button id="btn-session" class="btn hidden" title="当前会话：token / 会话ID / EchoScribe 对接（/admin + 管理密码后可见）">会话设置</button>
         <button id="btn-settings" class="btn hidden" title="协议配置 / 访问控制（/admin + 管理密码后可见）"><svg class="icon"><use href="/icons.svg#i-settings"></use></svg> 设置</button>
       </div>
     </header>
@@ -85,9 +85,9 @@
         <div class="hint-icons" aria-hidden="true"><svg class="icon"><use href="/icons.svg#i-bot"></use></svg><svg class="icon"><use href="/icons.svg#i-messages"></use></svg></div>
         <h3>本会话暂无问答</h3>
         <p>在下方输入问题，按 <code>Enter</code> 发送，答案实时流式显示；<br>
-           或用 <b>asr-tool 推送模式</b>把语音识别结果自动推送到本会话。</p>
+           或用 <b>EchoScribe 推送模式</b>把语音识别结果自动推送到本会话。</p>
         <p class="hint-proto" id="hint-proto"></p>
-        <p class="hint-sub">asr-tool 对接：打开「会话设置」复制 config.toml 片段（token + 会话ID）。
+        <p class="hint-sub">EchoScribe 对接：打开「会话设置」复制 echoscribe.toml 片段（token + 会话ID）。
            推送接口 <code>POST /api/push</code></p>
       </div>
     </main>
@@ -99,7 +99,7 @@
         <div id="rmt-audio-panel" class="rmt-audio-panel hidden">
           <div class="rmt-row">
             <label class="rmt-audio-label" for="rmt-device">设备</label>
-            <select id="rmt-device" title="asr-tool 正在推流到本会话的设备"></select>
+            <select id="rmt-device" title="EchoScribe 正在推流到本会话的设备"></select>
             <span class="rmt-btns">
               <button id="btn-rmt-start" class="btn" type="button" title="实时识别该设备正在接收的音频（最长 120s）">开始识别</button>
               <button id="btn-rmt-stop" class="btn" type="button" hidden title="停止并定稿：最后一次全段识别，文本填入输入框（勾选「识别后自动发送」则直接发送）">停止识别</button>
@@ -115,7 +115,7 @@
             <button id="btn-cancel" class="btn danger" disabled>停止</button>
             <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）"><input id="asr-autosend" type="checkbox"> 识别后自动发送</label>
             <button id="btn-mic" class="btn" type="button" title="语音输入：点击开始/停止录音；识别后填入输入框（勾选「识别后自动发送」则直接发送）"><svg class="icon"><use href="/icons.svg#i-mic"></use></svg> <span id="btn-mic-label">语音</span></button>
-            <button id="btn-rmt-audio" class="btn" type="button" title="音频输入：识别 asr-tool 持续推流到本会话的电脑输出音频（展开设备选择，点「开始识别」）"><svg class="icon"><use href="/icons.svg#i-headphones"></use></svg> <span id="btn-rmt-audio-label">音频</span></button>
+            <button id="btn-rmt-audio" class="btn" type="button" title="音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频（展开设备选择，点「开始识别」）"><svg class="icon"><use href="/icons.svg#i-headphones"></use></svg> <span id="btn-rmt-audio-label">音频</span></button>
             <button id="btn-send" class="btn primary"><svg class="icon"><use href="/icons.svg#i-send"></use></svg> 发送</button>
           </div>
         </div>
@@ -150,11 +150,11 @@
     </div>
     <label class="chk"><input id="sd-continue" type="checkbox"> 提问续接本会话（语音追问带上下文）</label>
 
-    <button id="sd-asr-toggle" class="asr-toggle" type="button" aria-expanded="false" title="对接 asr-tool 推送模式时展开：会话 ID / 推送 token / config.toml 片段与 body 值">
-      <svg class="icon"><use href="/icons.svg#i-chevron-down"></use></svg> asr-tool 对接（推送模式）
+    <button id="sd-asr-toggle" class="asr-toggle" type="button" aria-expanded="false" title="对接 EchoScribe 推送模式时展开：会话 ID / 推送 token / echoscribe.toml 片段与 body 值">
+      <svg class="icon"><use href="/icons.svg#i-chevron-down"></use></svg> EchoScribe 对接（推送模式）
     </button>
     <div id="sd-asr-extra" class="hidden">
-      <label>会话 ID <small>（asr-tool 推送请求体需同时携带）</small></label>
+      <label>会话 ID <small>（EchoScribe 推送请求体需同时携带）</small></label>
       <div class="id-row">
         <input id="sd-session-id" type="text" readonly class="mono">
         <button id="sd-copy-sid" class="btn" type="button">复制</button>
@@ -164,29 +164,29 @@
       <div class="id-row">
         <input id="sd-token" type="password" readonly class="mono">
         <button id="sd-copy-token" class="btn" type="button">复制</button>
-        <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 asr-tool 的 body">重生成</button>
+        <button id="sd-regen-token" class="btn" type="button" title="重新生成后需同步更新 EchoScribe 的 body">重生成</button>
       </div>
 
       <div class="asr-fld">
-        <span>asr-tool 配置片段 <small>（config.toml · 推送模式，可直接粘贴）</small></span>
+        <span>EchoScribe 配置片段 <small>（echoscribe.toml · 推送模式，可直接粘贴）</small></span>
         <button id="sd-copy-snippet" class="btn" type="button">复制</button>
       </div>
-      <textarea id="sd-snippet" rows="6" readonly class="mono" aria-label="asr-tool 配置片段"></textarea>
+      <textarea id="sd-snippet" rows="6" readonly class="mono" aria-label="EchoScribe 配置片段"></textarea>
       <div class="asr-fld">
-        <span>body 值 <small>（asr-tool 设置页「第三方接口 body」直接粘贴）</small></span>
+        <span>body 值 <small>（EchoScribe 设置页「第三方接口 body」直接粘贴）</small></span>
         <button id="sd-copy-body" class="btn" type="button">复制</button>
       </div>
       <textarea id="sd-snippet-body" rows="2" readonly class="mono" aria-label="body 值"></textarea>
     </div>
 
-    <label class="chk"><input id="sd-audio-enable" type="checkbox"> 启用电脑输出音频接收 <small>（asr-tool「持续推流」到本会话）</small></label>
+    <label class="chk"><input id="sd-audio-enable" type="checkbox"> 启用电脑输出音频接收 <small>（EchoScribe「持续推流」到本会话）</small></label>
     <div id="sd-audio-extra">
       <label>正在接收的设备 <small>（推流中时实时刷新；识别操作在底部提问框「音频」按钮）</small></label>
       <div id="sd-audio-devices" class="audio-devices"><span class="audio-dev-empty">无</span></div>
     </div>
 
     <div class="drawer-inline-actions">
-      <button id="sd-reset" class="btn" type="button" title="清空该会话的后端对话上下文（等同 asr-tool「清空」），已显示记录保留">重置会话（清空后端上下文）</button>
+      <button id="sd-reset" class="btn" type="button" title="清空该会话的后端对话上下文（等同 EchoScribe「清空」），已显示记录保留">重置会话（清空后端上下文）</button>
     </div>
   </div>
   <div class="drawer-actions">
@@ -308,7 +308,7 @@
     </section>
     <section class="cfg-panel hidden" data-cfgtab="asr">
       <h3>语音输入（麦克风 → 文字）</h3>
-      <p class="sec-desc">OpenAI 兼容 ASR 服务（与 asr-tool 同源）：浏览器录 WAV，服务端转发识别，结果填入输入框待确认后发送。留空 = 未启用（界面麦克风按钮禁用提示）。</p>
+      <p class="sec-desc">OpenAI 兼容 ASR 服务（与 EchoScribe 同源）：浏览器录 WAV，服务端转发识别，结果填入输入框待确认后发送。留空 = 未启用（界面麦克风按钮禁用提示）。</p>
       <label>接口基址（如 http://host:19003/v1，不以 /v1 结尾会自动补）</label>
       <input id="cfg-asr-url" type="text" spellcheck="false" placeholder="http://host:19003/v1">
       <label>API Key（可空）</label>

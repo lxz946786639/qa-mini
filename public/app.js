@@ -946,7 +946,7 @@ function asrBody(s) {
   return '{"token":"' + s.token + '","session_id":"' + s.id + '"}';
 }
 
-// config.toml 片段：TOML 单引号字面量，无转义，可直接复制粘贴
+// echoscribe.toml 片段：TOML 单引号字面量，无转义，可直接复制粘贴
 function asrSnippet(s) {
   const url = location.origin + "/api/push";
   const lines = [
@@ -959,7 +959,7 @@ function asrSnippet(s) {
   return lines.join("\n");
 }
 
-// ---------- 会话抽屉：电脑输出音频（asr-tool 持续推流） ----------
+// ---------- 会话抽屉：电脑输出音频（EchoScribe 持续推流） ----------
 function fmtBytes(n) {
   n = Number(n) || 0;
   if (n < 1024) return n + " B";
@@ -983,7 +983,7 @@ async function refreshAudioStreams(s) {
   } catch {}
 }
 
-// 设备显示名：旧版 asr-tool 发的是设备序号（纯数字），加提示区分
+// 设备显示名：旧版 EchoScribe 发的是设备序号（纯数字），加提示区分
 function fmtDevName(d) {
   d = String(d == null ? "" : d);
   return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
@@ -1015,12 +1015,12 @@ function renderAudioDeviceList(streams) {
   if (!(streams || []).length) {
     const sp = document.createElement("span");
     sp.className = "audio-dev-empty";
-    sp.textContent = "无（asr-tool 点「开始推流」后此处显示）";
+    sp.textContent = "无（EchoScribe 点「开始推流」后此处显示）";
     box.appendChild(sp);
   }
 }
 
-// ---------- 提问框「音频输入」：asr-tool 推流音频实时识别（对齐 asr-tool 交互：
+// ---------- 提问框「音频输入」：EchoScribe 推流音频实时识别（对齐 EchoScribe 交互：
 // 开始识别 / 停止识别（定稿）/ 重新开始 / 取消；中间识别走 SSE audio_listen partial；
 // 与「语音」输入互斥（二选一））----------
 const rmt = { mode: false, device: "", listening: false, finalText: "", busy: false };
@@ -1075,7 +1075,7 @@ function setRmtUI() {
   b.classList.toggle("listening", rmt.listening);
   b.disabled = rmt.listening;
   label.textContent = rmt.listening ? "识别中…" : "音频";
-  // asr-tool 交互：待机=「开始识别」；识别中=「停止识别 / 重新开始 / 取消」
+  // EchoScribe 交互：待机=「开始识别」；识别中=「停止识别 / 重新开始 / 取消」
   $("btn-rmt-start").hidden = rmt.listening;
   $("btn-rmt-stop").hidden = !rmt.listening;
   $("btn-rmt-again").hidden = !rmt.listening;
@@ -1102,7 +1102,7 @@ async function onRmtAudioToggle() {
     return;
   }
   const s = curSession();
-  if (!s || !s.token) { showToast("查看模式：音频识别不可用（需 asr-tool 对接）", 3000); return; }
+  if (!s || !s.token) { showToast("查看模式：音频识别不可用（需 EchoScribe 对接）", 3000); return; }
   if (!s.audio_remote || s.audio_remote.enabled !== true) {
     showToast("本会话未启用「电脑输出音频接收」（会话设置 → 启用）", 3500);
     return;
@@ -1110,13 +1110,13 @@ async function onRmtAudioToggle() {
   rmt.mode = true;
   setRmtUI();
   const streams = await refreshRmtDevices();
-  if (!streams.length) showToast("无正在接收的设备（请先在 asr-tool 点「开始推流」）", 3500);
+  if (!streams.length) showToast("无正在接收的设备（请先在 EchoScribe 点「开始推流」）", 3500);
 }
 async function rmtStart() {
   if (rmt.busy || rmt.listening) return;
   const s = curSession();
   if (!s) return;
-  if (!rmt.device) { showToast("无可选音频设备（等 asr-tool 推流后重试）", 3000); return; }
+  if (!rmt.device) { showToast("无可选音频设备（等 EchoScribe 推流后重试）", 3000); return; }
   rmt.busy = true;
   $("btn-rmt-start").disabled = true;
   try {
@@ -1173,7 +1173,7 @@ async function rmtCancel() {
   setRmtUI();
   showToast("已取消识别（文本已丢弃）", 2000);
 }
-// 重新开始（对齐 asr-tool「重新开始」）：丢弃当前已识别内容，立即新开一个识别任务
+// 重新开始（对齐 EchoScribe「重新开始」）：丢弃当前已识别内容，立即新开一个识别任务
 async function rmtRestart() {
   if (!rmt.listening || rmt.busy) return;
   const s = curSession();
@@ -1227,7 +1227,7 @@ function openSessionDrawer() {
   $("sd-snippet-body").value = asrBody(s);
   $("sd-save-state").textContent = "";
   $("sd-save-state").className = "save-state";
-  // asr-tool 对接区块每次「打开抽屉」时收起（打开状态下跟随切换刷新时保留用户当前展开状态）
+  // EchoScribe 对接区块每次「打开抽屉」时收起（打开状态下跟随切换刷新时保留用户当前展开状态）
   if ($("session-drawer").classList.contains("hidden")) {
     $("sd-asr-extra").classList.add("hidden");
     $("sd-asr-toggle").setAttribute("aria-expanded", "false");
@@ -1329,14 +1329,14 @@ async function saveSessionDrawer() {
 async function regenToken() {
   const s = curSession();
   if (!s) return;
-  if (!window.confirm("重新生成 token 后，asr-tool 的 body 需同步更新。确定？")) return;
+  if (!window.confirm("重新生成 token 后，EchoScribe 的 body 需同步更新。确定？")) return;
   const r = await api("PUT", "/api/sessions/" + s.id, { regenerate_token: true });
   if (r.status === 200 && r.data && r.data.ok) {
     s.token = r.data.session.token;
     $("sd-token").value = s.token;
     $("sd-snippet").value = asrSnippet(s);
     $("sd-snippet-body").value = asrBody(s);
-    showToast("token 已重新生成，请同步 asr-tool 配置");
+    showToast("token 已重新生成，请同步 EchoScribe 配置");
   } else {
     showToast("重新生成失败: " + ((r.data && r.data.detail) || ("HTTP " + r.status)), 3000);
   }
@@ -1856,11 +1856,11 @@ async function saveSettings() {
 // ---------- 初始化（门禁 → 主流程）----------
 // ---------- 语音输入（麦克风 → WAV 16-bit PCM → POST /api/asr → 服务端转发识别 → 填入输入框） ----------
 // 约束：getUserMedia / AudioWorklet 需安全上下文（https 或 127.0.0.1/localhost）；
-// 经 http 地址访问时按钮禁用并在 title 说明。硬上限 60s 自动停止送识别（对齐 asr-tool
+// 经 http 地址访问时按钮禁用并在 title 说明。硬上限 60s 自动停止送识别（对齐 EchoScribe
 // max_segment_s），<0.4s 丢弃（min_segment_s）。识别结果填入输入框待确认，不自动发送。
 const ASR_MAX_S = 60;
 const ASR_MIN_S = 0.4;
-const ASR_PARTIAL_S = 1.5; // 对齐 asr-tool partial_interval_s：中间识别周期（前缀重提）
+const ASR_PARTIAL_S = 1.5; // 对齐 EchoScribe partial_interval_s：中间识别周期（前缀重提）
 const ASR_AUTOSEND_KEY = "qa-mini-asr-autosend"; // 识别定稿后是否立即发送（默认勾选 = 立即发送；取消勾选 = 确认后再发）
 function asrAutosend() {
   try {
@@ -1937,7 +1937,7 @@ function hideMicInterim() {
   const el = $("mic-interim");
   if (el) { el.textContent = ""; el.classList.add("hidden"); }
 }
-// 中间识别（对齐 asr-tool「段进行中」语义）：周期性把「段首→当前」音频前缀重提一次
+// 中间识别（对齐 EchoScribe「段进行中」语义）：周期性把「段首→当前」音频前缀重提一次
 // 中间识别，以 … 前缀刷新预览行；同一时刻至多 1 个在途（忙则跳过、不排队）；
 // 中间结果不落盘、不入输入框；失败静默忽略（不 toast）。
 async function partialTick() {
@@ -2291,17 +2291,17 @@ $("font-mode").addEventListener("change", () => {
   $("sd-regen-token").addEventListener("click", regenToken);
   $("sd-copy-sid").addEventListener("click", () => copyText($("sd-session-id").value, "会话 ID 已复制"));
   $("sd-copy-token").addEventListener("click", () => copyText($("sd-token").value, "token 已复制"));
-  $("sd-copy-snippet").addEventListener("click", () => copyText($("sd-snippet").value, "asr-tool 配置片段已复制"));
+  $("sd-copy-snippet").addEventListener("click", () => copyText($("sd-snippet").value, "EchoScribe 配置片段已复制"));
   $("sd-copy-body").addEventListener("click", () => copyText($("sd-snippet-body").value, "body 值已复制"));
   $("sd-reset").addEventListener("click", resetCurrentSession);
   // 电脑输出音频：识别并提问（设备列表/按钮可用性由 renderAudioDeviceList 维护）
-  // 提问框「音频输入」：asr-tool 推流实时识别（设备下拉 + 开始识别/停止识别/重新开始/取消；与「语音」互斥）
+  // 提问框「音频输入」：EchoScribe 推流实时识别（设备下拉 + 开始识别/停止识别/重新开始/取消；与「语音」互斥）
 $("btn-rmt-audio").addEventListener("click", onRmtAudioToggle);
 $("btn-rmt-start").addEventListener("click", rmtStart);
 $("btn-rmt-again").addEventListener("click", rmtRestart);
 $("btn-rmt-stop").addEventListener("click", rmtStop);
 $("btn-rmt-cancel").addEventListener("click", rmtCancel);
-  // asr-tool 对接区块：默认收起，点击展开/折叠（会话设置表单对非 asr-tool 用户只保留 名称/协议/续接）
+  // EchoScribe 对接区块：默认收起，点击展开/折叠（会话设置表单对非 EchoScribe 用户只保留 名称/协议/续接）
   $("sd-asr-toggle").addEventListener("click", () => {
     const nowHidden = $("sd-asr-extra").classList.toggle("hidden");
     $("sd-asr-toggle").setAttribute("aria-expanded", String(!nowHidden));

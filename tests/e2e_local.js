@@ -42,7 +42,7 @@ async function waitDone(qaId, timeoutMs) {
   if (!sess) throw new Error("无可用会话");
   console.log("[2] 会话列表:", list.length, "个 | 当前:", sess.name, "id=" + sess.id, "token=" + sess.token.slice(0, 12) + "…", "protocol=" + sess.protocol);
 
-  // 3) 模拟 asr-tool 推送（token + session_id 同传）
+  // 3) 模拟 EchoScribe 推送（token + session_id 同传）
   const push = await api("POST", "/api/push", {
     token: sess.token, session_id: sess.id,
     text: "你好，请用一句话介绍一下你自己"
