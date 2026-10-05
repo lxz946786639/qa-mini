@@ -97,14 +97,18 @@
         <textarea id="question" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行" autofocus></textarea>
         <div id="mic-interim" class="mic-interim hidden"></div>
         <div id="rmt-audio-panel" class="rmt-audio-panel hidden">
-          <label class="rmt-audio-label" for="rmt-device">设备</label>
-          <select id="rmt-device" title="asr-tool 正在推流到本会话的设备"></select>
-          <button id="btn-rmt-start" class="btn" type="button">开始识别</button>
-          <button id="btn-rmt-stop" class="btn danger" type="button" hidden>停止识别</button>
-          <button id="btn-rmt-cancel" class="btn" type="button" hidden>取消</button>
-          <button id="btn-rmt-again" class="btn" type="button" hidden>重新识别</button>
+          <div class="rmt-row">
+            <label class="rmt-audio-label" for="rmt-device">设备</label>
+            <select id="rmt-device" title="asr-tool 正在推流到本会话的设备"></select>
+            <span class="rmt-btns">
+              <button id="btn-rmt-start" class="btn" type="button" title="实时识别该设备正在接收的音频（最长 120s）">开始识别</button>
+              <button id="btn-rmt-stop" class="btn" type="button" hidden title="停止并定稿：最后一次全段识别，文本填入输入框（勾选「识别后自动发送」则直接发送）">停止识别</button>
+              <button id="btn-rmt-again" class="btn" type="button" hidden title="丢弃当前已识别内容，立即重新开始识别">重新开始</button>
+              <button id="btn-rmt-cancel" class="btn danger" type="button" hidden title="丢弃识别结果并停止（不做定稿识别）">取消</button>
+            </span>
+          </div>
+          <div id="rmt-interim" class="mic-interim rmt-interim hidden"></div>
         </div>
-        <div id="rmt-interim" class="mic-interim hidden"></div>
         <div class="composer-bar">
           <span id="composer-proto" class="composer-proto" title="当前会话与协议（协议在「会话设置」中修改）"></span>
           <div class="composer-actions">

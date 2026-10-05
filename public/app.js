@@ -1021,7 +1021,8 @@ function renderAudioDeviceList(streams) {
 }
 
 // ---------- 提问框「音频输入」：asr-tool 推流音频实时识别（对齐 asr-tool 交互：
-// 开始识别 / 停止识别（定稿）/ 取消 / 重新识别；中间识别走 SSE audio_listen partial）----------
+// 开始识别 / 停止识别（定稿）/ 重新开始 / 取消；中间识别走 SSE audio_listen partial；
+// 与「语音」输入互斥（二选一））----------
 const rmt = { mode: false, device: "", listening: false, finalText: "", busy: false };
 function hideRmtInterim() {
   const el = $("rmt-interim");
@@ -1069,14 +1070,17 @@ function setRmtUI() {
   const b = $("btn-rmt-audio");
   const label = $("btn-rmt-audio-label");
   panel.classList.toggle("hidden", !rmt.mode);
+  panel.classList.toggle("listening", rmt.listening);
   b.classList.toggle("on", rmt.mode && !rmt.listening);
   b.classList.toggle("listening", rmt.listening);
   b.disabled = rmt.listening;
   label.textContent = rmt.listening ? "识别中…" : "音频";
-  $("btn-rmt-start").hidden = rmt.listening || !!rmt.finalText;
-  $("btn-rmt-again").hidden = rmt.listening || !rmt.finalText;
+  // asr-tool 交互：待机=「开始识别」；识别中=「停止识别 / 重新开始 / 取消」
+  $("btn-rmt-start").hidden = rmt.listening;
   $("btn-rmt-stop").hidden = !rmt.listening;
+  $("btn-rmt-again").hidden = !rmt.listening;
   $("btn-rmt-cancel").hidden = !rmt.listening;
+  setMicUI(); // 语音/音频互斥：音频模式开/关时同步「语音」按钮可用性
 }
 function resetRmtAll() {
   rmt.mode = false;
@@ -1088,8 +1092,15 @@ function resetRmtAll() {
   setRmtUI();
 }
 async function onRmtAudioToggle() {
-  if (rmt.listening) return; // 识别中：用「停止识别 / 取消」
+  if (rmt.listening) {
+    showToast("识别进行中：请用「停止识别 / 重新开始 / 取消」", 2500);
+    return;
+  }
   if (rmt.mode) { resetRmtAll(); return; }
+  if (mic.recording || mic.transcribing) {
+    showToast("语音/音频只能二选一：请先停止语音录音", 3000);
+    return;
+  }
   const s = curSession();
   if (!s || !s.token) { showToast("查看模式：音频识别不可用（需 asr-tool 对接）", 3000); return; }
   if (!s.audio_remote || s.audio_remote.enabled !== true) {
@@ -1108,7 +1119,6 @@ async function rmtStart() {
   if (!rmt.device) { showToast("无可选音频设备（等 asr-tool 推流后重试）", 3000); return; }
   rmt.busy = true;
   $("btn-rmt-start").disabled = true;
-  $("btn-rmt-again").disabled = true;
   try {
     const r = await api("POST", "/api/audio/listen", { token: s.token, device: rmt.device });
     if (r.status === 200 && r.data && r.data.ok) {
@@ -1125,7 +1135,6 @@ async function rmtStart() {
   } finally {
     rmt.busy = false;
     $("btn-rmt-start").disabled = false;
-    $("btn-rmt-again").disabled = false;
     setRmtUI();
   }
 }
@@ -1163,6 +1172,20 @@ async function rmtCancel() {
   hideRmtInterim();
   setRmtUI();
   showToast("已取消识别（文本已丢弃）", 2000);
+}
+// 重新开始（对齐 asr-tool「重新开始」）：丢弃当前已识别内容，立即新开一个识别任务
+async function rmtRestart() {
+  if (!rmt.listening || rmt.busy) return;
+  const s = curSession();
+  if (!s) return;
+  try {
+    await api("POST", "/api/audio/listen/cancel", { token: s.token, device: rmt.device });
+  } catch {}
+  rmt.listening = false;
+  rmt.finalText = "";
+  hideRmtInterim();
+  setRmtUI();
+  await rmtStart();
 }
 // 定稿：自动发送（勾选「识别后自动发送」）或填入输入框待确认（同「语音」语义）
 async function finalizeRemoteText(text) {
@@ -1879,6 +1902,12 @@ function setMicUI() {
     b.classList.add("recording");
     return;
   }
+  if (rmt.mode) { // 语音/音频互斥：音频模式进行中时禁用语音
+    b.disabled = true;
+    b.title = "音频模式进行中（语音/音频只能二选一）：点「音频」关闭后可用";
+    label.textContent = "语音";
+    return;
+  }
   b.disabled = false;
   b.title = "语音输入：点击开始/停止录音，识别后填入输入框";
   label.textContent = "语音";
@@ -2222,6 +2251,10 @@ $("font-mode").addEventListener("change", () => {
   });
   // 语音输入：点击开始/停止；http 非安全上下文时按钮已禁用（title 说明）
   $("btn-mic").addEventListener("click", () => {
+    if (rmt.mode) {
+      showToast("音频模式进行中：语音/音频只能二选一（先点「音频」关闭）", 2500);
+      return;
+    }
     if (mic.transcribing) return;
     if (mic.recording) { micStop(); return; }
     if (!mic.secure) {
@@ -2262,10 +2295,10 @@ $("font-mode").addEventListener("change", () => {
   $("sd-copy-body").addEventListener("click", () => copyText($("sd-snippet-body").value, "body 值已复制"));
   $("sd-reset").addEventListener("click", resetCurrentSession);
   // 电脑输出音频：识别并提问（设备列表/按钮可用性由 renderAudioDeviceList 维护）
-  // 提问框「音频输入」：asr-tool 推流实时识别（设备下拉 + 开始/停止/取消/重新识别）
+  // 提问框「音频输入」：asr-tool 推流实时识别（设备下拉 + 开始识别/停止识别/重新开始/取消；与「语音」互斥）
 $("btn-rmt-audio").addEventListener("click", onRmtAudioToggle);
 $("btn-rmt-start").addEventListener("click", rmtStart);
-$("btn-rmt-again").addEventListener("click", rmtStart);
+$("btn-rmt-again").addEventListener("click", rmtRestart);
 $("btn-rmt-stop").addEventListener("click", rmtStop);
 $("btn-rmt-cancel").addEventListener("click", rmtCancel);
   // asr-tool 对接区块：默认收起，点击展开/折叠（会话设置表单对非 asr-tool 用户只保留 名称/协议/续接）
