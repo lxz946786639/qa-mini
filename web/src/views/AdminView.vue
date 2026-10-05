@@ -25,7 +25,7 @@ onMounted(async () => {
   await auth.me();
   if (!auth.isAdmin) {
     try {
-      const r = await fetch("/api/health");
+      const r = await fetch("/api/status");
       const d = (await r.json()) as { admin_set?: boolean };
       adminSet.value = !!d.admin_set;
     } catch { adminSet.value = true; }

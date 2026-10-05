@@ -1,5 +1,6 @@
 # 运行时生成（含真实 key/token，禁止入库）
 config.json
+config.json.bak-*
 data/
 
 # 日志与临时
