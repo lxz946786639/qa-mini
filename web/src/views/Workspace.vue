@@ -149,6 +149,12 @@ function openSettings() {
   if (!sess.detail) return;
   settingsOpen.value = true;
 }
+// 对话框内「删除会话」（P7.9，对齐旧抽屉底部危险操作）：关框 + 走侧栏同款删除流程
+function onSettingsDelete() {
+  const s = currentSession.value;
+  settingsOpen.value = false;
+  if (s) deleteSession(s.id, s.name || s.id);
+}
 async function onSettingsSaved() {
   settingsOpen.value = false;
   if (sess.currentSid) { await sess.open(sess.currentSid); rebuildCards(); }
@@ -619,8 +625,13 @@ onBeforeUnmount(() => {
       </footer>
     </div>
 
-    <el-dialog v-model="settingsOpen" title="会话设置" width="620px" :close-on-click-modal="false">
-      <SessionSettings :session="currentSession" :is-admin="auth.isAdmin" :open="settingsOpen" @saved="onSettingsSaved" />
-    </el-dialog>
+    <SessionSettings
+      :session="currentSession"
+      :is-admin="auth.isAdmin"
+      :open="settingsOpen"
+      @close="settingsOpen = false"
+      @saved="onSettingsSaved"
+      @delete="onSettingsDelete"
+    />
   </div>
 </template>

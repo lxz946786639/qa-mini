@@ -512,6 +512,15 @@ body {
   padding: 8px 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
   margin: 0 0 8px; font-family: ui-monospace, Consolas, monospace;
 }
+/* P7.9 会话设置对话框（对齐旧抽屉排版）：小字注释 / mono 只读输入 / 底部操作条 */
+.ss-small { font-size: 12px; color: var(--text-dim); font-weight: 400; }
+.ss-label-note { margin-left: 6px; }
+.ss-mono .el-input__inner { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.ss-footer { display: flex; align-items: center; gap: 12px; width: 100%; }
+.ss-footer-btns { margin-left: auto; display: flex; gap: 8px; }
+.ss-save-state { font-size: 13px; color: var(--text-dim); }
+.ss-save-state.ok { color: var(--green); }
+.ss-save-state.err { color: var(--red); }
 /* ---------- P7.2 窄屏（对齐旧版断点：1024px 侧栏收窄 / 720px 会话栏左滑出抽屉） ---------- */
 @media (max-width: 1024px) {
   .ws-side { width: 218px; }
