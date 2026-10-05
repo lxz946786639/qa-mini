@@ -60,9 +60,15 @@ function buildContext() {
   };
   applyDbConfig(ctx);
 
+  // P3 首启：v1/v2 存量会话（双轨 user 形态）一次性回填共享桶（幂等）
+  const p3n = store.migrateLegacyToShared();
+  if (p3n > 0) console.log("[migrate] P3 归属回填：" + p3n + " 个存量会话 → shared 共享桶");
+
   ctx.bus = new EventBus();
   loadSessions(ctx, cfgmod); // 会话缓存 + 遗留桶 + JSON 兜底 + 默认会话补建
   ctx.manager = new V2SessionManager(ctx);
+  ctx.bus.setManager(ctx.manager); // P3：sessions 事件逐连接作用域载荷
+  ctx.bus.setSessionLookup((id) => ctx.manager.sessionById(id)); // P3：session_id 事件投递过滤 + agent_id 补齐
   ctx.audioStreams = new AudioStreamManager({
     getConfig: () => ctx.config,
     broadcast: (event, payload) => ctx.bus.emit(event, payload)

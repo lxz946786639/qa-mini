@@ -1,10 +1,53 @@
 "use strict";
-// 智能体路由（v2 新面）：P3 注册（/api/agents 列表 → /api/agents/:code 工作区上下文，
-// cookie 鉴权 + principal 过滤）。双轨期 P2 不注册任何路由（旧前端不依赖）。
-// P3 实现时在此 register() 内注册：
-//   GET  /api/agents          登录用户可选智能体列表（含 enabled 过滤）
-//   GET  /api/agents/:code    工作区初始化上下文（agent + 私有桶会话列表）
-function register(router, ctx) {
-  // P2：无路由
+// 智能体路由（P3 实体化）：
+//  GET /api/agents        （查看级）启用中智能体列表 → 落地页选择器
+//  GET /api/agents/:code  （查看级）工作区初始化上下文（agent + 该主体可见的该智能体会话）
+//  每智能体一个协议：agents 表无 protocol 列，协议与配置存 agent_configs（每智能体一行）。
+const { sendJSON } = require("../middleware");
+
+function maskCfg(cfg) {
+  const m = JSON.parse(JSON.stringify(cfg || {}));
+  if (m && typeof m.api_key === "string" && m.api_key) m.api_key = "…已设置";
+  return m;
 }
+
+function agentView(ctx, a) {
+  const cfg = ctx.store.getAgentConfig(a.id);
+  return {
+    id: a.id, code: a.code, name: a.name, description: a.description || "",
+    icon: a.icon || "", protocol: (cfg && cfg.protocol) || "ragflow", sort: a.sort
+  };
+}
+
+function register(router, ctx) {
+  const viewer403 = (req, urlObj, res) => {
+    if (!ctx.auth.viewerOk(req, urlObj)) {
+      sendJSON(res, 403, { ok: false, detail: "需要访问码" });
+      return true;
+    }
+    return false;
+  };
+
+  router.exact("GET", "/api/agents", (req, res, ctx_, urlObj) => {
+    if (viewer403(req, urlObj, res)) return Promise.resolve();
+    const agents = ctx.store.listAgents({ enabledOnly: true }).map((a) => agentView(ctx, a));
+    return sendJSON(res, 200, { agents });
+  });
+
+  router.regex("GET", /^\/api\/agents\/([a-zA-Z0-9][a-zA-Z0-9_-]*)$/, (req, res, ctx_, urlObj, params) => {
+    if (viewer403(req, urlObj, res)) return Promise.resolve();
+    const a = ctx.store.getAgentByCode(params[0]);
+    if (!a || a.enabled !== true) return sendJSON(res, 404, { ok: false, detail: "智能体不存在: " + params[0] });
+    const p = ctx.auth.principal(req, urlObj);
+    // 该主体在该智能体下的可见会话（user=私有桶 / code=该码桶 / admin=全部 / anon=共享桶）
+    const sessions = ctx.manager.list(false, p).filter((s) => (s.agent_id || null) === a.id);
+    const cfg = ctx.store.getAgentConfig(a.id);
+    return sendJSON(res, 200, {
+      agent: agentView(ctx, a),
+      protocol_config: maskCfg(cfg ? cfg.config : {}),
+      sessions
+    });
+  });
+}
+
 module.exports = { register };

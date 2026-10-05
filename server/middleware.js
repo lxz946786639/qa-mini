@@ -117,6 +117,18 @@ function withTimeout(promise, ms, onExpire) {
 }
 
 function ipOf(req) { return req.socket ? (req.socket.remoteAddress || "?") : "?"; }
+
+// 解析 Cookie 头中指定 name 的值（无则 null）
+function cookieValue(req, name) {
+  const h = req && req.headers && req.headers.cookie;
+  if (typeof h !== "string" || !h) return null;
+  for (const part of h.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return null;
+}
 function safeEqual(a, b) {
   const ha = crypto.createHash("sha256").update(String(a)).digest();
   const hb = crypto.createHash("sha256").update(String(b)).digest();
@@ -139,6 +151,6 @@ function maskConfigForBroadcast(c) {
 
 module.exports = {
   sendJSON, readBody, readRawBody, parseJSONBody,
-  MIME, serveStatic, withTimeout, ipOf, safeEqual,
+  MIME, serveStatic, withTimeout, ipOf, cookieValue, safeEqual,
   maskConfigForBroadcast
 };

@@ -16,9 +16,12 @@ function register(router, ctx) {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no"
     });
+    const p = ctx.auth.principal(req, urlObj);
+    const isAdmin = ctx.auth.isAdmin(req, urlObj);
     res.write(": connected\n\n");
-    res.write("event: sessions\ndata: " + JSON.stringify({ sessions: ctx.manager.list() }) + "\n\n");
-    ctx.bus.add(res);
+    // P3：初始会话列表按主体作用域（旧前端匿名场景 = 全共享桶，行为不变）
+    res.write("event: sessions\ndata: " + JSON.stringify({ sessions: ctx.manager.list(false, p) }) + "\n\n");
+    ctx.bus.add(res, p, isAdmin);
     const ping = setInterval(() => {
       try {
         res.write(": ping\n\n");

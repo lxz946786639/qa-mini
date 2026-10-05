@@ -101,11 +101,12 @@ async function waitDone(qaId, timeoutMs) {
   throw new Error("waitDone 超时: " + qaId);
 }
 
-async function collectSse() {
+async function collectSse(opts) {
   const events = [];
   const ctrl = new AbortController();
   (async () => {
-    const resp = await fetch(BASE + "/api/events", { signal: ctrl.signal });
+    const url = BASE + "/api/events" + (opts && opts.query ? opts.query : "");
+    const resp = await fetch(url, { signal: ctrl.signal, headers: (opts && opts.headers) || undefined });
     const decoder = new TextDecoder();
     let buf = "";
     for await (const chunk of resp.body) {
@@ -1818,6 +1819,242 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
 
 
+  // ================= P3：多用户 / 会话桶隔离 / 智能体 =================
+  const makeJar = () => {
+    let c = "";
+    return {
+      set(res) {
+        const list = res.headers.getSetCookie ? res.headers.getSetCookie() : ((res.headers.get("set-cookie") || "").split(", ").filter(Boolean));
+        for (const h of list) { const k = (h.split(";")[0] || "").split("=")[0]; if (k === "ea_sid") c = h.split(";")[0]; }
+      },
+      header() { return c ? { Cookie: c } : {}; },
+      raw() { return c; }
+    };
+  };
+  const waitDoneAs = async (jar, qaId, timeoutMs) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < (timeoutMs || 8000)) {
+      const r = await jarFetch(jar, "GET", "/api/history");
+      const rec = (r.data.items || []).find((h) => h.id === qaId);
+      if (rec && rec.status === "done") return rec;
+      await sleep(50);
+    }
+    throw new Error("waitDoneAs 超时: " + qaId);
+  };
+  const jarFetch = async (jar, method, p, body) => {
+    const headers = jar.header();
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const resp = await fetch(BASE + p, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    jar.set(resp);
+    let data = null;
+    try { data = await resp.json(); } catch {}
+    return { status: resp.status, data };
+  };
+
+  await test("p3: /api/auth 登录·me·登出（cookie）", async () => {
+    const bad = await jarFetch(makeJar(), "POST", "/api/auth/login", { username: "admin", password: "wrongpw9" });
+    assert.strictEqual(bad.status, 401, "错密码 401");
+    const jar = makeJar();
+    const ok = await jarFetch(jar, "POST", "/api/auth/login", { username: "admin", password: "newpw456" });
+    assert.strictEqual(ok.status, 200, ok.data && ok.data.detail);
+    assert.strictEqual(ok.data.user.role, "admin");
+    assert.ok(jar.raw(), "登录应下发 ea_sid cookie");
+    const me = await jarFetch(jar, "GET", "/api/auth/me");
+    assert.strictEqual(me.status, 200);
+    assert.strictEqual(me.data.principal.kind, "admin");
+    const anonMe = await api("GET", "/api/auth/me");
+    assert.strictEqual(anonMe.data.anonymous, true, "匿名环境下无凭证 = anonymous");
+    const out = await jarFetch(jar, "POST", "/api/auth/logout");
+    assert.strictEqual(out.status, 200);
+    const me2 = await jarFetch(jar, "GET", "/api/auth/me");
+    assert.ok(!me2.data.principal || me2.data.anonymous, "登出后 cookie 失效");
+  });
+
+  let aliceJar = null, aliceId = "";
+  await test("p3: 用户创建（仅管理）+ 登录", async () => {
+    assert.strictEqual((await api("POST", "/api/admin/users", { username: "x", password: "123456" })).status, 401, "非管理 401");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/users", { username: "a", password: "123456" }, adminTok)).status, 400, "用户名过短");
+    const u1 = await adminFetch("POST", "/api/admin/users", { username: "alice", password: "alicepw1", display_name: "爱丽丝", role: "user" }, adminTok);
+    assert.strictEqual(u1.status, 201, u1.data && u1.data.detail);
+    assert.strictEqual(u1.data.user.role, "user");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/users", { username: "alice", password: "alicepw1" }, adminTok)).status, 409, "重名 409");
+    const users = await adminFetch("GET", "/api/admin/users", undefined, adminTok);
+    assert.ok(users.data.users.some((x) => x.username === "alice"));
+    assert.ok(!users.data.users.some((x) => x.password_hash), "列表不含密码哈希");
+    aliceJar = makeJar();
+    const lg = await jarFetch(aliceJar, "POST", "/api/auth/login", { username: "alice", password: "alicepw1" });
+    assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
+    assert.strictEqual(lg.data.user.role, "user");
+    aliceId = lg.data.user.id;
+  });
+
+  let aliceSid = "";
+  await test("p3: 用户私有桶（user_id, agent_id）+ 跨主体不可见", async () => {
+    const c = await jarFetch(aliceJar, "POST", "/api/sessions", { name: "alice私有" });
+    assert.strictEqual(c.status, 201, c.data && c.data.detail);
+    aliceSid = c.data.session.id;
+    const adm = await adminFetch("GET", "/api/sessions/" + aliceSid, undefined, adminTok);
+    assert.strictEqual(adm.status, 200, "管理可见私有会话");
+    assert.strictEqual(adm.data.session.access_mode, "user");
+    assert.strictEqual(adm.data.session.user_id, aliceId);
+    assert.ok(adm.data.session.agent_id, "私有会话带 agent_id");
+    // 访问码主体：列表不含 / 读 404 / 问 404
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "555556", hours: 1 }, adminTok);
+    assert.strictEqual(gen.status, 201);
+    const acl = await api("POST", "/api/access/login", { code: "555556" });
+    const codeTok = acl.data.token;
+    const listCode = await api("GET", "/api/sessions?access=" + codeTok);
+    assert.ok(!listCode.data.sessions.some((s) => s.id === aliceSid), "码主体列表不含用户私有会话");
+    assert.strictEqual((await api("GET", "/api/sessions/" + aliceSid + "?access=" + codeTok)).status, 404, "码主体读私有会话 404");
+    assert.strictEqual((await api("POST", "/api/chat", { session_id: aliceSid, question: "x" })).status, 404, "匿名问私有会话 404");
+    // 属主本人可问
+    const my = await jarFetch(aliceJar, "POST", "/api/chat", { session_id: aliceSid, question: "私有问题" });
+    assert.strictEqual(my.status, 202, my.data && my.data.detail);
+    const rec = await waitDoneAs(aliceJar, my.data.qa_id); // 属主视角历史（匿名不可见私有记录）
+    assert.strictEqual(rec.ok, true, rec.detail);
+  });
+  await test("p3: SSE principal 作用域（私有会话事件不外泄）", async () => {
+    const sseA = await collectSse({ headers: aliceJar.header() });
+    // 初始 sessions 载荷应含 alice 私有会话
+    await sseA.wait("sessions", (d) => (d.sessions || []).some((s) => s.id === aliceSid));
+    // 共享会话提问 → alice 可见（含 agent_id 补齐）
+    const list0 = await api("GET", "/api/sessions");
+    const sharedSid = list0.data.sessions.find((s) => s.id !== aliceSid).id;
+    const rSh = await api("POST", "/api/chat", { session_id: sharedSid, question: "共享问题" });
+    assert.strictEqual(rSh.status, 202);
+    const hit = await sseA.wait("qa_start", (d) => d.session_id === sharedSid, 8000);
+    assert.ok(hit.data.agent_id, "QA 事件补齐 agent_id");
+    // alice 私有会话提问 → alice 自己的 SSE 可见
+    const rMy = await jarFetch(aliceJar, "POST", "/api/chat", { session_id: aliceSid, question: "私有SSE" });
+    assert.strictEqual(rMy.status, 202);
+    await sseA.wait("qa_start", (d) => d.session_id === aliceSid, 8000);
+    sseA.close();
+    // 换一个「非属主」匿名连接：admin 问 alice 私有会话 → 匿名 SSE 不得收到
+    const sseAnon = await collectSse();
+    await sseAnon.wait("sessions");
+    const rPriv = await adminFetch("POST", "/api/chat", { session_id: aliceSid, question: "管理问私有" }, adminTok);
+    assert.strictEqual(rPriv.status, 202);
+    await waitDoneAs(aliceJar, rPriv.data.qa_id); // 记录在 alice 私有桶：属主视角等待完成（匿名历史不可见）
+    await sleep(700);
+    sseAnon.close();
+    assert.ok(!sseAnon.events.some((e) => e.ev === "qa_start" && e.data.session_id === aliceSid), "匿名 SSE 收到私有会话 QA 事件");
+    assert.ok(!sseAnon.events.some((e) => e.ev === "done" && e.data.session_id === aliceSid), "匿名 SSE 收到私有会话 done 事件");
+    // 但共享会话事件匿名可见（双轨兼容）
+    const list1 = await api("GET", "/api/sessions");
+    const sharedSid2 = list1.data.sessions.find((s) => s.id !== aliceSid).id;
+    const sseAnon2 = await collectSse();
+    await sseAnon2.wait("sessions");
+    const rSh2 = await api("POST", "/api/chat", { session_id: sharedSid2, question: "共享问题2" });
+    assert.strictEqual(rSh2.status, 202);
+    await sseAnon2.wait("qa_start", (d) => d.session_id === sharedSid2, 8000);
+    sseAnon2.close();
+  });
+
+  await test("p3: 访问码私有桶（access_code_id, agent_id）", async () => {
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "666667", hours: 1 }, adminTok);
+    assert.strictEqual(gen.status, 201);
+    // 遗留 /api/access/login 在匿名 ON 时走匿名捷径（无 token）——双轨兼容语义；
+    // 码主体 cookie 走新端点 /api/auth/access-code
+    const legacy = await api("POST", "/api/access/login", { code: "666667" });
+    assert.strictEqual(legacy.status, 200);
+    assert.strictEqual(legacy.data.anonymous, true, "匿名 ON 时代码登录走匿名捷径");
+    const codeJar = makeJar();
+    const lg = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "666667" });
+    assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
+    // 码主体创建会话 → 码桶
+    const c = await api("POST", "/api/sessions", { name: "码桶会话" });
+    assert.strictEqual(c.status, 401, "无凭证建会话 401");
+    const c2 = await jarFetch(codeJar, "POST", "/api/sessions", { name: "码桶会话" });
+    assert.strictEqual(c2.status, 201, c2.data && c2.data.detail);
+    const codeSid = c2.data.session.id;
+    const adm = await adminFetch("GET", "/api/sessions/" + codeSid, undefined, adminTok);
+    assert.strictEqual(adm.data.session.access_mode, "code");
+    assert.ok(adm.data.session.access_code_id, "码桶带 access_code_id");
+    // 同码可见；其他主体不可见
+    const listC = await jarFetch(codeJar, "GET", "/api/sessions");
+    assert.ok(listC.data.sessions.some((s) => s.id === codeSid), "码主体可见码桶会话");
+    assert.ok(!listC.data.sessions.some((s) => s.id === aliceSid), "码主体不可见用户私有会话");
+    assert.ok(!(await jarFetch(aliceJar, "GET", "/api/sessions")).data.sessions.some((s) => s.id === codeSid), "用户不可见码桶会话");
+    assert.strictEqual((await jarFetch(aliceJar, "GET", "/api/sessions/" + codeSid)).status, 404, "用户读码桶会话 404");
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + codeSid, undefined, adminTok)).status, 200, "管理清理码桶会话");
+  });
+
+  await test("p3: IDOR 写保护（属主可改删己有；他人桶 401）", async () => {
+    const list0 = await api("GET", "/api/sessions");
+    const sharedSid = list0.data.sessions.find((s) => s.id !== aliceSid).id;
+    assert.strictEqual((await jarFetch(aliceJar, "PUT", "/api/sessions/" + sharedSid, { name: "hijack" })).status, 401, "非属主改共享会话 401");
+    assert.strictEqual((await jarFetch(aliceJar, "DELETE", "/api/sessions/" + sharedSid, undefined)).status, 401, "非属主删共享会话 401");
+    const put = await jarFetch(aliceJar, "PUT", "/api/sessions/" + aliceSid, { name: "alice私有v2" });
+    assert.strictEqual(put.status, 200, "属主改己有会话 200");
+    assert.strictEqual(put.data.session.name, "alice私有v2");
+    const del = await jarFetch(aliceJar, "DELETE", "/api/sessions/" + aliceSid, undefined);
+    assert.strictEqual(del.status, 200, "属主删己有会话 200");
+    assert.strictEqual((await adminFetch("GET", "/api/sessions/" + aliceSid, undefined, adminTok)).status, 404, "删除后 404");
+  });
+  await test("p3: 智能体 API（落地页列表/详情/管理 CRUD）", async () => {
+    const anonOn = await api("GET", "/api/agents");
+    assert.strictEqual(anonOn.status, 200);
+    assert.ok(anonOn.data.agents.some((a) => a.code === "industry-brain"), "种子智能体在列");
+    const brain = await api("GET", "/api/agents/industry-brain");
+    assert.strictEqual(brain.status, 200);
+    assert.strictEqual(brain.data.agent.code, "industry-brain");
+    assert.ok(Array.isArray(brain.data.sessions), "详情带该主体可见会话");
+    const pk = brain.data.protocol_config.api_key;
+    assert.ok(pk === undefined || pk === "…已设置", "详情不泄露 api_key 原值: " + pk);
+    assert.strictEqual((await api("GET", "/api/agents/nope-xxx")).status, 404, "未知 code 404");
+    assert.strictEqual((await api("POST", "/api/admin/agents", { code: "qa", name: "x" })).status, 401, "非管理建智能体 401");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/agents", { code: "Bad_Code", name: "x" }, adminTok)).status, 400, "非法 code");
+    const ag1 = await adminFetch("POST", "/api/admin/agents", { code: "qa-assist", name: "测试助理", protocol: "openai", description: "p3" }, adminTok);
+    assert.strictEqual(ag1.status, 201, ag1.data && ag1.data.detail);
+    assert.strictEqual(ag1.data.agent.protocol, "openai");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/agents", { code: "qa-assist", name: "x" }, adminTok)).status, 409, "重复 code 409");
+    const list2 = await api("GET", "/api/agents");
+    assert.ok(list2.data.agents.some((a) => a.code === "qa-assist"), "新智能体在列表");
+    const dis = await adminFetch("PATCH", "/api/admin/agents/qa-assist", { enabled: false }, adminTok);
+    assert.strictEqual(dis.status, 200);
+    assert.ok(!(await api("GET", "/api/agents")).data.agents.some((a) => a.code === "qa-assist"), "停用后出列表");
+    assert.strictEqual((await api("GET", "/api/agents/qa-assist")).status, 404, "停用后详情 404");
+    const ren = await adminFetch("PATCH", "/api/admin/agents/qa-assist", { name: "测试助理v2", enabled: true }, adminTok);
+    assert.strictEqual(ren.status, 200);
+    assert.strictEqual(ren.data.agent.name, "测试助理v2");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/qa-assist", { protocol: "bogus" }, adminTok)).status, 400, "未知协议 400");
+  });
+
+  await test("p3: 审计日志（admin 操作留痕）", async () => {
+    assert.strictEqual((await api("GET", "/api/admin/audit")).status, 401, "非管理 401");
+    const au = await adminFetch("GET", "/api/admin/audit?limit=200", undefined, adminTok);
+    assert.strictEqual(au.status, 200);
+    const acts = au.data.items.map((x) => x.action);
+    assert.ok(acts.includes("users.create"), "users.create 留痕");
+    assert.ok(acts.includes("agents.create"), "agents.create 留痕");
+    assert.ok(acts.includes("auth.login"), "auth.login 留痕");
+    const uRec = au.data.items.find((x) => x.action === "users.create");
+    assert.strictEqual(uRec.detail.username, "alice");
+    assert.ok(uRec.actor_id, "审计带 actor_id");
+  });
+  await test("p3: 最后一个 active 管理员守护", async () => {
+    const b = await adminFetch("POST", "/api/admin/users", { username: "bob", password: "bobpw123", role: "admin" }, adminTok);
+    assert.strictEqual(b.status, 201);
+    const bobId = b.data.user.id;
+    const disBob = await adminFetch("PATCH", "/api/admin/users/" + bobId, { status: "disabled" }, adminTok);
+    assert.strictEqual(disBob.status, 200, "停用非唯一 admin 允许");
+    const u = await adminFetch("GET", "/api/admin/users", undefined, adminTok);
+    const adminU = u.data.users.find((x) => x.role === "admin" && x.status === "active" && x.id !== bobId);
+    assert.ok(adminU, "当前 admin 用户应存在");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + adminU.id, { status: "disabled" }, adminTok)).status, 400, "停用最后 admin 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + adminU.id, { role: "user" }, adminTok)).status, 400, "降级最后 admin 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + bobId, { status: "active" }, adminTok)).status, 200, "恢复 bob");
+  });
+  await test("p3: 访问码失效吊销 cookie 会话", async () => {
+    const jar = makeJar();
+    const lg = await jarFetch(jar, "POST", "/api/auth/access-code", { code: "555556" });
+    assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
+    const me1 = await jarFetch(jar, "GET", "/api/auth/me");
+    assert.strictEqual(me1.data.principal.kind, "code");
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/555556", undefined, adminTok)).status, 200, "管理失效该码");
+    const me2 = await jarFetch(jar, "GET", "/api/auth/me");
+    assert.ok(!me2.data.principal || me2.data.principal.kind !== "code", "码失效后 cookie 不再是 code 主体");
+  });
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);

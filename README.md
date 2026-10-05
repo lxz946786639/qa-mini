@@ -154,8 +154,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/audio/listen`（+ `/stop`、`/cancel`） | **实时识别**（提问框「音频」按钮）。body `{token, device?}`：开始监听，每 2.5s 全段重提一次，SSE `audio_listen`（partial/stopped/cancelled/stream_stopped，均带 session_id）；`/stop` 定稿返回 `{ok, text, elapsed_s}`；`/cancel` 丢弃。同设备已有任务 409，设备未接收 409，ASR 未配置 400 |
 | POST | `/api/audio/capture` | **识别并提问**（一键 API）。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
 | GET | `/api/audio/stream?token=` | 该会话正在接收的设备列表 `{ok, enabled, streams:[{device, bytes, frames, ms_since_last_frame}]}`（会话设置抽屉实时刷新用） |
-| GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at） |
-| POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?}` → 201 会话 |
+| GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at）；P3：按主体作用域（只看可见桶） |
+| POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?, agent_id?/agent_code?}` → 201 会话；P3：管理/登录用户（自身私有桶）/访问码主体（自身码桶），匿名 401 |
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖 / 电脑输出音频 `{enabled, preferred_device}`） |
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」） |
@@ -170,12 +170,28 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | PUT | `/api/config` | 修改配置（深合并 + 写盘 + 广播；port 变更需重启生效） |
 | GET | `/api/health` | 存活 / 会话数 / 在途 QA / 广播客户端数 / asr_configured |
 | GET | `/api/status` | 公开状态：`{ok, allow_anonymous, admin_set}`（无敏感信息） |
-| POST | `/api/admin/login` | 管理登录 `{password}` → 管理 token（未设密码时输入即初始化；12h） |
+| POST | `/api/admin/login` | 管理登录 `{password}` → 管理 token（未设密码时输入即初始化；12h；P3 起同时下发 `ea_sid` cookie） |
 | POST | `/api/access/login` | 访问码登录 `{code}` → 访问 token（24h，≤码有效期） |
 | POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?, count?}`（6 位；可多个，每个码独立时长，默认 8h；批量随机 1-10 个） |
 | POST | `/api/admin/access-codes/:code/renew` | 该访问码延期 `{hours?}`（默认 +8h） |
 | DELETE | `/api/admin/access-codes/:code` | 访问码一键失效（已发 token 同步吊销） |
 | DELETE | `/api/admin/access-codes/expired` | 清理全部已过期码 |
+| POST | `/api/auth/login` | **P3 用户登录** `{username, password}` → 200 + `ea_sid` cookie（HttpOnly/SameSite=Lax，12h，落 DB 可吊销） |
+| POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
+| GET | `/api/auth/me` | 当前主体 `{principal（admin/user/code）, anonymous?}` |
+| POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
+| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…） |
+| GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏） |
+| GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
+| PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie） |
+| GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?}`（每智能体一个协议，存 agent_configs） |
+| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?}`（协议/配置变更清空该智能体会话后端会话 ID） |
+| GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
+
+> **v59（P3）多用户隔离**：会话按桶归属（`user` 私有 (user_id,agent_id) / `code` (access_code_id,agent_id) /
+> `shared` 共享——存量会话全在 shared，保留「访问码=共享会话」语义）；会话级端点 IDOR 校验
+> （不可见 = 404，写他人桶 = 401）；SSE 按主体作用域投递（一个用户的私有问答绝不广播给
+> 其他主体），QA 事件带 `agent_id`。详见 doc/01 §3.4/§6。
 
 ## 配置（config.json · 协议级）
 
@@ -292,10 +308,14 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**132 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**142 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
+  **P3 多用户隔离**：cookie 登录/me/登出、用户创建仅管理、用户私有桶跨主体
+  不可见（列表/读/chat 404）、SSE principal 作用域（私有事件不外泄 + agent_id
+  补齐）、访问码私有桶、IDOR 写保护（他人桶 401）、智能体 API（列表/详情/管理
+  CRUD）、审计日志留痕、最后 active 管理员守护、访问码失效吊销 cookie、
   **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
   测试连接含鉴权/SSE 广播脱敏/客户端断开中止上游（lib 级 + E2E）、
   **电脑输出音频流**：node 模拟推流端（chunked POST + Deflate 帧）覆盖
@@ -321,6 +341,8 @@ npm test           # node tests/run_tests.js
   浏览器禁止录音，🎤 按钮自动禁用（tooltip 说明）；需 https（compose `tls`
   profile 自签入口，见 doc/03 §8）或本机 127.0.0.1/localhost 访问。识别质量
   取决于所配置 ASR 服务；单次录音上限 60s、<0.4s 丢弃。
-- `/api/config` 与 `/api/sessions` 无鉴权（局域网自用）；暴露公网请自行加反向代理鉴权。
+- **局域网自用 + 多用户隔离（v59 P3）**：会话按桶隔离（user 私有 / code / shared），
+  会话级端点 IDOR 校验（不可见 404 / 写他人桶 401），SSE 按主体作用域投递；
+  `/api/push` 与音频推流公开（凭证 = 会话推送 token）。暴露公网请自行加反向代理鉴权。
 - 本目录 config.json / data/echoanswer.db（及 sessions.json.bak-* 归档）内含本机真实 API Key 与推送 token，
   请勿提交到公开仓库。
