@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 系统设置（P7：移植自旧前端「⚙ 设置」抽屉，仅 admin 管理台可达）
+// 系统设置（P7：移植自旧前端「⚙ 设置」抽屉，仅 admin 控制台可达）
 // 协议全局默认（config.protocols）/ 语音输入 ASR（config.asr + /api/asr/test 草稿探测）/
 // 访问控制（security.allow_anonymous）。PUT /api/config 深合并：清空字段保存 = 清除该字段。
 import { onMounted, reactive, ref } from "vue";
@@ -183,7 +183,7 @@ async function testAsr() {
         <label>允许匿名访问（可看/可问）</label>
         <el-switch v-model="form.allow_anonymous"></el-switch>
       </div>
-      <p class="tab-note">关闭后打开应用需 6 位访问码（「访问码」页签生成/管理）；管理台与 API 管理端点始终需管理登录。管理密码修改在「用户管理」页签（重置密码）。</p>
+      <p class="tab-note">关闭后打开应用需 6 位访问码（「访问码」模块生成/管理）；控制台与 API 管理端点始终需管理登录。管理密码修改在「用户管理」模块（重置密码）。</p>
       <el-button type="primary" :loading="busy === 'sec'" @click="saveSec">应用</el-button>
     </section>
   </div>

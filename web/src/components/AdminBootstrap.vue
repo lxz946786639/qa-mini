@@ -2,7 +2,7 @@
 // 管理账号首启引导（P7.1）：admin 未初始化时（GET /api/status admin_set=false）
 // 显示「设置管理账号密码」表单。POST /api/admin/login 初始化通道：创建 admin、
 // 签发 ea_sid cookie（成功后调用方已以 admin 登录），emit done 由父级跳转。
-// 供 /login（首启访问）与 /admin（管理台首屏）共用。
+// 供 /login（首启访问）与 /admin（控制台首屏）共用。
 import { ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";

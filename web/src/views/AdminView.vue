@@ -1,9 +1,10 @@
-
 <script setup lang="ts">
-// 管理台（P6）：用户 / 智能体 / 访问码 / 审计日志。仅 admin 主体可访问。
-import { onMounted, ref } from "vue";
+// 控制台（P6，路由 /admin；P7.3 布局对齐 Ant Design Admin 参考：左侧纵向导航 + 顶栏标题 + 内容卡片）
+// 用户 / 智能体 / 访问码 / 审计日志 / 系统设置。仅 admin 主体可访问。
+import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { useTheme } from "../composables/useTheme";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
@@ -16,6 +17,26 @@ const checked = ref(false);
 // 首启引导（对齐旧版 /admin 首屏）：admin 未初始化时（GET /api/status admin_set=false）
 // 显示「设置管理账号」表单（共享组件 AdminBootstrap，/login 首启访问同样展示）
 const adminSet = ref<boolean | null>(null);
+const { lightTheme, toggleTheme } = useTheme();
+
+// 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
+const MENU = [
+  { key: "users", icon: "👥", label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码）" },
+  { key: "agents", icon: "🤖", label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
+  { key: "codes", icon: "🔑", label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期；访问码主体共享会话桶" },
+  { key: "audit", icon: "📋", label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
+  { key: "sys", icon: "⚙️", label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
+];
+const tab = ref("users");
+const activeMeta = computed(() => MENU.find((m) => m.key === tab.value) || MENU[0]);
+
+// 侧栏收起 / 窄屏抽屉（与工作区同款语义）
+const sideCollapsed = ref(false);
+const sideOpen = ref(false);
+function toggleSide() {
+  if (window.matchMedia("(max-width: 720px)").matches) sideOpen.value = !sideOpen.value;
+  else sideCollapsed.value = !sideCollapsed.value;
+}
 
 onMounted(async () => {
   await auth.me();
@@ -30,7 +51,7 @@ onMounted(async () => {
 });
 
 async function onBootstrapDone() {
-  // 初始化通道已签发 ea_sid cookie（以 admin 登录）→ 重新取主体进入管理台
+  // 初始化通道已签发 ea_sid cookie（以 admin 登录）→ 重新取主体进入控制台
   await auth.me();
 }
 async function onLogout() {
@@ -40,43 +61,63 @@ async function onLogout() {
 </script>
 
 <template>
-  <div class="landing">
-    <header class="topbar">
-      <div class="brand">
+  <div class="adm-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
+    <!-- 左侧导航（品牌 + 模块菜单 + 返回首页） -->
+    <aside class="adm-side">
+      <div class="adm-brand">
         <router-link to="/" class="brand">
           <span class="brand-mark">回</span>
-          <span class="brand-text">EchoAnswer · 回响答</span>
+          <span class="brand-text">EchoAnswer</span>
         </router-link>
-        <span class="admin-badge">管理台</span>
+        <span class="adm-brand-sub">回响答 · 控制台</span>
       </div>
-      <nav class="topnav">
-        <router-link to="/" class="topnav-link">← 返回落地页</router-link>
-        <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || "管理员" }}</span>
-        <el-button v-if="auth.isAuthed" size="small" @click="onLogout">退出</el-button>
-      </nav>
-    </header>
-    <main class="admin-main">
-      <div v-if="!checked" class="admin-wait">校验身份中…</div>
-      <div v-else-if="!auth.isAdmin" class="admin-deny">
-        <template v-if="adminSet === false">
-          <p>管理密码尚未初始化</p>
-          <p class="admin-dim">首次部署：设置管理账号密码后进入管理台（初始化通道，对齐旧版 /admin 首屏）。</p>
-          <AdminBootstrap @done="onBootstrapDone" />
-        </template>
-        <template v-else>
-          <p>当前身份无管理权限</p>
-          <p class="admin-dim">管理台仅对 admin 角色开放（账号登录；访问码/匿名身份不可用）。</p>
-          <el-button type="primary" size="small" @click="auth.me()">重新校验</el-button>
-          <router-link to="/" class="topnav-link">返回落地页</router-link>
-        </template>
+      <ul class="adm-nav">
+        <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" @click="tab = m.key">
+          <span class="adm-ic">{{ m.icon }}</span>{{ m.label }}
+        </li>
+      </ul>
+      <div class="adm-side-foot">
+        <router-link to="/" class="adm-home" @click="sideOpen = false">← 返回落地页</router-link>
       </div>
-      <el-tabs v-else type="border-card" class="admin-tabs">
-        <el-tab-pane label="用户管理" name="users"><UsersTab /></el-tab-pane>
-        <el-tab-pane label="智能体管理" name="agents"><AgentsTab /></el-tab-pane>
-        <el-tab-pane label="访问码" name="codes"><CodesTab /></el-tab-pane>
-        <el-tab-pane label="审计日志" name="audit"><AuditTab /></el-tab-pane>
-        <el-tab-pane label="系统设置" name="sys"><SystemTab /></el-tab-pane>
-      </el-tabs>
-    </main>
+    </aside>
+
+    <div class="adm-col">
+      <header class="adm-top">
+        <button class="ws-head-menu" title="收起 / 展开控制台导航" @click="toggleSide">☰</button>
+        <div class="adm-top-tt">
+          <div class="adm-top-title">{{ activeMeta.label }}</div>
+          <div class="adm-top-sub">{{ activeMeta.sub }}</div>
+        </div>
+        <div class="adm-top-right">
+          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme">{{ lightTheme ? '🌙' : '☀️' }}</button>
+          <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '管理员' }}</span>
+          <el-button v-if="auth.isAuthed" size="small" @click="onLogout">退出</el-button>
+        </div>
+      </header>
+
+      <main class="adm-body">
+        <div v-if="!checked" class="admin-wait">校验身份中…</div>
+        <div v-else-if="!auth.isAdmin" class="admin-deny">
+          <template v-if="adminSet === false">
+            <p>管理密码尚未初始化</p>
+            <p class="admin-dim">首次部署：设置管理账号密码后进入控制台（初始化通道，对齐旧版 /admin 首屏）。</p>
+            <AdminBootstrap @done="onBootstrapDone" />
+          </template>
+          <template v-else>
+            <p>当前身份无管理权限</p>
+            <p class="admin-dim">控制台仅对 admin 角色开放（账号登录；访问码/匿名身份不可用）。</p>
+            <el-button type="primary" size="small" @click="auth.me()">重新校验</el-button>
+            <router-link to="/" class="topnav-link">返回落地页</router-link>
+          </template>
+        </div>
+        <div v-else class="adm-card">
+          <UsersTab v-if="tab === 'users'" />
+          <AgentsTab v-else-if="tab === 'agents'" />
+          <CodesTab v-else-if="tab === 'codes'" />
+          <AuditTab v-else-if="tab === 'audit'" />
+          <SystemTab v-else-if="tab === 'sys'" />
+        </div>
+      </main>
+    </div>
   </div>
 </template>

@@ -7,6 +7,7 @@ import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
+import { useTheme } from "../composables/useTheme";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -43,19 +44,8 @@ const composerProto = computed(() => {
   const proto = PROTO_NAMES[s.protocol] || s.protocol || "";
   return (proto ? proto + " · " : "") + (s.name || "未命名会话");
 });
-// 主题（对齐旧版：localStorage echoanswer-theme light/dark → <html> data-theme）
-const lightTheme = ref(false);
-function toggleTheme() {
-  lightTheme.value = !lightTheme.value;
-  if (lightTheme.value) document.documentElement.setAttribute("data-theme", "light");
-  else document.documentElement.removeAttribute("data-theme");
-  try { localStorage.setItem("echoanswer-theme", lightTheme.value ? "light" : "dark"); } catch {}
-}
-(function initTheme() {
-  let t = "dark";
-  try { t = localStorage.getItem("echoanswer-theme") || "dark"; } catch {}
-  if (t === "light") { lightTheme.value = true; document.documentElement.setAttribute("data-theme", "light"); }
-})();
+// 主题（对齐旧版键 echoanswer-theme；useTheme 共享：工作区 / 控制台顶栏 ☀️/🌙）
+const { lightTheme, toggleTheme } = useTheme();
 
 interface Card extends RecordView { html: string; live: string; }
 const cards = ref<Card[]>([]);      // 展示序：旧→新（历史反转 + 在途追加）
@@ -526,7 +516,7 @@ onBeforeUnmount(() => {
           <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '用户' }}</span>
           <router-link v-else to="/login" class="topnav-link">登录</router-link>
           <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
-          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">管理台</router-link>
+          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
         </div>
       </header>
 

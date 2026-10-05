@@ -67,7 +67,7 @@ onMounted(() => {
             {{ auth.displayName || "用户" }}
             <em v-if="auth.isAdmin">管理</em>
           </span>
-          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">管理台</router-link>
+          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
           <el-button size="small" @click="onLogout">退出</el-button>
         </template>
         <template v-else>
@@ -103,7 +103,7 @@ onMounted(() => {
 
       <div v-else-if="!agents.length" class="empty">
         <p>暂无可用智能体</p>
-        <p class="empty-dim">请联系管理员在「管理台」创建并启用智能体。</p>
+        <p class="empty-dim">请联系管理员在「控制台」创建并启用智能体。</p>
       </div>
 
       <div v-else class="grid">
