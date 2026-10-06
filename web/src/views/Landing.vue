@@ -11,6 +11,7 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
+import { APP_VERSION } from "../version";
 import "../landing.css";
 
 interface AgentItem {
@@ -589,7 +590,7 @@ onBeforeUnmount(() => {
           <a class="lp-btn lp-btn-soft" href="/doc/03-部署说明.md">查看部署文档</a>
         </div>
         </div>
-        <footer class="lp-foot">© 2025-现在 Echo Tech Co., Ltd.</footer>
+        <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2025-现在 Echo Tech Co., Ltd.</footer>
       </section>
     </main>
 

@@ -116,6 +116,7 @@ node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*
 npm test                                        # 151 项断言全绿
 node tests/store_tests.js                       # 40 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
+# 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```
 
