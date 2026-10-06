@@ -231,18 +231,15 @@ function onDocClick(e: MouseEvent) {
 // 滚轮归一为「一步一区块」：
 //  · 任意滚动手势（鼠标 notch / OS 整页滚动 / 触控板细滚累计 ≥45px / 惯性甩动）
 //    都只前进或后退一个区块，easeInOutCubic 动画到区块顶（= 吸附位）；
-//  · 动画开始 220ms 内的再次滚动缓冲 1 步（快速双击 = 连走两区块），
-//    之后的惯性尾全部吸收；连步完成后 320ms 冷却，防一次甩动连翻多区块；
+//  · P8.24：动画期间 + 每区块动画结束后 500ms 停顿内的滚轮输入全部丢弃——
+//    高敏鼠标 / 快速甩动一次只走一个区块（停顿后需新手势再继续）；
 //  · prefers-reduced-motion → 无动画，直接跳区块。
 const SNAP_IDS = ["top", "agents", "matrix", "workflow"];
 const SNAP_ACC_THRESHOLD = 45;   // 触控板细滚累计阈值（px）
-const SNAP_BUFFER_MS = 220;      // 动画开始后的缓冲窗口（连击判定）
-const SNAP_COOLDOWN_MS = 320;    // 连步完成后的惯性尾冷却
+const SNAP_PAUSE_MS = 500;       // P8.24：每区块动画结束后的停顿（期间丢弃滚轮输入）
 let snapRaf = 0;
-let snapStartAt = 0;
-let snapBuffer = 0;
 let snapAcc = 0;
-let snapCooldownUntil = 0;
+let snapPauseUntil = 0;          // P8.24：动画 + 停顿期截止时间（期间丢弃滚轮输入）
 function snapSectionTop(i: number) {
   if (i === 0) return 0; // 首区块对齐页面顶（导航在文档流占 60px，scrollY=0 为首屏）
   const el = document.getElementById(SNAP_IDS[i]);
@@ -264,36 +261,25 @@ function snapIndex() {
 function snapEase(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // easeInOutCubic
 }
-function snapFinish() {
-  const buf = snapBuffer;
-  snapBuffer = 0;
-  if (buf !== 0) {
-    const to = Math.max(0, Math.min(SNAP_IDS.length - 1, snapIndex() + buf));
-    if (to !== snapIndex()) { snapAnimate(to); return; } // 缓冲的连步（最多一次）
-  }
-  snapCooldownUntil = performance.now() + SNAP_COOLDOWN_MS;
-}
 function snapAnimate(to: number) {
   if (snapRaf) return;
   const start = window.scrollY;
   const end = Math.max(0, Math.min(snapMaxScroll(), snapSectionTop(to)));
+  const t0 = performance.now();
   if (end === start || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     window.scrollTo(0, end);
-    snapFinish();
+    snapPauseUntil = t0 + SNAP_PAUSE_MS; // P8.24：直跳同样停顿
     return;
   }
   const dist = Math.abs(end - start);
   const dur = Math.max(420, Math.min(720, dist / 1.3));
-  const t0 = performance.now();
-  snapStartAt = t0;
+  // P8.24：「动画 + 停顿」期间丢弃全部滚轮输入——快速甩动一次只走一个区块
+  snapPauseUntil = t0 + dur + SNAP_PAUSE_MS;
   snapRaf = requestAnimationFrame(function tick(now) {
     const t = Math.min(1, (now - t0) / dur);
     window.scrollTo(0, start + (end - start) * snapEase(t));
     if (t < 1) snapRaf = requestAnimationFrame(tick);
-    else {
-      snapRaf = 0;
-      snapFinish();
-    }
+    else snapRaf = 0;
   });
 }
 // ---------- P8.13 区块边缘指引 ----------
@@ -319,11 +305,7 @@ function snapGoPrev() { snapAnimate(Math.max(0, snapIndex() - 1)); }
 function onWheel(e: WheelEvent) {
   e.preventDefault(); // 满屏区块页：全部滚轮输入归一为区块步
   const now = performance.now();
-  if (snapRaf) {
-    if (now - snapStartAt < SNAP_BUFFER_MS) snapBuffer = e.deltaY > 0 ? 1 : -1; // 连击缓冲
-    return;
-  }
-  if (now < snapCooldownUntil) return; // 惯性尾冷却
+  if (now < snapPauseUntil) { snapAcc = 0; return; } // P8.24：动画/停顿期——丢弃
   snapAcc += e.deltaY;
   if (Math.abs(snapAcc) >= SNAP_ACC_THRESHOLD) {
     const dir = snapAcc > 0 ? 1 : -1;
@@ -354,7 +336,6 @@ onBeforeUnmount(() => {
   if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
   if (snapRaf) cancelAnimationFrame(snapRaf);
   snapRaf = 0;
-  snapBuffer = 0;
   snapAcc = 0;
   if (io) io.disconnect();
   io = null;
