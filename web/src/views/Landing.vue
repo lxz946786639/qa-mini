@@ -371,6 +371,7 @@ onBeforeUnmount(() => {
       </a>
       <nav class="lp-nav-right" aria-label="主导航">
         <div class="lp-nav-links">
+          <button class="lp-nav-link" type="button" @click="scrollTo('top')">首页</button>
           <button class="lp-nav-link" type="button" @click="scrollTo('agents')">智能体</button>
           <button class="lp-nav-link" type="button" @click="scrollTo('matrix')">产品矩阵</button>
           <button class="lp-nav-link" type="button" @click="scrollTo('workflow')">工作流</button>
