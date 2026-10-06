@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { LOGO_SVG } from "../utils/brandLogo";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
 
 // 登录：账号（用户名+密码 → /api/auth/login）/ 访问码（→ /api/auth/access-code），
@@ -92,7 +93,7 @@ onMounted(async () => {
   <div class="login-page">
     <div class="login-card">
       <div class="login-brand">
-        <span class="brand-mark">回</span>
+        <span class="adm-brand-logo" v-html="LOGO_SVG"></span>
         <span>EchoAnswer · 回响答</span>
       </div>
       <template v-if="adminSet === false">

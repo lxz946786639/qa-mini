@@ -12,6 +12,7 @@ import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import { agentIconComponent, normalizeAgentIcon } from "../utils/agentIcon";
+import { LOGO_SVG } from "../utils/brandLogo";
 import { APP_VERSION } from "../version";
 import "../landing.css";
 
@@ -33,7 +34,7 @@ interface AgentItem {
 const S = (inner: string, vb = "0 0 24 24") =>
   '<svg viewBox="' + vb + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + inner + "</svg>";
 const ICONS: Record<string, string> = {
-  logo: S('<path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/>'),
+  logo: LOGO_SVG,
   chip: S('<rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
   flow: S('<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7.5 12h4l3.5-6M11.5 12l3.5 6"/>'),
   send: S('<path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5 21 3z"/>'),

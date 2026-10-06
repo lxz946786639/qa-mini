@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
+import { LOGO_SVG } from "../utils/brandLogo";
 import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
@@ -525,7 +526,6 @@ function srcName(source: string): string {
 
 // ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
 const SEND_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>';
-const LOGO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/></svg>';
 const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const userMenuOpen = ref(false);
 const userWrap = ref<HTMLElement | null>(null);

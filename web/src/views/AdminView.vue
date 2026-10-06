@@ -6,6 +6,7 @@ import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, ArrowLeft } from "@element-plus/icons-vue";
+import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
@@ -79,7 +80,7 @@ async function onLogout() {
     <aside class="adm-side">
       <div class="adm-brand">
         <router-link to="/" class="brand">
-          <span class="brand-mark">回</span>
+          <span class="adm-brand-logo" v-html="LOGO_SVG"></span>
           <span class="brand-text">EchoAnswer</span>
         </router-link>
         <span class="adm-brand-sub">回响答 · 控制台</span>
