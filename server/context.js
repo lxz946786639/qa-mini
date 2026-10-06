@@ -64,6 +64,10 @@ function buildContext() {
   const p3n = store.migrateLegacyToShared();
   if (p3n > 0) console.log("[migrate] P3 归属回填：" + p3n + " 个存量会话 → shared 共享桶");
 
+  // P8.21：遗留中断记录归一化（空 finished_at → started_at），前端不再永远「生成中」
+  const p821n = store.normalizeLegacyFinished();
+  if (p821n > 0) console.log("[migrate] P8.21 中断记录归一化：" + p821n + " 条 finished_at 空值 → started_at");
+
   ctx.bus = new EventBus();
   loadSessions(ctx, cfgmod); // 会话缓存 + 遗留桶 + JSON 兜底 + 默认会话补建
   ctx.manager = new V2SessionManager(ctx);

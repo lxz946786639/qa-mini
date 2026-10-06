@@ -89,7 +89,8 @@ lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界�
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
 lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:sqlite：
-                 sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志）
+                 sessions/records/users/agents/访问码/cookie 会话(auth_sessions)/审计日志；
+                 P8.21 normalizeLegacyFinished 启动归一化遗留空 finished_at）
 public/          （P7 已退役：旧纯静态前端目录已删除，能力全量迁移至 web/）
 web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
                  src/（views: Landing(P8 官网首页四区块：Hero/智能体选择/产品矩阵/工作流，
