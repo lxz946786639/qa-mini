@@ -11,6 +11,7 @@
   --accent-soft: #1d3a5c;
   --green: #3fb950;
   --red: #f85149;
+  --menu-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   --radius: 10px;
   color-scheme: dark;
 }
@@ -26,6 +27,7 @@
   --accent-soft: #dbe7fb;
   --green: #15803d;
   --red: #dc2626;
+  --menu-shadow: 0 8px 28px rgba(30, 40, 60, 0.18);
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -117,12 +119,41 @@ body {
   font-size: 14px; font-weight: 700;
 }
 .brand-text { font-weight: 600; letter-spacing: 0.2px; }
-.user-chip {
-  font-size: 13px; color: var(--text);
-  background: var(--card); border: 1px solid var(--border);
-  padding: 3px 10px; border-radius: 999px;
+/* ---------- P8.4 内部顶栏右侧（与首页一致：主题按钮 / 控制台 / 用户名下拉） ---------- */
+.nav-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; flex: none; }
+.topnav-link {
+  color: var(--text-dim); font-size: 13.5px; text-decoration: none;
+  padding: 6px 10px; border-radius: 8px; transition: color 0.15s, background 0.15s;
 }
-.user-chip em { color: var(--accent); font-style: normal; margin-left: 4px; font-size: 12px; }
+.topnav-link:hover { color: var(--text); background: var(--accent-soft); }
+.topnav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.topnav-link.is-active { color: var(--accent); }
+.user-wrap { position: relative; flex: none; }
+.user-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  color: var(--text); font-size: 13.5px; padding: 6px 10px; border-radius: 8px;
+  transition: background 0.15s;
+}
+.user-btn:hover, .user-btn[aria-expanded="true"] { background: var(--accent-soft); }
+.user-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.user-caret { display: inline-flex; color: var(--text-dim); transition: transform 0.18s; }
+.user-caret svg { width: 13px; height: 13px; }
+.user-btn[aria-expanded="true"] .user-caret { transform: rotate(180deg); }
+.user-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 100;
+  min-width: 110px; padding: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: var(--menu-shadow);
+}
+.user-menu-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  color: var(--text-dim); font-size: 13.5px; padding: 8px 12px; border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+}
+.user-menu-item:hover { background: var(--accent-soft); color: var(--text); }
+.user-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .login-page {
   min-height: 100dvh; display: flex; align-items: center; justify-content: center;
@@ -246,6 +277,9 @@ body {
   font-family: inherit;
 }
 .prefs-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* P8.4：纯图标主题按钮去边框（与首页主题按钮一致） */
+.prefs-btn-theme { border: none; padding: 7px 10px; border-radius: 8px; }
+.prefs-btn-theme:hover { background: var(--accent-soft); border-color: transparent; }
 .prefs-box .prefs-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .prefs-box .prefs-row label { width: 62px; flex: none; font-size: 13px; color: var(--text-dim); }
 .prefs-box .el-select { width: 148px; flex: none; }

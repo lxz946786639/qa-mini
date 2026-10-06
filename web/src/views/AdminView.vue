@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 控制台（P6，路由 /admin；P7.3 布局对齐 Ant Design Admin 参考：左侧纵向导航 + 顶栏标题 + 内容卡片）
 // 用户 / 智能体 / 访问码 / 审计日志 / 系统设置。仅 admin 主体可访问。
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
@@ -49,7 +49,19 @@ onMounted(async () => {
     } catch { adminSet.value = true; }
   }
   checked.value = true;
+  document.addEventListener("click", onUserDocClick);
 });
+onBeforeUnmount(() => {
+  document.removeEventListener("click", onUserDocClick);
+});
+
+// ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
+const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+const userMenuOpen = ref(false);
+const userWrap = ref<HTMLElement | null>(null);
+function onUserDocClick(e: MouseEvent) {
+  if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) userMenuOpen.value = false;
+}
 
 async function onBootstrapDone() {
   // 初始化通道已签发 ea_sid cookie（以 admin 登录）→ 重新取主体进入控制台
@@ -90,9 +102,15 @@ async function onLogout() {
           <div class="adm-top-sub">{{ activeMeta.sub }}</div>
         </div>
         <div class="adm-top-right">
-          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
-          <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '管理员' }}</span>
-          <el-button v-if="auth.isAuthed" size="small" @click="onLogout">退出</el-button>
+          <!-- P8.4：与首页一致的顶栏右侧（主题 / 控制台 / 用户名下拉「退出」） -->
+          <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
+          <router-link to="/admin" class="topnav-link is-active">控制台</router-link>
+          <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
+            <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '管理员' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
+            <div v-if="userMenuOpen" class="user-menu" role="menu">
+              <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
+            </div>
+          </div>
         </div>
       </header>
 

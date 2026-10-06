@@ -442,13 +442,29 @@ function fmtTime(ts: string | null): string {
   return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
 
+// ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
+const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+const userMenuOpen = ref(false);
+const userWrap = ref<HTMLElement | null>(null);
+function onUserDocClick(e: MouseEvent) {
+  if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) userMenuOpen.value = false;
+}
+async function onLogout() {
+  userMenuOpen.value = false;
+  await auth.logout();
+  ElMessage.success("已退出登录");
+  router.push("/");
+}
+
 onMounted(async () => {
   auth.me();
   await loadAgent();
   if (!agentErr.value) await initSessions();
+  document.addEventListener("click", onUserDocClick);
 });
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf);
+  document.removeEventListener("click", onUserDocClick);
 });
 </script>
 
@@ -547,11 +563,18 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </el-popover>
-          <button class="prefs-btn" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
-          <span v-if="auth.isAuthed" class="user-chip">{{ auth.displayName || '用户' }}</span>
-          <router-link v-else to="/login" class="topnav-link">登录</router-link>
           <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
+          <span class="nav-sep" aria-hidden="true"></span>
+          <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
           <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
+          <!-- P8.4：用户名下拉（与首页一致：点击展开「退出」，点外部 / Esc 关闭） -->
+          <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
+            <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '用户' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
+            <div v-if="userMenuOpen" class="user-menu" role="menu">
+              <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
+            </div>
+          </div>
+          <router-link v-else to="/login" class="topnav-link">登录</router-link>
         </div>
       </header>
 

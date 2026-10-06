@@ -244,7 +244,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   + 保存）+ 显示偏好（P7：字号 / 内容宽度 / 行间距，顶栏「⚙ 显示」，
   localStorage 键沿用旧版）+ 主题切换 ☀️/🌙（P7.4：Element Plus 组件变量全量映射项目色板，
   深色/浅色双色调，对话框/表格/下拉/输入/标签全适配；P7.6 移除 EP html.dark
-  官方暗色机制修复浅色残留深色）+ 图标（P7.5：全站 emoji 换 Element Plus
+  官方暗色机制修复浅色残留深色）+ 顶栏右侧统一（P8.4：无描边主题按钮 +「控制台」
+  + 用户名下拉「退出」，与官网首页同排版/交互）+ 图标（P7.5：全站 emoji 换 Element Plus
   图标库 @element-plus/icons-vue）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：用户 / 智能体 / 访问码 / 审计日志 /
   系统设置五页签，仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
   对齐旧版 /admin 首屏）。开发：`cd web && npm install && npm run dev`（vite dev
