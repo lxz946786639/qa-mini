@@ -3,6 +3,7 @@
 // 访问码管理（列表来自 GET /api/config → security.access_codes；生成/延期/失效/清理过期）
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { fmtDateTime } from "../../utils/formatTime";
 import { api } from "../../api";
 
 interface Code { code: string; created_at: string; expires_at: string; }
@@ -86,10 +87,12 @@ onMounted(load);
       <el-table-column label="访问码" min-width="160">
         <template #default="{ row }"><b>{{ row.code }}</b></template>
       </el-table-column>
-      <el-table-column label="创建时间" prop="created_at" min-width="200" />
+      <el-table-column label="创建时间" min-width="200">
+        <template #default="{ row }">{{ fmtDateTime(row.created_at) || "—" }}</template>
+      </el-table-column>
       <el-table-column label="到期时间" min-width="200">
         <template #default="{ row }">
-          <span :class="{ danger: expired(row) }">{{ row.expires_at }}</span>
+          <span :class="{ danger: expired(row) }">{{ fmtDateTime(row.expires_at) }}</span>
           <el-tag v-if="expired(row)" type="danger" size="small" style="margin-left: 6px">已过期</el-tag>
         </template>
       </el-table-column>

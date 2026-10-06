@@ -3,6 +3,7 @@
 // 审计日志（管理操作留痕：users.create / users.update / agents.create / agents.update / auth.login…）
 import { onMounted, ref } from "vue";
 import { api } from "../../api";
+import { fmtDateTime } from "../../utils/formatTime";
 
 interface Item {
   id: number; actor_type: string; actor_id: string | null; action: string;
@@ -39,7 +40,9 @@ onMounted(() => load(true));
       <el-button size="small" :loading="loading" @click="load(true)">刷新</el-button>
     </div>
     <el-table v-loading="loading" :data="items" size="default">
-      <el-table-column label="时间" prop="created_at" min-width="165" />
+      <el-table-column label="时间" min-width="165">
+        <template #default="{ row }">{{ fmtDateTime(row.created_at) }}</template>
+      </el-table-column>
       <el-table-column label="操作者" min-width="150">
         <template #default="{ row }">
           {{ row.actor_type === "admin" ? "管理员" : row.actor_type }}

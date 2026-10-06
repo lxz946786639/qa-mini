@@ -3,6 +3,7 @@
 // 用户管理（管理员创建制；停用 → cookie 会话全吊销；不能移除最后一个 active 管理员）
 import { onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { fmtDateTime } from "../../utils/formatTime";
 import { api } from "../../api";
 
 interface U {
@@ -75,9 +76,11 @@ onMounted(load);
           <el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status === "active" ? "启用" : "停用" }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" min-width="170" />
+      <el-table-column label="创建时间" min-width="170">
+        <template #default="{ row }">{{ fmtDateTime(row.created_at) || "—" }}</template>
+      </el-table-column>
       <el-table-column prop="last_login_at" label="最近登录" min-width="170">
-        <template #default="{ row }">{{ row.last_login_at || "—" }}</template>
+        <template #default="{ row }">{{ row.last_login_at ? fmtDateTime(row.last_login_at) : "—" }}</template>
       </el-table-column>
       <el-table-column label="操作" width="250" fixed="right">
         <template #default="{ row }">

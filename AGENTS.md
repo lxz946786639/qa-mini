@@ -105,10 +105,11 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
                  P8.26 控制台四表格列宽均衡（全 min-width 比例伸展）；
                  P8.27 品牌波形 logo 四处统一（utils/brandLogo.ts 单一来源，「回」字砖移除）；
+                 P8.28 时间展示统一 yyyy-MM-dd HH:mm:ss（utils/formatTime.ts）；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
-                 utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射)；landing.css P8 首页双主题变量）
+                 utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
                  + dist/（构建产物随仓库提交，根服务器以站点根提供）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
