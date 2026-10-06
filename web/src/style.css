@@ -326,7 +326,9 @@ body {
 /* P8.14b：答案区两列 grid——「答」标签与内容首行同行，换行对齐内容左缘（对齐旧版 .card-a） */
 .a-block {
   display: grid; grid-template-columns: auto 1fr; column-gap: 8px;
-  background: none; border: none; border-radius: 0; padding: 10px 14px 8px;
+  background: none; border: none; border-radius: 0;
+  /* P8.14d：左边距 17px = 14px 内边距 + 问题行 3px 蓝边条 → 答徽章与问徽章、答案文本与问题文本严格同列 */
+  padding: 10px 14px 8px 17px;
 }
 .a-block > .tag-a {
   grid-column: 1; grid-row: 1; align-self: start; margin-right: 0;
@@ -344,6 +346,7 @@ body {
 .q-block .tag-q {
   display: inline-flex; align-items: center;
   height: calc(var(--qa-size, 14.5px) * var(--qa-line, 1.55));
+  margin-right: 0;
 }
 .tag-a { background: none; border: 1px solid var(--green); color: var(--green); }
 .q-text {
