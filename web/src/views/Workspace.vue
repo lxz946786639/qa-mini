@@ -470,7 +470,69 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="ws-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
-    <!-- 左侧会话栏（P7.2 对齐旧版 #sidebar：252px 全高左固定；≤720px 左滑出抽屉） -->
+    <!-- P8.5：满宽顶栏（对齐首页排版：logo + 名称左上角，右侧控制组同款） -->
+    <header class="ws-top">
+      <div class="ws-top-left">
+        <router-link to="/" class="brand">
+          <span class="brand-mark">回</span>
+          <span class="brand-text">EchoAnswer</span>
+          <span class="ws-top-sub">回响答 · 语音问答 · 流式展示</span>
+        </router-link>
+        <button class="ws-top-menu" title="收起 / 展开会话列表" @click="toggleSide"><el-icon><Menu /></el-icon></button>
+      </div>
+      <div class="ws-head-right">
+        <span class="agent-pill">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
+        <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
+        <el-popover placement="bottom-end" :width="300" trigger="click">
+          <template #reference>
+            <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
+          </template>
+          <div class="prefs-box">
+            <div class="prefs-row">
+              <label>字号</label>
+              <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
+                <el-option label="默认（15px）" value="default" />
+                <el-option label="大（18px）" value="large" />
+                <el-option label="自定义" value="custom" />
+              </el-select>
+              <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
+            </div>
+            <div class="prefs-row">
+              <label>内容宽度</label>
+              <el-select v-model="widthMode" size="small" @change="applyPrefs">
+                <el-option label="窄（860px）" value="narrow" />
+                <el-option label="宽（1180px）" value="wide" />
+                <el-option label="铺满" value="full" />
+              </el-select>
+            </div>
+            <div class="prefs-row">
+              <label>行间距</label>
+              <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
+                <el-option label="默认" value="default" />
+                <el-option label="窄（1.35）" value="narrow" />
+                <el-option label="自定义" value="custom" />
+              </el-select>
+              <el-input-number v-if="lineState.mode === 'custom'" v-model="lineState.val" :min="1" :max="2.5" :step="0.05" :precision="2" size="small" controls-position="right" @change="applyPrefs" />
+            </div>
+          </div>
+        </el-popover>
+        <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
+        <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
+        <!-- P8.4：用户名下拉（与首页一致：点击展开「退出」，点外部 / Esc 关闭） -->
+        <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
+          <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '用户' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
+          <div v-if="userMenuOpen" class="user-menu" role="menu">
+            <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
+          </div>
+        </div>
+        <router-link v-else to="/login" class="topnav-link">登录</router-link>
+      </div>
+    </header>
+
+    <div class="ws-body">
+    <!-- 左侧会话栏（P7.2 对齐旧版 #sidebar；P8.5 下移至满宽顶栏之下；≤720px 左滑出抽屉） -->
     <aside class="ws-side">
       <div class="ws-side-head">
         <span class="ws-side-title">会话列表</span>
@@ -518,66 +580,8 @@ onBeforeUnmount(() => {
       </div>
     </aside>
 
-    <!-- 主列（对齐旧版 .main-col：header / main#chat / footer composer） -->
+    <!-- 主列（P8.5：顶栏已上移为满宽 .ws-top；本列仅 main#chat / footer composer） -->
     <div class="ws-col">
-      <header class="ws-head">
-        <button class="ws-head-menu" title="收起 / 展开会话列表" @click="toggleSide"><el-icon><Menu /></el-icon></button>
-        <router-link to="/" class="brand">
-          <span class="brand-mark">回</span>
-          <span class="brand-text">EchoAnswer</span>
-          <span class="ws-head-sub">回响答 · 语音问答 · 流式展示</span>
-        </router-link>
-        <div class="ws-head-right">
-          <span class="agent-pill">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
-          <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
-          <el-popover placement="bottom-end" :width="300" trigger="click">
-            <template #reference>
-              <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
-            </template>
-            <div class="prefs-box">
-              <div class="prefs-row">
-                <label>字号</label>
-                <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
-                  <el-option label="默认（15px）" value="default" />
-                  <el-option label="大（18px）" value="large" />
-                  <el-option label="自定义" value="custom" />
-                </el-select>
-                <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
-              </div>
-              <div class="prefs-row">
-                <label>内容宽度</label>
-                <el-select v-model="widthMode" size="small" @change="applyPrefs">
-                  <el-option label="窄（860px）" value="narrow" />
-                  <el-option label="宽（1180px）" value="wide" />
-                  <el-option label="铺满" value="full" />
-                </el-select>
-              </div>
-              <div class="prefs-row">
-                <label>行间距</label>
-                <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
-                  <el-option label="默认" value="default" />
-                  <el-option label="窄（1.35）" value="narrow" />
-                  <el-option label="自定义" value="custom" />
-                </el-select>
-                <el-input-number v-if="lineState.mode === 'custom'" v-model="lineState.val" :min="1" :max="2.5" :step="0.05" :precision="2" size="small" controls-position="right" @change="applyPrefs" />
-              </div>
-            </div>
-          </el-popover>
-          <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
-          <span class="nav-sep" aria-hidden="true"></span>
-          <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
-          <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
-          <!-- P8.4：用户名下拉（与首页一致：点击展开「退出」，点外部 / Esc 关闭） -->
-          <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
-            <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '用户' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
-            <div v-if="userMenuOpen" class="user-menu" role="menu">
-              <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
-            </div>
-          </div>
-          <router-link v-else to="/login" class="topnav-link">登录</router-link>
-        </div>
-      </header>
-
       <main ref="chatEl" class="ws-main">
         <div v-if="agentErr" class="ws-err">{{ agentErr }}</div>
         <div v-else-if="!sess.currentSid" class="ws-empty-main">
@@ -676,6 +680,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </footer>
+    </div>
     </div>
 
     <SessionSettings
