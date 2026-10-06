@@ -190,7 +190,15 @@ body {
 /* ---------- P5 工作区（P8.5：满宽顶栏对齐首页（logo+名称左上角）+ 下方左会话栏 / 主列） ---------- */
 .ws-app { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; min-height: 0; }
 .ws-body { flex: 1 1 auto; display: flex; min-height: 0; }
-@media (min-width: 721px) { .ws-app.side-collapsed .ws-side { display: none; } }
+@media (min-width: 721px) {
+  .ws-app.side-collapsed .ws-side { width: 44px; }
+  .ws-app.side-collapsed .ws-side-title,
+  .ws-app.side-collapsed .ws-side-new,
+  .ws-app.side-collapsed .ws-sess-list,
+  .ws-app.side-collapsed .ws-side-empty,
+  .ws-app.side-collapsed .ws-side-foot { display: none; }
+  .ws-app.side-collapsed .ws-side-head { justify-content: center; padding: 10px 6px; }
+}
 .ws-side {
   width: 252px; flex: 0 0 auto; border-right: 1px solid var(--border);
   background: var(--bg-soft); display: flex; flex-direction: column; min-height: 0;
@@ -202,6 +210,12 @@ body {
 .ws-side-title { font-size: 13.5px; font-weight: 600; }
 .ws-side-actions { display: flex; align-items: center; gap: 6px; }
 .ws-side-new { padding: 3px 10px; font-size: 14px; line-height: 1.2; }
+.ws-side-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  font-size: 16px; cursor: pointer; padding: 4px 7px; border-radius: 7px; line-height: 1; flex: none;
+}
+.ws-side-toggle:hover { color: var(--text); border-color: var(--border); background: var(--card); }
 .ws-side-close {
   display: none; background: none; border: none; color: var(--text-dim);
   font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 6px; border-radius: 6px;
@@ -252,13 +266,11 @@ body {
   flex: 0 0 auto; height: 60px; padding: 0 18px;
   background: var(--bg-soft); border-bottom: 1px solid var(--border); position: relative; z-index: 20;
 }
-.ws-top-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: none; }
-.ws-top-menu {
-  background: none; border: 1px solid transparent; color: var(--text-dim);
-  font-size: 17px; cursor: pointer; padding: 5px 9px; border-radius: 8px; line-height: 1; flex: 0 0 auto;
-}
-.ws-top-menu:hover { color: var(--text); border-color: var(--border); }
-.ws-top-sub { font-size: 12px; color: var(--text-dim); margin-left: 8px; white-space: nowrap; }
+.ws-top-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: none; }
+/* P8.6：品牌与官网首页一致（波形 logo 26px accent + 名称 16px/700） */
+.ws-brand-logo { display: inline-flex; }
+.ws-brand-logo svg { width: 26px; height: 26px; color: var(--accent); }
+.ws-top .brand-text { font-size: 16px; font-weight: 700; }
 .ws-head-right { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
 .ws-active-pill {
   font-size: 12px; color: var(--accent); background: var(--accent-soft);
@@ -526,7 +538,6 @@ body {
 /* ---------- P7.2 窄屏（对齐旧版断点：1024px 侧栏收窄 / 720px 会话栏左滑出抽屉） ---------- */
 @media (max-width: 1024px) {
   .ws-side { width: 218px; }
-  .ws-top-sub { display: none; }
 }
 @media (max-width: 720px) {
   .ws-side {
@@ -536,6 +547,8 @@ body {
   }
   .ws-app.sidebar-open .ws-side { transform: translateX(0); }
   .ws-side-close { display: block; }
+  .ws-side-toggle { display: none; }
+  .ws-top-left .nav-sep, .ws-top .agent-pill { display: none; }
   .ws-col { height: auto; flex: 1 1 auto; min-height: 0; overflow: hidden; }
   .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; height: auto; }
   .ws-head-right { flex-wrap: wrap; row-gap: 6px; }

@@ -8,7 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Microphone } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -443,6 +443,7 @@ function fmtTime(ts: string | null): string {
 }
 
 // ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
+const LOGO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/></svg>';
 const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const userMenuOpen = ref(false);
 const userWrap = ref<HTMLElement | null>(null);
@@ -473,16 +474,16 @@ onBeforeUnmount(() => {
     <!-- P8.5：满宽顶栏（对齐首页排版：logo + 名称左上角，右侧控制组同款） -->
     <header class="ws-top">
       <div class="ws-top-left">
+        <!-- P8.6：品牌与官网首页一致（同款波形 logo + 名称） -->
         <router-link to="/" class="brand">
-          <span class="brand-mark">回</span>
-          <span class="brand-text">EchoAnswer</span>
-          <span class="ws-top-sub">回响答 · 语音问答 · 流式展示</span>
+          <span class="ws-brand-logo" v-html="LOGO_SVG"></span>
+          <span class="brand-text">EchoAnswer 回响答</span>
         </router-link>
-        <button class="ws-top-menu" title="收起 / 展开会话列表" @click="toggleSide"><el-icon><Menu /></el-icon></button>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <span class="agent-pill" title="当前智能体与协议">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
+        <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
       </div>
       <div class="ws-head-right">
-        <span class="agent-pill">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
-        <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
         <el-popover placement="bottom-end" :width="300" trigger="click">
           <template #reference>
             <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
@@ -516,7 +517,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </el-popover>
-        <el-button v-if="auth.isAdmin && currentSession" size="small" @click="openSettings">会话设置</el-button>
+        <button v-if="auth.isAdmin && currentSession" class="prefs-btn" title="会话设置（管理）" @click="openSettings"><el-icon><Setting /></el-icon>会话设置</button>
         <span class="nav-sep" aria-hidden="true"></span>
         <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
         <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
@@ -538,6 +539,7 @@ onBeforeUnmount(() => {
         <span class="ws-side-title">会话列表</span>
         <span class="ws-side-actions">
           <el-button size="small" type="primary" plain class="ws-side-new" :icon="Plus" @click="createSession">新建</el-button>
+          <button class="ws-side-toggle" :title="sideCollapsed ? '展开会话列表' : '收起会话列表'" @click="toggleSide"><el-icon><Menu /></el-icon></button>
           <button class="ws-side-close" title="关闭会话列表" @click="sideOpen = false"><el-icon><Close /></el-icon></button>
         </span>
       </div>
