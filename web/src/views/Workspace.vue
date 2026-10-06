@@ -8,7 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -201,7 +201,7 @@ function scheduleRender(card: Card) {
     for (const c of cards.value) {
       if (c.answer !== c.live) {
         c.answer = c.live;
-        c.html = renderMarkdown(c.answer);
+        c.html = renderMarkdown(c.answer) + (c.status === "running" ? "<span class=\"md-cursor\"></span>" : "");
       }
     }
     scrollBottom(false); // P8.12 对齐旧版：流式输出中贴近底部时自动跟随（不打断上滑阅读）
@@ -475,10 +475,17 @@ function canRegen(c: Card): boolean {
   return !!last && last.id === c.id && last.status === "done";
 }
 
-function copyText(t: string) {
+const copiedKey = ref("");
+let copiedTimer: ReturnType<typeof setTimeout> | null = null;
+function markCopied(key: string) {
+  copiedKey.value = key;
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => (copiedKey.value = ""), 1400);
+}
+function copyText(t: string, key?: string) {
   // P8.12 对齐旧版：无内容提示 + 非安全上下文（http 局域网 IP）execCommand 降级
   if (!t) { ElMessage.info("暂无可复制内容"); return; }
-  const done = () => ElMessage.success("已复制");
+  const done = () => { if (key) markCopied(key); ElMessage.success("已复制"); }
   const fallback = () => {
     const ta = document.createElement("textarea");
     ta.value = t;
@@ -492,6 +499,8 @@ function copyText(t: string) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback);
   else fallback();
 }
+function copyQ(c: Card) { copyText(c.question, c.id + ":q"); }
+function copyA(c: Card) { copyText(c.answer, c.id + ":a"); }
 
 function fmtTime(ts: string | null): string {
   if (!ts) return "";
@@ -499,8 +508,23 @@ function fmtTime(ts: string | null): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
+// P8.14 对齐旧版：卡片元信息时间 = HH:MM:SS（会话列表仍用 MM-DD HH:MM）
+function fmtCardTime(ts: string | null): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+// P8.14 对齐旧版：来源徽章（网页 / 语音推送 / 电脑音频）
+function srcCls(source: string): string {
+  return source === "push" ? "b-push" : source === "remote_audio" ? "b-remote" : "b-web";
+}
+function srcName(source: string): string {
+  return source === "push" ? "语音推送" : source === "remote_audio" ? "电脑音频" : "网页";
+}
 
 // ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
+const SEND_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>';
 const LOGO_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10v4M7 7v10M11 4v16M15 8v8M19 10v4"/></svg>';
 const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const userMenuOpen = ref(false);
@@ -525,6 +549,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf);
   if (tickTimer != null) { clearInterval(tickTimer); tickTimer = null; }
+  if (copiedTimer) clearTimeout(copiedTimer);
   document.removeEventListener("click", onUserDocClick);
   chatEl.value?.removeEventListener("scroll", onChatScroll);
 });
@@ -675,12 +700,17 @@ onBeforeUnmount(() => {
             <div class="q-block">
               <span class="tag tag-q">问</span>
               <span class="q-text">{{ c.question }}</span>
-              <span class="meta">
-                <em class="proto">{{ c.protocol_name || c.protocol || (c.status === 'running' ? '处理中' : '') }}</em>
-                <em class="src">{{ c.source === 'push' ? '语音推送' : '网页' }}</em>
-                <em class="tm">{{ fmtTime(c.started_at) }}</em>
+              <span class="card-meta">
+                <em class="badge" :class="srcCls(c.source)">
+                  <el-icon class="badge-ic"><ChatDotRound v-if="c.source === 'web'" /><Microphone v-else-if="c.source === 'push'" /><Headset v-else /></el-icon>
+                  {{ srcName(c.source) }}
+                </em>
+                <em class="badge" v-if="c.protocol_name || c.protocol || c.status === 'running'">{{ c.protocol_name || c.protocol || (c.status === 'running' ? '处理中' : '') }}</em>
+                <em class="time">{{ fmtCardTime(c.started_at) }}</em>
               </span>
-              <button class="q-copy" type="button" title="复制问题" @click="copyText(c.question)">复制</button>
+              <button class="q-copy" type="button" :class="{ copied: copiedKey === c.id + ':q' }" title="复制问题" @click="copyQ(c)">
+                <el-icon class="btn-ic"><CopyDocument /></el-icon>{{ copiedKey === c.id + ':q' ? '已复制' : '复制' }}
+              </button>
             </div>
             <div class="a-block">
               <span class="tag tag-a">答</span>
@@ -688,17 +718,20 @@ onBeforeUnmount(() => {
               <div class="a-status">
                 <template v-if="c.status === 'running'">
                   <span class="st st-run">生成中… {{ runElapsed(c) }}s</span>
-                  <button class="st-btn" @click="cancelQa(c.id)">停止</button>
+                  <button class="st-btn st-danger" @click="cancelQa(c.id)"><el-icon class="btn-ic"><VideoPause /></el-icon>停止</button>
                 </template>
                 <template v-else>
                   <span class="st" :class="c.ok ? 'st-ok' : 'st-err'">
-                    {{ c.ok ? '完成' : (c.detail || '失败') }}
+                    <el-icon class="st-ic"><Check v-if="c.ok" /><Close v-else /></el-icon>
+                    {{ c.detail || (c.ok ? '完成' : '失败') }}
                     <template v-if="c.duration_s != null"> · {{ c.duration_s }}s</template>
                   </span>
                   <span class="st-btns">
-                    <button v-if="c.ok && c.answer" class="st-btn" @click="copyText(c.answer)">复制</button>
-                    <button class="st-btn" :disabled="!canRegen(c)" @click="regen(c)">重新生成</button>
-                    <button class="st-btn" @click="deleteCard(c)">删除</button>
+                    <button v-if="c.ok && c.answer" class="st-btn" :class="{ copied: copiedKey === c.id + ':a' }" @click="copyA(c)">
+                      <el-icon class="btn-ic"><CopyDocument /></el-icon>{{ copiedKey === c.id + ':a' ? '已复制' : '复制' }}
+                    </button>
+                    <button class="st-btn" :disabled="!canRegen(c)" @click="regen(c)"><el-icon class="btn-ic"><RefreshRight /></el-icon>重新生成</button>
+                    <button class="st-btn st-danger" @click="deleteCard(c)"><el-icon class="btn-ic"><Delete /></el-icon>删除</button>
                   </span>
                 </template>
               </div>
@@ -747,7 +780,9 @@ onBeforeUnmount(() => {
                 :title="audioListening ? '识别进行中：请用上方面板「停止识别 / 重新开始 / 取消」' : '音频输入：识别 EchoScribe 持续推流到本会话的电脑输出音频'"
                 @click="openAudioPanel"
               ><el-icon><Headset /></el-icon>{{ audioListening ? '识别中…' : '音频' }}</button>
-              <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
+              <el-button type="primary" :loading="sending" :disabled="!input.trim()" @click="send">
+                <span class="send-ic" v-html="SEND_SVG"></span>发送
+              </el-button>
             </div>
           </div>
         </div>

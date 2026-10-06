@@ -11,6 +11,7 @@
   --accent-soft: #1d3a5c;
   --green: #3fb950;
   --red: #f85149;
+  --orange: #f0883e; /* P8.14：来源徽章「语音推送」（对齐旧版色板） */
   --menu-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   --radius: 10px;
   color-scheme: dark;
@@ -27,6 +28,7 @@
   --accent-soft: #dbe7fb;
   --green: #15803d;
   --red: #dc2626;
+  --orange: #b45309; /* P8.14（浅色） */
   --menu-shadow: 0 8px 28px rgba(30, 40, 60, 0.18);
   color-scheme: light;
 }
@@ -309,27 +311,45 @@ body {
 .ws-empty-proto { font-size: 12.5px; }
 .ws-empty-dim { font-size: 12px; }
 
-.qcard { max-width: var(--qa-maxw); margin: 0 auto 16px; width: 100%; }
+/* P8.14：对齐旧版会话窗口卡片——问题行与答案同属一张卡（问题行 card-head 底 + 底部分隔线） */
+.qcard {
+  max-width: var(--qa-maxw); margin: 0 auto 14px; width: 100%;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
 .q-block {
-  background: var(--card); border: 1px solid var(--border);
-  border-left: 3px solid var(--accent); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 6px;
+  display: flex; align-items: flex-start; gap: 8px;
+  background: var(--card-head);
+  border-bottom: 1px solid var(--border); border-left: 3px solid var(--accent);
+  padding: 10px 14px;
 }
-.a-block {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 14px 8px;
-}
-.qcard.running .a-block { border-color: var(--accent-soft); }
+.a-block { background: none; border: none; border-radius: 0; padding: 10px 14px 8px; }
+.qcard.running { border-color: var(--accent-soft); }
 .tag {
   display: inline-block; font-size: 11px; font-weight: 700;
   padding: 1px 7px; border-radius: 4px; margin-right: 8px; vertical-align: 1px;
 }
-.tag-q { background: var(--accent-soft); color: var(--accent); }
-.tag-a { background: var(--bg-soft); color: var(--text-dim); }
-.q-text { font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.55); white-space: pre-wrap; word-break: break-word; }
-.meta { margin-left: 8px; font-style: normal; font-size: 11px; color: var(--text-dim); }
-.meta em { font-style: normal; margin-left: 8px; }
-.meta .src { opacity: 0.8; }
+.tag-q { background: none; border: 1px solid var(--accent); color: var(--accent); }
+.tag-a { background: none; border: 1px solid var(--green); color: var(--green); }
+.q-text {
+  flex: 1 1 auto; font-weight: 600;
+  font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.55);
+  white-space: pre-wrap; word-break: break-word;
+}
+/* P8.14：问题行元信息（对齐旧版：来源徽章 + 协议徽章 + HH:MM:SS） */
+.card-meta { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-style: normal;
+  font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-dim); white-space: nowrap;
+}
+.badge-ic { font-size: 11px; }
+.badge.b-web { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.badge.b-push { color: var(--orange); border-color: var(--orange); background: #2a1c10; }
+.badge.b-remote { color: var(--green); border-color: var(--green); background: #122a18; }
+:root[data-theme="light"] .badge.b-push { background: #fdf3e7; }
+:root[data-theme="light"] .badge.b-remote { background: #e8f6ec; }
+.card-meta .time { font-style: normal; font-size: 11px; color: var(--text-dim); }
 
 .a-body { font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.65); word-break: break-word; }
 .a-body p, .a-body li { line-height: var(--qa-line, inherit); }
@@ -338,23 +358,41 @@ body {
   border-top: 1px dashed var(--border); margin-top: 8px; padding-top: 7px;
   font-size: 12px;
 }
-.st { color: var(--text-dim); }
+.st { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); }
+.st-ic { font-size: 13px; }
 .st-run { color: var(--accent); }
 .st-ok { color: var(--green); }
 .st-err { color: var(--red); }
-.st-btns { margin-left: auto; display: inline-flex; gap: 6px; }
+.st-btns { margin-left: auto; display: inline-flex; gap: 6px; flex-wrap: wrap; }
+/* P8.14：对齐旧版 mini-btn（图标 + 文字，高 22px，11px 字，圆角 6px） */
 .st-btn {
+  display: inline-flex; align-items: center; gap: 4px; line-height: 1;
   background: none; border: 1px solid var(--border); color: var(--text-dim);
-  border-radius: 5px; font-size: 12px; padding: 2px 9px; cursor: pointer;
+  border-radius: 6px; height: 22px; padding: 0 8px; cursor: pointer; font-size: 11px;
 }
+.btn-ic { font-size: 12px; }
 .st-btn:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .st-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-/* P8.12：问题行「复制」（对齐旧版）+ 主区「↓ 最新」浮钮（对齐旧版）+ 输入框底部「停止」 */
+.st-btn.st-danger:hover:not(:disabled) { color: var(--red); border-color: var(--red); }
+.st-btn.copied { color: var(--green); border-color: var(--green); }
+/* P8.12/13：问题行「复制」（对齐旧版：图标 + 文字，右下对齐） */
 .q-copy {
-  margin-left: 8px; background: none; border: none; padding: 0;
-  color: var(--text-dim); font-size: 11.5px; cursor: pointer; flex: none;
+  margin-left: 4px; flex: 0 0 auto; align-self: flex-end;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; padding: 2px 4px; border-radius: 5px;
+  color: var(--text-dim); font-size: 11px; cursor: pointer;
 }
 .q-copy:hover { color: var(--accent); }
+.q-copy.copied { color: var(--green); }
+/* P8.14：流式光标（对齐旧版 .cursor 闪烁） */
+.md-cursor {
+  display: inline-block; width: 8px; height: 15px;
+  background: var(--accent); vertical-align: text-bottom; margin-left: 2px;
+  animation: md-blink 0.9s steps(1) infinite;
+}
+@keyframes md-blink { 50% { opacity: 0; } }
+/* P8.14：发送按钮纸飞机图标（对齐旧版） */
+.send-ic { display: inline-flex; margin-right: 5px; vertical-align: -2px; }
 .ws-to-latest {
   position: absolute; right: 18px; bottom: 92px; z-index: 5;
   display: inline-flex; align-items: center; gap: 4px;
