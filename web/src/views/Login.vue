@@ -5,6 +5,7 @@ import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { LOGO_SVG } from "../utils/brandLogo";
+import { Back } from "@element-plus/icons-vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
 
 // 登录：账号（用户名+密码 → /api/auth/login）/ 访问码（→ /api/auth/access-code），
@@ -147,7 +148,7 @@ onMounted(async () => {
       </template>
       <div v-else class="login-wait">加载中…</div>
 
-      <router-link to="/" class="login-back">← 返回落地页</router-link>
+      <router-link to="/" class="login-back"><el-icon><Back /></el-icon>返回首屏</router-link>
     </div>
   </div>
 </template>

@@ -5,7 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, ArrowLeft, Fold, Expand } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
@@ -76,7 +76,7 @@ async function onLogout() {
 
 <template>
   <div class="adm-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
-    <!-- 左侧导航（品牌 + 模块菜单 + 返回首页） -->
+    <!-- 左侧导航（品牌 + 模块菜单 + 返回首屏） -->
     <aside class="adm-side">
       <div class="adm-brand">
         <div class="adm-brand-row">
@@ -97,7 +97,7 @@ async function onLogout() {
         </li>
       </ul>
       <div class="adm-side-foot">
-        <router-link to="/" class="adm-home" @click="sideOpen = false"><el-icon><ArrowLeft /></el-icon><span class="adm-nav-lb">返回落地页</span></router-link>
+        <router-link to="/" class="adm-home" @click="sideOpen = false"><el-icon><Back /></el-icon><span class="adm-nav-lb">返回首屏</span></router-link>
       </div>
     </aside>
 
@@ -134,7 +134,7 @@ async function onLogout() {
             <p>当前身份无管理权限</p>
             <p class="admin-dim">控制台仅对 admin 角色开放（账号登录；访问码/匿名身份不可用）。</p>
             <el-button type="primary" size="small" @click="auth.me()">重新校验</el-button>
-            <router-link to="/" class="topnav-link">返回落地页</router-link>
+            <router-link to="/" class="topnav-link"><el-icon><Back /></el-icon>返回首屏</router-link>
           </template>
         </div>
         <div v-else class="adm-card">

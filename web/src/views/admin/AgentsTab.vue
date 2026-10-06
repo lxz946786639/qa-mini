@@ -112,7 +112,7 @@ async function save() {
 }
 async function toggleEnabled(a: Agent) {
   const r = await api("/api/admin/agents/" + encodeURIComponent(a.code), { method: "PATCH", body: { enabled: !a.enabled } });
-  if (r.ok) { ElMessage.success(a.enabled ? "已停用（落地页不再展示）" : "已启用"); load(); }
+  if (r.ok) { ElMessage.success(a.enabled ? "已停用（首屏不再展示）" : "已启用"); load(); }
   else ElMessage.error(r.data.detail || "操作失败");
 }
 onMounted(load);
@@ -121,7 +121,7 @@ onMounted(load);
 <template>
   <div>
     <div class="tab-bar">
-      <span class="tab-note">共 {{ agents.length }} 个智能体（停用后落地页隐藏，已有会话不受影响）</span>
+      <span class="tab-note">共 {{ agents.length }} 个智能体（停用后首屏隐藏，已有会话不受影响）</span>
       <el-button type="primary" size="small" @click="openCreate">＋ 新建智能体</el-button>
     </div>
     <el-table v-loading="loading" :data="agents">
@@ -192,7 +192,7 @@ onMounted(load);
               <el-input-number v-model="form.sort" :min="0" :max="999" />
             </el-form-item>
             <el-form-item>
-              <el-switch v-model="form.enabled" active-text="启用（落地页展示）" />
+              <el-switch v-model="form.enabled" active-text="启用（首屏展示）" />
             </el-form-item>
           </el-form>
         </el-tab-pane>

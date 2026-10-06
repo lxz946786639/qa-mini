@@ -24,7 +24,7 @@ interface AgentItem {
   icon: string;
   protocol: string;
   sort: number;
-  // P8.9：访问控制（控制台·安全页配置；落地页徽标 + 点击进入前鉴权）
+  // P8.9：访问控制（控制台·安全页配置；首屏徽标 + 点击进入前鉴权）
   allow_anon: boolean;
   allow_code: boolean;
   allow_user: boolean;
@@ -151,7 +151,7 @@ async function onLogout() {
 }
 
 function goCard(c: Card) {
-  // P8.9：落地页展示全部智能体；当前主体无权进入 → 先去登录（?next 回跳）
+  // P8.9：首屏展示全部智能体；当前主体无权进入 → 先去登录（?next 回跳）
   const a = agents.value.find((x) => x.id === c.key);
   if (a && !allowedFor(a)) {
     ElMessage.info("该智能体需要登录，登录后继续");

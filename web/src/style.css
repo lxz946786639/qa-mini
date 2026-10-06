@@ -179,7 +179,7 @@ body {
 .admin-bs-form { display: flex; flex-direction: column; }
 .admin-bs-form .admin-bs-btn { width: 100%; }
 .login-btn { width: 100%; margin-top: 16px; }
-.login-back { display: block; text-align: center; margin-top: 14px; color: var(--text-dim); font-size: 13px; }
+.login-back { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 14px; color: var(--text-dim); font-size: 13px; }
 .login-back:hover { color: var(--accent); }
 .ws-back { display: inline-block; color: var(--text-dim); text-decoration: none; font-size: 14px; margin-bottom: 18px; }
 .ws-back:hover { color: var(--accent); }
@@ -314,7 +314,7 @@ body {
 .prefs-box .prefs-row label { width: 62px; flex: none; font-size: 13px; color: var(--text-dim); }
 .prefs-box .el-select { width: 148px; flex: none; }
 .ws-empty-main { text-align: center; color: var(--text-dim); margin-top: 80px; }
-.ws-empty-main .login-back { display: inline-block; }
+.ws-empty-main .login-back { display: inline-flex; align-items: center; gap: 4px; }
 .ws-empty-chat { text-align: center; color: var(--text-dim); margin-top: 60px; padding: 0 16px; }
 .ws-empty-chat h3 { margin: 0 0 8px; font-size: 15px; color: var(--text); }
 .ws-empty-chat p { margin: 6px 0; font-size: 13.5px; line-height: 1.7; }

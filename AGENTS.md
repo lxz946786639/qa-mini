@@ -107,6 +107,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.27 品牌波形 logo 四处统一（utils/brandLogo.ts 单一来源，「回」字砖移除）；
                  P8.28 时间展示统一 yyyy-MM-dd HH:mm:ss（utils/formatTime.ts）；
                  P8.31 侧栏收起对齐会话列表（Fold/Expand 移入品牌行，收起 = 44px 图标窄轨）；
+                 P8.32 UI 文案「落地页」统一更名「首屏」，返回符号统一 EP Back 图标）；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；

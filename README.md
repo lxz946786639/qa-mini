@@ -43,7 +43,7 @@ npm start            # 或 node server.js
 
 启动后：
 
-- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；P8 官网首页四区块：Hero / 智能体选择 / 产品矩阵 / 工作流 → 智能体 → 工作区（落地页导航「控制台」P8.10 仅 admin 可见）；P8.13 区块导航：「立即体验」滚动到智能体区块、「向下探索」可点击、吸附位顶右 / 底右上一 / 下一区块指引）；项目文档 /doc/<文件名>.md）
+- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；P8 官网首页四区块：Hero / 智能体选择 / 产品矩阵 / 工作流 → 智能体 → 工作区（首屏导航「控制台」P8.10 仅 admin 可见）；P8.13 区块导航：「立即体验」滚动到智能体区块、「向下探索」可点击、吸附位顶右 / 底右上一 / 下一区块指引）；项目文档 /doc/<文件名>.md）
 - 控制台：http://127.0.0.1:8787/admin（仅 admin；管理密码未初始化时显示首启设置表单）
 - 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
@@ -181,7 +181,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
 | GET | `/api/auth/me` | 当前主体 `{principal（admin/user/code）, anonymous?}` |
 | POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
-| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
+| GET | `/api/agents` | 启用中智能体列表（首屏选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
 | PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie） |
