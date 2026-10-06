@@ -27,6 +27,11 @@
   --lp-tag-kn: #38BDF8;     --lp-tag-kn-bg: rgba(56, 189, 248, 0.14);
   --lp-tag-orch: #A78BFA;   --lp-tag-orch-bg: rgba(167, 139, 250, 0.14);
   --lp-tag-gen: #FBBF24;    --lp-tag-gen-bg: rgba(251, 191, 36, 0.13);
+  /* P8.9 访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员） */
+  --lp-access-anon: #34D399;  --lp-access-anon-bg: rgba(52, 211, 153, 0.14);
+  --lp-access-login: #FBBF24; --lp-access-login-bg: rgba(251, 191, 36, 0.13);
+  --lp-access-code: #38BDF8;  --lp-access-code-bg: rgba(56, 189, 248, 0.14);
+  --lp-access-admin: #F87171; --lp-access-admin-bg: rgba(248, 113, 113, 0.14);
 }
 :root[data-theme="light"] {
   --lp-bg: #FFFFFF;
@@ -48,6 +53,10 @@
   --lp-tag-kn: #0284C7;     --lp-tag-kn-bg: rgba(2, 132, 199, 0.10);
   --lp-tag-orch: #6D28D9;   --lp-tag-orch-bg: rgba(109, 40, 217, 0.08);
   --lp-tag-gen: #B45309;    --lp-tag-gen-bg: rgba(180, 83, 9, 0.10);
+  --lp-access-anon: #059669;  --lp-access-anon-bg: rgba(5, 150, 105, 0.12);
+  --lp-access-login: #B45309; --lp-access-login-bg: rgba(180, 83, 9, 0.10);
+  --lp-access-code: #0284C7;  --lp-access-code-bg: rgba(2, 132, 199, 0.10);
+  --lp-access-admin: #DC2626; --lp-access-admin-bg: rgba(220, 38, 38, 0.10);
 }
 
 /* ---------- 页面壳 ---------- */
@@ -283,6 +292,12 @@
 .lp-tag.t-kn   { color: var(--lp-tag-kn);   background: var(--lp-tag-kn-bg); }
 .lp-tag.t-orch { color: var(--lp-tag-orch); background: var(--lp-tag-orch-bg); }
 .lp-tag.t-gen  { color: var(--lp-tag-gen);  background: var(--lp-tag-gen-bg); }
+/* P8.9：访问控制徽标（与协议标签同形，按访问方式着色） */
+.lp-access { font-size: 12px; line-height: 18px; padding: 0 10px; border-radius: 999px; white-space: nowrap; }
+.lp-access.lp-access-anon  { color: var(--lp-access-anon);  background: var(--lp-access-anon-bg); }
+.lp-access.lp-access-login { color: var(--lp-access-login); background: var(--lp-access-login-bg); }
+.lp-access.lp-access-code  { color: var(--lp-access-code);  background: var(--lp-access-code-bg); }
+.lp-access.lp-access-admin { color: var(--lp-access-admin); background: var(--lp-access-admin-bg); }
 .lp-sample { font-size: 11px; color: var(--lp-dim); }
 .lp-agent-name { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; flex-wrap: wrap; }
 .lp-def-mark {

@@ -21,6 +21,10 @@ interface AgentItem {
   icon: string;
   protocol: string;
   sort: number;
+  // P8.9：访问控制（控制台·安全页配置；落地页徽标 + 点击进入前鉴权）
+  allow_anon: boolean;
+  allow_code: boolean;
+  allow_user: boolean;
 }
 
 // ---------- 内联 SVG 图标（2px 描边，currentColor） ----------
@@ -85,16 +89,38 @@ interface Card {
   href: string;
   isDefault: boolean;
   isSample: boolean;
+  // P8.9：访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员）
+  access: string;
+  accessCls: string;
+}
+
+// P8.9：访问方式徽标（优先级 匿名 > 用户登录 > 访问码）
+function accessBadge(a: AgentItem): { label: string; cls: string } {
+  if (a.allow_anon) return { label: "无需登录", cls: "lp-access-anon" };
+  if (a.allow_user) return { label: "需登录", cls: "lp-access-login" };
+  if (a.allow_code) return { label: "需访问码", cls: "lp-access-code" };
+  return { label: "仅管理员", cls: "lp-access-admin" };
+}
+
+// P8.9：当前主体是否可进入该智能体（与服务端 agentAllows 同矩阵）
+function allowedFor(a: AgentItem): boolean {
+  const p = auth.principal;
+  if (!p) return !!a.allow_anon;
+  if (p.kind === "admin") return true;
+  if (p.kind === "user") return !!(a.allow_anon || a.allow_user);
+  return !!(a.allow_anon || a.allow_code); // code
 }
 
 // 卡片 = 真实智能体（sort 序，前 4）+ 示例卡补齐至 4；0 个真实卡不补示例
 const cards = computed<Card[]>(() => {
   const real: Card[] = agents.value.slice(0, 4).map((a, i) => {
     const p = PROTO[a.protocol] || PROTO.generic;
+    const ab = accessBadge(a);
     return {
       key: a.id, name: a.name, desc: a.description || "（暂无描述）",
       tag: p.label, tagCls: p.cls, icon: p.icon,
-      href: "/agents/" + a.code, isDefault: i === 0, isSample: false
+      href: "/agents/" + a.code, isDefault: i === 0, isSample: false,
+      access: ab.label, accessCls: ab.cls
     };
   });
   if (!agents.value.length || real.length >= 4) return real;
@@ -103,7 +129,8 @@ const cards = computed<Card[]>(() => {
     return {
       key: "sample-" + i, name: s.name, desc: s.desc,
       tag: p.label, tagCls: p.cls, icon: s.icon,
-      href: "/login", isDefault: false, isSample: true
+      href: "/login", isDefault: false, isSample: true,
+      access: "", accessCls: ""
     };
   });
   return [...real, ...extra];
@@ -136,6 +163,13 @@ async function onLogout() {
 }
 
 function goCard(c: Card) {
+  // P8.9：落地页展示全部智能体；当前主体无权进入 → 先去登录（?next 回跳）
+  const a = agents.value.find((x) => x.id === c.key);
+  if (a && !allowedFor(a)) {
+    ElMessage.info("该智能体需要登录，登录后继续");
+    router.push({ path: "/login", query: { next: c.href } });
+    return;
+  }
   router.push(c.href);
 }
 function viewAll() {
@@ -439,6 +473,7 @@ onBeforeUnmount(() => {
               <span class="lp-agent-ic" v-html="ICONS[c.icon] || ICONS.mic"></span>
               <span class="lp-tags">
                 <span class="lp-tag" :class="c.tagCls">{{ c.tag }}</span>
+                <span v-if="c.access" class="lp-access" :class="c.accessCls">{{ c.access }}</span>
                 <span v-if="c.isSample" class="lp-sample">示例</span>
               </span>
             </div>

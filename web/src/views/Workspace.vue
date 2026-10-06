@@ -28,6 +28,7 @@ const agentId = ref<string | null>(null);
 const agentName = ref("…");
 const agentProto = ref("");
 const agentErr = ref("");
+const agentNeedLogin = ref(false); // P8.9：未登录遇到入口门控 → 显示「去登录」
 const listLoading = ref(true);
 
 // P7.2 布局对齐旧版：左固定会话栏（252px）+ 主列（header / main / footer）；
@@ -312,12 +313,24 @@ const sse = useSse({
 // 切会话：收起音频面板（面板内部 watch 会取消在途识别并清空状态）
 watch(() => sess.currentSid, () => { showAudio.value = false; });
 
+function goLogin() {
+  router.push({ path: "/login", query: { next: route.fullPath } });
+}
+
 async function loadAgent() {
   listLoading.value = true;
   const { ok, data } = await api<{ ok: boolean; agent?: { id: string; name: string; protocol: string }; detail?: string }>(
     "/api/agents/" + encodeURIComponent(agentCode.value)
   );
-  if (!ok) { agentErr.value = data.detail || "智能体不存在或已停用"; listLoading.value = false; return; }
+  if (!ok) {
+    listLoading.value = false;
+    // P8.9：入口门控 404（智能体不存在/停用 或 当前主体未被放行，不泄露存在性）
+    agentNeedLogin.value = !auth.isAuthed;
+    agentErr.value = auth.isAuthed
+      ? "当前登录身份无权访问该智能体（可在 控制台·智能体管理·安全 中调整访问控制）"
+      : "此智能体需要登录或访问码，登录后进入";
+    return;
+  }
   agentId.value = data.agent?.id || null;
   agentName.value = data.agent?.name || agentCode.value;
   agentProto.value = data.agent?.protocol || "";
@@ -585,7 +598,7 @@ onBeforeUnmount(() => {
     <!-- 主列（P8.5：顶栏已上移为满宽 .ws-top；本列仅 main#chat / footer composer） -->
     <div class="ws-col">
       <main ref="chatEl" class="ws-main">
-        <div v-if="agentErr" class="ws-err">{{ agentErr }}</div>
+        <div v-if="agentErr" class="ws-err">{{ agentErr }}<button v-if="agentNeedLogin" type="button" class="ws-err-go" @click="goLogin">去登录 →</button></div>
         <div v-else-if="!sess.currentSid" class="ws-empty-main">
           <p>左侧选择或新建一个会话开始问答</p>
           <el-button v-if="auth.isAuthed" type="primary" @click="createSession">新建会话</el-button>

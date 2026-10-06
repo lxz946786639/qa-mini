@@ -181,7 +181,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
 | GET | `/api/auth/me` | 当前主体 `{principal（admin/user/code）, anonymous?}` |
 | POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
-| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…；P8.8 按主体访问控制过滤） |
+| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
 | PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie） |
@@ -254,7 +254,10 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   系统设置五页签，仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
   对齐旧版 /admin 首屏；P8.8 智能体新增/编辑对话框分类为 tab（基本/协议/安全），
   安全页 = 访问控制三开关（允许匿名访问 / 允许访问码访问 / 允许普通用户登录访问，
-  不同访问方式会话落独立桶互不可见，全关 = 仅管理员））。开发：`cd web && npm install && npm run dev`（vite dev
+  不同访问方式会话落独立桶互不可见，全关 = 仅管理员）；P8.9 首页智能体卡片随控制台
+  配置动态展示 + 访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员），当前主体无权
+  进入时点击 → 登录页（`?next` 登录成功回跳），工作区被门控且未登录 → 「去登录」
+  按钮）。开发：`cd web && npm install && npm run dev`（vite dev
   代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`（构建产物随仓库
   提交，服务器直接挂载，部署不跑前端构建）。
 - **旧前端（P7 退役）**：原根路径纯静态界面（`public/` 目录：index.html / app.js /

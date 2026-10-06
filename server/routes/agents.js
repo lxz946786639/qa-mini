@@ -16,7 +16,9 @@ function agentView(ctx, a) {
   const cfg = ctx.store.getAgentConfig(a.id);
   return {
     id: a.id, code: a.code, name: a.name, description: a.description || "",
-    icon: a.icon || "", protocol: (cfg && cfg.protocol) || "ragflow", sort: a.sort
+    icon: a.icon || "", protocol: (cfg && cfg.protocol) || "ragflow", sort: a.sort,
+    // P8.9：访问控制标志随公开视图下发（落地页「访问」徽标；门控仍在入口端点）
+    allow_anon: a.allow_anon === true, allow_code: a.allow_code === true, allow_user: a.allow_user === true
   };
 }
 
@@ -31,11 +33,9 @@ function register(router, ctx) {
 
   router.exact("GET", "/api/agents", (req, res, ctx_, urlObj) => {
     if (viewer403(req, urlObj, res)) return Promise.resolve();
-    // P8.8：按主体过滤访问控制（anon 只看 allow_anon；user/code 含超集；admin 全量）
-    const p = ctx.auth.principal(req, urlObj);
-    const agents = ctx.store.listAgents({ enabledOnly: true })
-      .filter((a) => agentAllows(p, a))
-      .map((a) => agentView(ctx, a));
+    // P8.9：落地页展示全部启用智能体（不按访问控制过滤，含 allow_* 标志供徽标）；
+    // 无权主体的门控在入口：GET /api/agents/:code → 404、POST /api/sessions → 403。
+    const agents = ctx.store.listAgents({ enabledOnly: true }).map((a) => agentView(ctx, a));
     return sendJSON(res, 200, { agents });
   });
 

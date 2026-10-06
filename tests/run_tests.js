@@ -2066,9 +2066,13 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(setc.data.agent.allow_anon, false);
     assert.strictEqual(setc.data.agent.allow_user, false);
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: "yes" }, adminTok)).status, 400, "非布尔 → 400");
-    // anon 不可见 / 不可打开
-    assert.ok(!(await api("GET", "/api/agents")).data.agents.some((a) => a.code === "sec-a"), "anon 列表隐藏 sec-a");
-    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "anon 打开 sec-a 404");
+    // P8.9：落地页展示全部启用智能体（含 allow_* 供徽标），无权主体在入口被门控
+    const anonList = (await api("GET", "/api/agents")).data.agents;
+    const secAView = anonList.find((a) => a.code === "sec-a");
+    assert.ok(secAView, "anon 列表仍展示 sec-a（点击进入再鉴权）");
+    assert.strictEqual(secAView.allow_anon, false, "列表暴露 allow_anon（落地页徽标）");
+    assert.strictEqual(secAView.allow_code, true);
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "anon 打开 sec-a 404（入口门控）");
     // user 主体被拒
     const u1 = await adminFetch("POST", "/api/admin/users", { username: "carol", password: "carolpw1" }, adminTok);
     assert.strictEqual(u1.status, 201, u1.data && u1.data.detail);
