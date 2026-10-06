@@ -332,8 +332,8 @@ body {
 }
 .a-block > .tag-a {
   grid-column: 1; grid-row: 1; align-self: start; margin-right: 0;
-  display: inline-flex; align-items: center;
-  height: calc(var(--qa-size, 14.5px) * var(--qa-line, 1.65));
+  /* P8.14e：紧凑徽章，「答」字符中心 = 首行文字中心（与「感谢专家提问…」平行） */
+  margin-top: calc(var(--qa-size, 14.5px) * var(--qa-line, 1.65) / 2 - 10.8px);
 }
 .a-block .a-body { grid-column: 2; grid-row: 1; min-width: 0; }
 .qcard.running { border-color: var(--accent-soft); }
@@ -343,10 +343,10 @@ body {
 }
 .tag-q { background: none; border: 1px solid var(--accent); color: var(--accent); }
 /* P8.14c：问/答 徽章高度 = 首行行高并垂直居中 → 与右侧内容水平对齐 */
+/* P8.14e：紧凑徽章（自然高度），margin-top 使「问」字符中心 = 首行文字中心（对齐旧版 .q-tag 紧凑样式） */
 .q-block .tag-q {
-  display: inline-flex; align-items: center;
-  height: calc(var(--qa-size, 14.5px) * var(--qa-line, 1.55));
   margin-right: 0;
+  margin-top: calc(var(--qa-size, 14.5px) * var(--qa-line, 1.55) / 2 - 10.8px);
 }
 .tag-a { background: none; border: 1px solid var(--green); color: var(--green); }
 .q-text {
