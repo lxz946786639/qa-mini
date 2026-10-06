@@ -323,7 +323,13 @@ body {
   border-bottom: 1px solid var(--border); border-left: 3px solid var(--accent);
   padding: 10px 14px;
 }
-.a-block { background: none; border: none; border-radius: 0; padding: 10px 14px 8px; }
+/* P8.14b：答案区两列 grid——「答」标签与内容首行同行，换行对齐内容左缘（对齐旧版 .card-a） */
+.a-block {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 8px;
+  background: none; border: none; border-radius: 0; padding: 10px 14px 8px;
+}
+.a-block > .tag-a { grid-column: 1; grid-row: 1; align-self: start; margin-right: 0; margin-top: 3px; }
+.a-block .a-body { grid-column: 2; grid-row: 1; min-width: 0; }
 .qcard.running { border-color: var(--accent-soft); }
 .tag {
   display: inline-block; font-size: 11px; font-weight: 700;
@@ -356,7 +362,7 @@ body {
 .a-status {
   display: flex; align-items: center; gap: 10px;
   border-top: 1px dashed var(--border); margin-top: 8px; padding-top: 7px;
-  font-size: 12px;
+  font-size: 12px; grid-column: 1 / -1;
 }
 .st { display: inline-flex; align-items: center; gap: 5px; color: var(--text-dim); }
 .st-ic { font-size: 13px; }
