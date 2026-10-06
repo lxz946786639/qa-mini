@@ -39,25 +39,25 @@ onMounted(() => load(true));
       <el-button size="small" :loading="loading" @click="load(true)">刷新</el-button>
     </div>
     <el-table v-loading="loading" :data="items" size="default">
-      <el-table-column label="时间" prop="created_at" width="165" />
-      <el-table-column label="操作者" width="140">
+      <el-table-column label="时间" prop="created_at" min-width="165" />
+      <el-table-column label="操作者" min-width="150">
         <template #default="{ row }">
           {{ row.actor_type === "admin" ? "管理员" : row.actor_type }}
           <span class="dim" v-if="row.actor_id">（{{ row.actor_id }}）</span>
         </template>
       </el-table-column>
-      <el-table-column label="动作" width="150">
+      <el-table-column label="动作" min-width="150">
         <template #default="{ row }">
           <el-tag size="small" :type="row.action.includes('create') ? 'success' : row.action.includes('update') ? 'warning' : 'info'">{{ row.action }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="目标" min-width="150">
+      <el-table-column label="目标" min-width="180">
         <template #default="{ row }">{{ row.target_type ? row.target_type + ":" + (row.target_id || "") : "—" }}</template>
       </el-table-column>
-      <el-table-column label="详情" min-width="260">
+      <el-table-column label="详情" min-width="320">
         <template #default="{ row }"><span class="dim">{{ fmtDetail(row.detail) }}</span></template>
       </el-table-column>
-      <el-table-column label="IP" prop="ip" width="130" />
+      <el-table-column label="IP" prop="ip" min-width="130" />
     </el-table>
     <div class="tab-more">
       <el-button size="small" :loading="loading" :disabled="loading" @click="load(false)">加载更多</el-button>

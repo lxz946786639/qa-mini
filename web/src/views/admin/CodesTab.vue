@@ -83,11 +83,11 @@ onMounted(load);
       <el-button type="primary" size="small" @click="add">生成</el-button>
     </div>
     <el-table v-loading="loading" :data="list">
-      <el-table-column label="访问码" width="120">
+      <el-table-column label="访问码" min-width="160">
         <template #default="{ row }"><b>{{ row.code }}</b></template>
       </el-table-column>
-      <el-table-column label="创建时间" prop="created_at" min-width="160" />
-      <el-table-column label="到期时间" min-width="160">
+      <el-table-column label="创建时间" prop="created_at" min-width="200" />
+      <el-table-column label="到期时间" min-width="200">
         <template #default="{ row }">
           <span :class="{ danger: expired(row) }">{{ row.expires_at }}</span>
           <el-tag v-if="expired(row)" type="danger" size="small" style="margin-left: 6px">已过期</el-tag>

@@ -125,35 +125,35 @@ onMounted(load);
       <el-button type="primary" size="small" @click="openCreate">＋ 新建智能体</el-button>
     </div>
     <el-table v-loading="loading" :data="agents">
-      <el-table-column label="图标" width="70">
+      <el-table-column label="图标" min-width="70">
         <template #default="{ row }"><el-icon class="agent-ic agent-ic-ui" :size="20"><component :is="agentIconComponent(row.icon)" /></el-icon></template>
       </el-table-column>
-      <el-table-column label="名称" min-width="160">
+      <el-table-column label="名称" min-width="200">
         <template #default="{ row }">
           <b>{{ row.name }}</b>
           <div class="sub">{{ row.code }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="协议" width="130">
+      <el-table-column label="协议" min-width="120">
         <template #default="{ row }">
           <el-tag size="small" effect="plain">{{ row.protocol }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="访问" width="120">
+      <el-table-column label="访问" min-width="130">
         <template #default="{ row }">
           <el-tag size="small" :type="row.allow_anon ? 'success' : (accessLabel(row) === '仅管理员' ? 'danger' : 'warning')" effect="plain">{{ accessLabel(row) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="排序" prop="sort" width="70" />
-      <el-table-column label="状态" width="90">
+      <el-table-column label="排序" prop="sort" min-width="90" />
+      <el-table-column label="状态" min-width="100">
         <template #default="{ row }">
           <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? "启用" : "停用" }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="描述" min-width="180">
+      <el-table-column label="描述" min-width="300">
         <template #default="{ row }"><span class="dim">{{ row.description || "—" }}</span></template>
       </el-table-column>
-      <el-table-column label="操作" width="190" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
           <el-button size="small" :type="row.enabled ? 'danger' : 'success'" plain @click="toggleEnabled(row)">{{ row.enabled ? "停用" : "启用" }}</el-button>

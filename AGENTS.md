@@ -103,6 +103,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
                  users/agents/codes/audit/sys 五模块 + P7 首启引导；
                  P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
+                 P8.26 控制台四表格列宽均衡（全 min-width 比例伸展）；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；

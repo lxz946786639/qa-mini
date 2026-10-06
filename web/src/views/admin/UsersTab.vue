@@ -63,20 +63,20 @@ onMounted(load);
       <el-button type="primary" size="small" @click="dialog = true">＋ 新建用户</el-button>
     </div>
     <el-table v-loading="loading" :data="users" size="default">
-      <el-table-column prop="username" label="用户名" min-width="130" />
-      <el-table-column prop="display_name" label="显示名" min-width="120" />
-      <el-table-column label="角色" width="110">
+      <el-table-column prop="username" label="用户名" min-width="140" />
+      <el-table-column prop="display_name" label="显示名" min-width="140" />
+      <el-table-column label="角色" min-width="110">
         <template #default="{ row }">
           <el-tag :type="row.role === 'admin' ? 'warning' : 'info'" size="small">{{ row.role === "admin" ? "管理员" : "普通用户" }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="90">
+      <el-table-column label="状态" min-width="100">
         <template #default="{ row }">
           <el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status === "active" ? "启用" : "停用" }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" min-width="150" />
-      <el-table-column prop="last_login_at" label="最近登录" min-width="150">
+      <el-table-column prop="created_at" label="创建时间" min-width="170" />
+      <el-table-column prop="last_login_at" label="最近登录" min-width="170">
         <template #default="{ row }">{{ row.last_login_at || "—" }}</template>
       </el-table-column>
       <el-table-column label="操作" width="250" fixed="right">
