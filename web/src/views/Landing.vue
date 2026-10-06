@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
           <a class="lp-btn lp-btn-soft" href="/doc/03-部署说明.md">查看部署文档</a>
         </div>
         </div>
-        <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2025-现在 Echo Tech Co., Ltd.</footer>
+        <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2026 Echo Tech Co., Ltd. All rights reserved.</footer>
       </section>
     </main>
 

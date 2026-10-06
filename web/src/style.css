@@ -470,11 +470,8 @@ body {
 }
 .asr-autosend input { margin: 0; accent-color: var(--accent); cursor: pointer; }
 
-.agent-pill {
-  font-size: 13px; background: var(--card); border: 1px solid var(--border);
-  padding: 3px 10px; border-radius: 999px;
-}
-.agent-pill em { font-style: normal; color: var(--text-dim); margin-left: 6px; font-size: 11px; }
+/* P8.15：品牌位「EchoAnswer · 智能体名称」——智能体名用主题色突出 */
+.brand-agent { font-style: normal; color: var(--accent); }
 .sse-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .dot-open { background: var(--green); }
 .dot-err { background: var(--red); }
@@ -639,7 +636,7 @@ body {
   .ws-app.sidebar-open .ws-side { transform: translateX(0); }
   .ws-side-close { display: block; }
   .ws-side-toggle { display: none; }
-  .ws-top-left .nav-sep, .ws-top .agent-pill { display: none; }
+  .ws-top-left .nav-sep { display: none; }
   .ws-col { height: auto; flex: 1 1 auto; min-height: 0; overflow: hidden; }
   .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; height: auto; }
   .ws-head-right { flex-wrap: wrap; row-gap: 6px; }

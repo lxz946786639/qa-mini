@@ -563,10 +563,10 @@ onBeforeUnmount(() => {
         <!-- P8.6：品牌与官网首页一致（同款波形 logo + 名称） -->
         <router-link to="/" class="brand">
           <span class="ws-brand-logo" v-html="LOGO_SVG"></span>
-          <span class="brand-text">EchoAnswer 回响答</span>
+          <!-- P8.15：品牌位直接显示当前智能体名称（替代「回响答」+ 原智能体徽章） -->
+          <span class="brand-text">EchoAnswer<em class="brand-agent"> · {{ agentName }}</em></span>
         </router-link>
-        <span class="nav-sep" aria-hidden="true"></span>
-        <span class="agent-pill" title="当前智能体与协议">{{ agentName }}<em>{{ PROTO_NAMES[agentProto] || agentProto }}</em></span>
+        <span v-if="runningCount > 0" class="nav-sep" aria-hidden="true"></span>
         <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
       </div>
       <div class="ws-head-right">
