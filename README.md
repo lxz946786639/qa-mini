@@ -225,7 +225,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 - **新代前端（v59 P4–P7，站点根）**：web/ 构建产物（Vue3 + Vite + TS + Element
   Plus + Pinia + PWA，独立 package，仅 web/ 用 npm；根项目后端保持零依赖）直接作为
   站点根（P7 切根；旧 `/app/` 挂载与 `public/` 旧前端退役）。路由：`/` 官网首页（P8 四区块：
-  Hero / 智能体选择（`GET /api/agents` 真实卡 + 示例卡补齐）/ 产品矩阵（EchoScribe ×
+  Hero / 智能体选择（`GET /api/agents` 全量真实卡，无示例卡）/ 产品矩阵（EchoScribe ×
   EchoAnswer）/ 完整工作流（四步）；landing.css `--lp-*` 双主题 + IO 滚动渐入；
   主题首访跟随系统、手动切换持久化）+ `/doc/<文件名>.md` 项目文档静态路由 +
   `/login`（账号 / 6 位访问码 → `ea_sid` cookie；

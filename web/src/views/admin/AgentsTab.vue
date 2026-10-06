@@ -3,7 +3,7 @@
 // 智能体管理（P3 多智能体：每智能体一个协议；config 空字段 = 回退全局协议默认）
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Microphone } from "@element-plus/icons-vue";
+import { Microphone, Cpu } from "@element-plus/icons-vue";
 import { api } from "../../api";
 
 interface Agent {
@@ -52,6 +52,10 @@ const form = reactive({
   config: { url: "", api_key: "", chat_id: "", model: "", body: "" }
 });
 const fields = computed(() => CFG_FIELDS[form.protocol] || []);
+
+// P8.11：图标改为点选（不再手输表情码）；留空 = 默认图标
+const ICON_CHOICES = ["🤖", "🧠", "💡", "🎓", "🎙️", "📚", "📖", "🔬", "🧪", "⚗️", "📋", "📝", "💬", "📊", "⚖️", "💼", "🏭", "🌐", "🎯", "🛠️"];
+const customIcon = computed(() => (form.icon && !ICON_CHOICES.includes(form.icon) ? [form.icon] : []));
 
 async function load() {
   loading.value = true;
@@ -172,8 +176,14 @@ onMounted(load);
             <el-form-item label="描述（≤200）">
               <el-input v-model="form.description" type="textarea" :rows="2" />
             </el-form-item>
-            <el-form-item label="图标（表情符号，可空）">
-              <el-input v-model="form.icon" placeholder="留空 = 默认图标" style="max-width: 120px" />
+            <el-form-item label="图标（点选；留空 = 默认图标）">
+              <div class="at-icon-pick">
+                <button type="button" class="at-icon-opt" :class="{ on: form.icon === '' }"
+                  title="默认图标" @click="form.icon = ''"><el-icon :size="17"><Cpu /></el-icon></button>
+                <button v-for="e in [...ICON_CHOICES, ...customIcon]" :key="e" type="button"
+                  class="at-icon-opt" :class="{ on: form.icon === e }" :title="e" @click="form.icon = e">{{ e }}</button>
+              </div>
+              <div class="at-icon-hint">点击选择；再次点击已选项或「默认图标」可取消。所选图标显示在首页卡片与控制台列表。</div>
             </el-form-item>
             <el-form-item label="排序（小者优先）">
               <el-input-number v-model="form.sort" :min="0" :max="999" />

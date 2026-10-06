@@ -64,13 +64,6 @@ const PROTO: Record<string, { label: string; cls: string; icon: string }> = {
   openai: { label: "通用", cls: "t-gen", icon: "send" },
   generic: { label: "通用", cls: "t-gen", icon: "send" }
 };
-// 示例卡（真实智能体不足 4 张时补齐；示意场景，进入需登录）
-const SAMPLES = [
-  { name: "答辩副手", desc: "毕业答辩多轮问答，对话流编排", proto: "dify", icon: "flow" },
-  { name: "评审通", desc: "会议评审 / 路演问答，通用协议接入", proto: "generic", icon: "send" },
-  { name: "科研助手", desc: "科研答辩多领域知识问答", proto: "ragflow", icon: "flask" }
-];
-
 const router = useRouter();
 const auth = useAuthStore();
 const theme = useTheme();
@@ -88,10 +81,11 @@ interface Card {
   icon: string;
   href: string;
   isDefault: boolean;
-  isSample: boolean;
   // P8.9：访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员）
   access: string;
   accessCls: string;
+  // P8.11：控制台配置的表情图标；空 = 按协议取默认 SVG
+  iconEmoji: string;
 }
 
 // P8.9：访问方式徽标（优先级 匿名 > 用户登录 > 访问码）
@@ -111,30 +105,19 @@ function allowedFor(a: AgentItem): boolean {
   return !!(a.allow_anon || a.allow_code); // code
 }
 
-// 卡片 = 真实智能体（sort 序，前 4）+ 示例卡补齐至 4；0 个真实卡不补示例
-const cards = computed<Card[]>(() => {
-  const real: Card[] = agents.value.slice(0, 4).map((a, i) => {
-    const p = PROTO[a.protocol] || PROTO.generic;
-    const ab = accessBadge(a);
-    return {
-      key: a.id, name: a.name, desc: a.description || "（暂无描述）",
-      tag: p.label, tagCls: p.cls, icon: p.icon,
-      href: "/agents/" + a.code, isDefault: i === 0, isSample: false,
-      access: ab.label, accessCls: ab.cls
-    };
-  });
-  if (!agents.value.length || real.length >= 4) return real;
-  const extra: Card[] = SAMPLES.slice(0, 4 - real.length).map((s, i) => {
-    const p = PROTO[s.proto];
-    return {
-      key: "sample-" + i, name: s.name, desc: s.desc,
-      tag: p.label, tagCls: p.cls, icon: s.icon,
-      href: "/login", isDefault: false, isSample: true,
-      access: "", accessCls: ""
-    };
-  });
-  return [...real, ...extra];
-});
+// P8.11：卡片全部来自控制台智能体配置（GET /api/agents，sort 序，前 4；
+// 不再有前端示例卡）；图标优先用控制台配置的表情符号，空 = 协议默认 SVG
+const cards = computed<Card[]>(() => agents.value.slice(0, 4).map((a, i) => {
+  const p = PROTO[a.protocol] || PROTO.generic;
+  const ab = accessBadge(a);
+  return {
+    key: a.id, name: a.name, desc: a.description || "（暂无描述）",
+    tag: p.label, tagCls: p.cls, icon: p.icon,
+    href: "/agents/" + a.code, isDefault: i === 0,
+    access: ab.label, accessCls: ab.cls,
+    iconEmoji: a.icon || ""
+  };
+}));
 
 const steps = [
   { no: "01", name: "采集", desc: "EchoScribe 采集电脑输出音频，无需虚拟声卡。", icon: "mic" },
@@ -466,11 +449,11 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="goCard(c)"
           >
             <div class="lp-agent-top">
-              <span class="lp-agent-ic" v-html="ICONS[c.icon] || ICONS.mic"></span>
+              <span v-if="c.iconEmoji" class="lp-agent-ic lp-agent-emoji">{{ c.iconEmoji }}</span>
+              <span v-else class="lp-agent-ic" v-html="ICONS[c.icon] || ICONS.mic"></span>
               <span class="lp-tags">
                 <span class="lp-tag" :class="c.tagCls">{{ c.tag }}</span>
                 <span v-if="c.access" class="lp-access" :class="c.accessCls">{{ c.access }}</span>
-                <span v-if="c.isSample" class="lp-sample">示例</span>
               </span>
             </div>
             <div class="lp-agent-name">
