@@ -500,12 +500,34 @@ body {
 }
 /* ---------- P6 控制台（P7.3：Ant Design Admin 风格：左纵向导航 + 顶栏标题 + 内容卡片） ---------- */
 .adm-app { display: flex; height: 100dvh; overflow: hidden; min-height: 0; }
-@media (min-width: 721px) { .adm-app.side-collapsed .adm-side { display: none; } }
+/* P8.31：收起 = 44px 图标窄轨（对齐工作区会话列表交互；原 display:none 整栏隐藏） */
+@media (min-width: 721px) {
+  .adm-app.side-collapsed .adm-side { width: 44px; }
+  .adm-app.side-collapsed .adm-brand { padding: 10px 4px; }
+  .adm-app.side-collapsed .adm-brand-row { flex-direction: column; gap: 6px; }
+  .adm-app.side-collapsed .adm-brand .brand-text,
+  .adm-app.side-collapsed .adm-brand-sub,
+  .adm-app.side-collapsed .adm-nav-lb { display: none; }
+  .adm-app.side-collapsed .adm-brand-row .brand { justify-content: center; }
+  .adm-app.side-collapsed .adm-nav { margin: 10px 4px; }
+  .adm-app.side-collapsed .adm-nav li { justify-content: center; padding: 9px 0; }
+  .adm-app.side-collapsed .adm-side-foot { padding: 10px 4px; }
+  .adm-app.side-collapsed .adm-home { justify-content: center; width: 100%; }
+}
+/* P8.31：顶栏汉堡仅窄屏抽屉开关（桌面隐藏，收起/展开在侧栏内） */
+.adm-head-menu {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  font-size: 16px; cursor: pointer; padding: 4px 7px; border-radius: 7px; line-height: 1; flex: none;
+}
+.adm-head-menu:hover { color: var(--text); border-color: var(--border); background: var(--card); }
+@media (min-width: 721px) { .adm-head-menu { display: none; } }
 .adm-side {
   width: 220px; flex: 0 0 auto; background: var(--bg-soft); border-right: 1px solid var(--border);
   display: flex; flex-direction: column; min-height: 0;
 }
 .adm-brand { padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
+.adm-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .adm-brand-sub { display: block; font-size: 11px; color: var(--text-dim); margin-top: 4px; }
 .adm-nav { list-style: none; margin: 10px 8px; padding: 0; overflow-y: auto; flex: 1; }
 .adm-nav li {

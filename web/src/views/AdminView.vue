@@ -5,7 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, ArrowLeft } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, ArrowLeft, Fold, Expand } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
@@ -79,25 +79,32 @@ async function onLogout() {
     <!-- 左侧导航（品牌 + 模块菜单 + 返回首页） -->
     <aside class="adm-side">
       <div class="adm-brand">
-        <router-link to="/" class="brand">
-          <span class="adm-brand-logo" v-html="LOGO_SVG"></span>
-          <span class="brand-text">EchoAnswer</span>
-        </router-link>
+        <div class="adm-brand-row">
+          <router-link to="/" class="brand">
+            <span class="adm-brand-logo" v-html="LOGO_SVG"></span>
+            <span class="brand-text">EchoAnswer</span>
+          </router-link>
+          <!-- P8.31：收起/展开移入侧栏品牌行（Fold/Expand 语义图标，与工作区会话列表同款） -->
+          <button class="ws-side-toggle" :title="sideCollapsed ? '展开控制台导航' : '收起控制台导航'" @click="toggleSide">
+            <el-icon v-if="sideCollapsed"><Expand /></el-icon><el-icon v-else><Fold /></el-icon>
+          </button>
+        </div>
         <span class="adm-brand-sub">回响答 · 控制台</span>
       </div>
       <ul class="adm-nav">
-        <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" @click="tab = m.key">
-          <el-icon class="adm-ic"><component :is="m.icon" /></el-icon>{{ m.label }}
+        <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" :title="m.label" @click="tab = m.key">
+          <el-icon class="adm-ic"><component :is="m.icon" /></el-icon><span class="adm-nav-lb">{{ m.label }}</span>
         </li>
       </ul>
       <div class="adm-side-foot">
-        <router-link to="/" class="adm-home" @click="sideOpen = false"><el-icon><ArrowLeft /></el-icon>返回落地页</router-link>
+        <router-link to="/" class="adm-home" @click="sideOpen = false"><el-icon><ArrowLeft /></el-icon><span class="adm-nav-lb">返回落地页</span></router-link>
       </div>
     </aside>
 
     <div class="adm-col">
       <header class="adm-top">
-        <button class="ws-head-menu" title="收起 / 展开控制台导航" @click="toggleSide"><el-icon><Menu /></el-icon></button>
+        <!-- P8.31：顶栏汉堡 = 仅窄屏（≤720px）抽屉开关；桌面收起/展开在侧栏内（Fold/Expand） -->
+        <button class="adm-head-menu" title="打开导航" @click="toggleSide"><el-icon><Menu /></el-icon></button>
         <div class="adm-top-tt">
           <div class="adm-top-title">{{ activeMeta.label }}</div>
           <div class="adm-top-sub">{{ activeMeta.sub }}</div>
