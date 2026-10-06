@@ -80,36 +80,66 @@
 }
 .lp-brand span { display: inline-flex; }
 .lp-brand svg { width: 26px; height: 26px; color: var(--lp-accent); }
-.lp-nav-right { display: flex; align-items: center; gap: 16px; }
+/* P8.2 导航布局：锚点链接（智能体/产品矩阵/工作流）｜ 无边框主题按钮 · 控制台 · 登录/用户名下拉 */
+.lp-nav-right { display: flex; align-items: center; gap: 4px; }
+.lp-nav-links { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
 .lp-nav-link {
-  background: none; border: none; padding: 0; font-family: inherit;
+  background: none; border: none; padding: 6px 10px; font-family: inherit;
   color: var(--lp-dim); text-decoration: none; font-size: 14px; cursor: pointer;
-  transition: color 0.15s;
+  border-radius: 8px; white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
 }
-.lp-nav-link:hover { color: var(--lp-accent); }
+.lp-nav-link:hover { color: var(--lp-text); background: var(--lp-glow); }
+.lp-nav-link:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 1px; }
+.lp-nav-sep { width: 1px; height: 20px; background: var(--lp-border); margin: 0 8px; flex: none; }
 .lp-theme-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; border-radius: 9px; cursor: pointer;
-  background: transparent; border: 1px solid var(--lp-border); color: var(--lp-dim);
-  transition: color 0.15s, border-color 0.15s;
+  width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+  background: transparent; border: none; color: var(--lp-dim);
+  transition: color 0.15s, background 0.15s;
 }
-.lp-theme-btn:hover { color: var(--lp-accent); border-color: var(--lp-accent); }
-.lp-theme-btn svg { width: 18px; height: 18px; }
-.lp-nav-auth { display: flex; align-items: center; gap: 10px; }
-.lp-user-chip { font-size: 13px; color: var(--lp-dim); display: inline-flex; align-items: center; gap: 6px; }
-.lp-user-chip em {
-  font-style: normal; font-size: 11px; color: var(--lp-accent);
-  border: 1px solid var(--lp-accent); border-radius: 999px; padding: 0 6px; line-height: 16px;
+.lp-theme-btn:hover { color: var(--lp-accent); background: var(--lp-glow); }
+.lp-theme-btn:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 1px; }
+.lp-theme-btn svg { width: 19px; height: 19px; }
+.lp-user-wrap { position: relative; }
+.lp-user-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  color: var(--lp-text); font-size: 14px; padding: 7px 10px; border-radius: 8px;
+  transition: background 0.15s;
 }
-.lp-auth-btn {
-  font-size: 13px; font-family: inherit; color: var(--lp-text); text-decoration: none; cursor: pointer;
+.lp-user-btn:hover, .lp-user-btn[aria-expanded="true"] { background: var(--lp-glow); }
+.lp-user-btn:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 1px; }
+.lp-user-caret { display: inline-flex; color: var(--lp-dim); transition: transform 0.18s; }
+.lp-user-caret svg { width: 13px; height: 13px; }
+.lp-user-btn[aria-expanded="true"] .lp-user-caret { transform: rotate(180deg); }
+.lp-user-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 60;
+  min-width: 110px; padding: 6px;
+  background: var(--lp-card); border: 1px solid var(--lp-border);
+  border-radius: 10px; box-shadow: var(--lp-shadow);
+}
+.lp-user-menu-item {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; font-family: inherit; cursor: pointer;
+  color: var(--lp-dim); font-size: 13.5px; padding: 8px 12px; border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+}
+.lp-user-menu-item:hover { background: var(--lp-glow); color: var(--lp-text); }
+.lp-user-menu-item:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: -2px; }
+.lp-login-btn {
+  font-size: 13.5px; font-family: inherit; color: var(--lp-text); text-decoration: none; cursor: pointer;
   background: transparent; border: 1px solid var(--lp-border); border-radius: 8px;
-  padding: 6px 14px; transition: color 0.15s, border-color 0.15s;
+  padding: 7px 16px; margin-left: 4px; transition: color 0.15s, border-color 0.15s;
 }
-.lp-auth-btn:hover { color: var(--lp-accent); border-color: var(--lp-accent); }
+.lp-login-btn:hover { color: var(--lp-accent); border-color: var(--lp-accent); }
 @media (max-width: 640px) {
-  .lp-nav { gap: 10px; }
-  .lp-nav-link { display: none; }
+  .lp-nav { gap: 8px; }
+  .lp-nav-links { display: none; }
+  .lp-nav-sep { margin: 0 2px; }
+}
+@media (max-width: 420px) {
+  .lp-brand span:last-child { display: none; }
 }
 
 /* ---------- 区块通用 ---------- */

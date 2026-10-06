@@ -47,7 +47,8 @@ const ICONS: Record<string, string> = {
   moon: S('<path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/>'),
   arrowD: S('<path d="M12 5v14M6 13l6 6 6-6"/>'),
   arrowR: S('<path d="M5 12h14M13 6l6 6-6 6"/>'),
-  arrowVD: S('<path d="M12 3v20M6.5 17.5 12 23l5.5-5.5"/>', "0 0 24 26")
+  arrowVD: S('<path d="M12 3v20M6.5 17.5 12 23l5.5-5.5"/>', "0 0 24 26"),
+  chevD: S('<path d="m6 9 6 6 6-6"/>')
 };
 const waveHeights = [18, 30, 12, 38, 22, 44, 28, 16, 34, 20, 10, 46, 26, 14];
 
@@ -142,6 +143,10 @@ function viewAll() {
 function goExperience() {
   router.push("/agents/industry-brain");
 }
+// P8.2 导航：控制台入口（admin → /admin，其余主体 / 未登录 → /login）
+function goConsole() {
+  router.push(auth.isAdmin ? "/admin" : "/login");
+}
 function scrollTo(id: string) {
   const el = document.getElementById(id);
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -172,6 +177,15 @@ function revealInit() {
     el.style.transitionDelay = (i % 8) * 55 + "ms";
     io!.observe(el);
   });
+}
+
+// ---------- P8.2 用户名下拉（点外部关闭） ----------
+const userMenuOpen = ref(false);
+const userWrap = ref<HTMLElement | null>(null);
+function onDocClick(e: MouseEvent) {
+  if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) {
+    userMenuOpen.value = false;
+  }
 }
 
 // ---------- 滚动提示淡出（一次性） ----------
@@ -242,10 +256,12 @@ onMounted(() => {
   revealInit();
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("wheel", onWheel, { passive: false });
+  document.addEventListener("click", onDocClick);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
   window.removeEventListener("wheel", onWheel);
+  document.removeEventListener("click", onDocClick);
   if (glideRaf) cancelAnimationFrame(glideRaf);
   glideRaf = 0;
   glidePending = 0;
@@ -263,8 +279,12 @@ onBeforeUnmount(() => {
         <span>EchoAnswer 回响答</span>
       </a>
       <nav class="lp-nav-right" aria-label="主导航">
-        <button class="lp-nav-link" type="button" @click="scrollTo('matrix')">产品矩阵</button>
-        <a class="lp-nav-link" href="/doc/01-项目设计文档.md">文档</a>
+        <div class="lp-nav-links">
+          <button class="lp-nav-link" type="button" @click="scrollTo('agents')">智能体</button>
+          <button class="lp-nav-link" type="button" @click="scrollTo('matrix')">产品矩阵</button>
+          <button class="lp-nav-link" type="button" @click="scrollTo('workflow')">工作流</button>
+        </div>
+        <span class="lp-nav-sep" aria-hidden="true"></span>
         <button
           class="lp-theme-btn"
           type="button"
@@ -273,19 +293,24 @@ onBeforeUnmount(() => {
         >
           <span v-html="theme.lightTheme ? ICONS.sun : ICONS.moon"></span>
         </button>
-        <div class="lp-nav-auth">
-          <template v-if="auth.isAuthed">
-            <span class="lp-user-chip">
-              {{ auth.displayName || "用户" }}
-              <em v-if="auth.isAdmin">管理</em>
-            </span>
-            <router-link v-if="auth.isAdmin" to="/admin" class="lp-auth-btn">控制台</router-link>
-            <button class="lp-auth-btn" type="button" @click="onLogout">退出</button>
-          </template>
-          <template v-else>
-            <router-link to="/login" class="lp-auth-btn">登录</router-link>
-          </template>
+        <button class="lp-nav-link" type="button" @click="goConsole">控制台</button>
+        <div v-if="auth.isAuthed" class="lp-user-wrap" ref="userWrap">
+          <button
+            class="lp-user-btn"
+            type="button"
+            aria-haspopup="menu"
+            :aria-expanded="userMenuOpen ? 'true' : 'false'"
+            @click="userMenuOpen = !userMenuOpen"
+            @keydown.esc="userMenuOpen = false"
+          >
+            {{ auth.displayName || "用户" }}
+            <span class="lp-user-caret" v-html="ICONS.chevD"></span>
+          </button>
+          <div v-if="userMenuOpen" class="lp-user-menu" role="menu" aria-label="用户菜单">
+            <button class="lp-user-menu-item" role="menuitem" type="button" @click="onLogout">退出</button>
+          </div>
         </div>
+        <router-link v-else to="/login" class="lp-login-btn">登录</router-link>
       </nav>
     </header>
 
