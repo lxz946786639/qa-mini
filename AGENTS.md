@@ -33,8 +33,8 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 150 项断言全绿，
-   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3 数据层 38 项）；
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 151 项断言全绿，
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 40 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 
 ## 3. 代码-文档同步规则（核心）
@@ -84,7 +84,7 @@ lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI �
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
 lib/config.js    配置加载/深合并/校验 + 旧 JSON 会话兼容（存储已迁 store.js）
-lib/migrations.js v1→v2→v3 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列）
+lib/migrations.js v1→v2→v3→v4 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
@@ -113,8 +113,8 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 150 项断言全绿
-node tests/store_tests.js                       # 38 项数据层单测全绿
+npm test                                        # 151 项断言全绿
+node tests/store_tests.js                       # 40 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
 ```

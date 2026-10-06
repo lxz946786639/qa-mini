@@ -10,9 +10,11 @@
 //   null                        // 无凭证（由调用方决定 401/403）
 //
 // 会话桶（sessions.access_mode）：
-//   "shared" —— 共享桶：v1/v2 存量会话（P3 首启一次性回填）+ 管理员/匿名新建；
+//   "shared" —— 共享桶：v1/v2 存量会话（P3 首启一次性回填）+ 匿名新建；
 //               一切查看级主体可见可问（保留旧「访问码 = 共享会话」语义）
 //   "user"   —— 用户私有桶 (user_id, agent_id)：仅属主用户 + 管理
+//               （P8.10：管理员新建会话也落此桶，user_id = 管理员用户，
+//                 不再污染共享桶 —— 此前管理员新建对码/用户/匿名全部可见）
 //   "code"   —— 访问码私有桶 (access_code_id, agent_id)：仅该码持有者 + 管理
 
 function canView(principal, s) {
@@ -60,7 +62,12 @@ function bucketFor(principal, legacy) {
   if (principal && principal.kind === "code") {
     return { access_mode: "code", user_id: null, agent_id: principal.agentId || (legacy && legacy.agentId), access_code_id: principal.codeId };
   }
-  // admin / anon / null → 共享桶（双轨期遗留语义）
+  // P8.10：管理员新建 → 管理员私有桶（user 桶，user_id = 管理员用户）；
+  // userId 缺失（遗留 token 边缘态）→ 兜底共享桶
+  if (principal && principal.kind === "admin" && principal.userId) {
+    return { access_mode: "user", user_id: principal.userId, agent_id: principal.agentId || (legacy && legacy.agentId), access_code_id: null };
+  }
+  // anon / null → 共享桶（双轨期遗留语义：匿名创建 = 共享）
   return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: legacy ? legacy.agentId : null, access_code_id: null };
 }
 

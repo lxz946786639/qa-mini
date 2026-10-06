@@ -90,6 +90,19 @@ async function api(method, urlPath, body) {
   return { status: resp.status, data };
 }
 
+async function waitDoneWith(qaId, headers, timeoutMs) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < (timeoutMs || 8000)) {
+    const resp = await fetch(BASE + "/api/history", { headers: Object.assign({ "Content-Type": "application/json" }, headers || {}) });
+    let data = null;
+    try { data = await resp.json(); } catch {}
+    const rec = ((data && data.items) || []).find((h) => h.id === qaId);
+    if (rec && rec.status === "done") return rec;
+    await sleep(50);
+  }
+  throw new Error("waitDoneWith 超时: " + qaId);
+}
+
 async function waitDone(qaId, timeoutMs) {
   const t0 = Date.now();
   while (Date.now() - t0 < (timeoutMs || 8000)) {
@@ -1684,10 +1697,10 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(!("unknown" in d1.data.session.protocol_config.openai), "未知字段被清洗");
     assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: [1] }, adminTok)).status, 400, "数组 -> 400");
     assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: "x" }, adminTok)).status, 400, "字符串 -> 400");
+    // P8.10：管理员私有桶会话对 anon 不可见（数据边界）；非管理视图剥离语义由
+    // 「非管理视图剥离 token」用例的共享会话断言覆盖
     const anon = await api("GET", "/api/sessions/" + sid);
-    assert.strictEqual(anon.status, 200);
-    assert.ok(!("protocol_config" in anon.data.session), "非管理视图剥离 protocol_config");
-    assert.ok(!("token" in anon.data.session));
+    assert.strictEqual(anon.status, 404, "P8.10 anon 不可见管理员私有会话");
     const p2 = await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { openai: {} } }, adminTok);
     assert.strictEqual(p2.status, 200);
     assert.deepStrictEqual(p2.data.session.protocol_config.openai, {}, "空对象 = 清除该协议覆盖");
@@ -1711,9 +1724,9 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(rBad.status, 400, "无覆盖会话应被前置校验拦截");
     assert.ok(rBad.data.detail.includes("Chat ID"), rBad.data.detail);
     // 有覆盖会话：合并后 key/chat_id 齐全 -> 全链路成功
-    const rOk = await api("POST", "/api/chat", { session_id: sid, question: "覆盖问题" });
+    const rOk = await adminFetch("POST", "/api/chat", { session_id: sid, question: "覆盖问题" }, adminTok);
     assert.strictEqual(rOk.status, 202);
-    const rec = await waitDone(rOk.data.qa_id);
+    const rec = await waitDoneWith(rOk.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec.ok, true, rec.detail);
     assert.strictEqual(rec.session_id, sid);
     // 恢复全局配置 + 清理会话
@@ -1795,9 +1808,9 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const c = await adminFetch("POST", "/api/sessions", { name: "stale-reset", protocol: "ragflow" }, adminTok);
     assert.strictEqual(c.status, 201);
     const sid = c.data.session.id;
-    const r1 = await api("POST", "/api/chat", { session_id: sid, question: "q1" });
+    const r1 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q1" }, adminTok);
     assert.strictEqual(r1.status, 202);
-    const rec1 = await waitDone(r1.data.qa_id);
+    const rec1 = await waitDoneWith(r1.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec1.ok, true, rec1.detail);
     const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
     assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
@@ -1806,8 +1819,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const d2 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
     assert.strictEqual(d2.data.session.ragflow_session_id, "", "chat_id 变更后 ragflow_session_id 被清空");
     // 新 chat 下重新提问 → 建新会话并正常
-    const r2 = await api("POST", "/api/chat", { session_id: sid, question: "q2" });
-    const rec2 = await waitDone(r2.data.qa_id);
+    const r2 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q2" }, adminTok);
+    const rec2 = await waitDoneWith(r2.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec2.ok, true, rec2.detail);
     const d3 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
     assert.ok(d3.data.session.ragflow_session_id, "新 chat 会话已保存");
@@ -1822,8 +1835,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const c = await adminFetch("POST", "/api/sessions", { name: "global-reset", protocol: "ragflow" }, adminTok);
     assert.strictEqual(c.status, 201);
     const sid = c.data.session.id;
-    const r1 = await api("POST", "/api/chat", { session_id: sid, question: "q1" });
-    const rec1 = await waitDone(r1.data.qa_id);
+    const r1 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q1" }, adminTok);
+    const rec1 = await waitDoneWith(r1.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec1.ok, true, rec1.detail);
     const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
     assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
@@ -1835,8 +1848,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(typeof cp.data.invalidated_sessions, "number", "响应带 invalidated_sessions");
     // 该会话加覆盖（C9）→ 不受全局变更影响
     assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { ragflow: { chat_id: "C9" } } }, adminTok)).status, 200);
-    const r2 = await api("POST", "/api/chat", { session_id: sid, question: "q2" });
-    const rec2 = await waitDone(r2.data.qa_id);
+    const r2 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q2" }, adminTok);
+    const rec2 = await waitDoneWith(r2.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec2.ok, true, rec2.detail);
     const d3 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
     const sid3 = d3.data.session.ragflow_session_id;
@@ -2109,6 +2122,42 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { agent_code: "sec-a" })).status, 403, "全关 → user 403");
     assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "全关 → anon 404");
     assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
+  });
+
+  await test("p8.10: 权限与数据边界（admin 新建 → 管理员私有桶；重构前共享保持共享）", async () => {
+    const users = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users;
+    const adminU = users.find((u) => u.role === "admin");
+    // admin 新建 → 管理员私有桶（P8.10：不再落共享桶）
+    const mk = await adminFetch("POST", "/api/sessions", { name: "p810-admin" }, adminTok);
+    assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
+    const sid = mk.data.session.id;
+    const det = (await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok)).data.session;
+    assert.strictEqual(det.access_mode, "user", "admin 新建会话 → user 私有桶（P8.10）");
+    assert.strictEqual(det.user_id, adminU.id, "归属管理员用户");
+    // 访问码主体：列表不含 + 详情 404
+    const codeJar = makeJar();
+    const cl = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "888888" });
+    assert.strictEqual(cl.status, 200, cl.data && cl.data.detail);
+    assert.ok(!(await jarFetch(codeJar, "GET", "/api/sessions")).data.sessions.some((s) => s.id === sid), "code 列表不含管理员私有会话");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/sessions/" + sid)).status, 404, "code 访问管理员私有会话 404");
+    // 重构前共享会话：code 仍可见（「访问码 = 共享会话」语义保留）
+    const adminList = (await adminFetch("GET", "/api/sessions", undefined, adminTok)).data.sessions;
+    assert.ok(adminList.some((s) => s.id === sid), "admin 列表含自身私有会话");
+    let sharedVisible = false;
+    for (const s of adminList.slice(0, 10)) {
+      const d = (await adminFetch("GET", "/api/sessions/" + s.id, undefined, adminTok)).data.session;
+      if (d.access_mode === "shared") {
+        sharedVisible = (await jarFetch(codeJar, "GET", "/api/sessions/" + s.id)).status === 200;
+        break;
+      }
+    }
+    assert.ok(sharedVisible, "重构前共享会话对 code 仍可见");
+    // 登录用户 / 匿名：均不可见
+    const uJar = makeJar();
+    const ul = await jarFetch(uJar, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(ul.status, 200, ul.data && ul.data.detail);
+    assert.ok(!(await jarFetch(uJar, "GET", "/api/sessions")).data.sessions.some((s) => s.id === sid), "user 列表不含管理员私有会话");
+    assert.ok(!(await api("GET", "/api/sessions")).data.sessions.some((s) => s.id === sid), "anon 列表不含管理员私有会话");
   });
 
   await test("p3: 审计日志（admin 操作留痕）", async () => {

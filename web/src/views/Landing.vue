@@ -178,10 +178,6 @@ function viewAll() {
 function goExperience() {
   router.push("/agents/industry-brain");
 }
-// P8.2 导航：控制台入口（admin → /admin，其余主体 / 未登录 → /login）
-function goConsole() {
-  router.push(auth.isAdmin ? "/admin" : "/login");
-}
 function scrollTo(id: string) {
   const el = document.getElementById(id);
   if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -365,7 +361,7 @@ onBeforeUnmount(() => {
         >
           <span v-html="theme.lightTheme ? ICONS.sun : ICONS.moon"></span>
         </button>
-        <button class="lp-nav-link" type="button" @click="goConsole">控制台</button>
+        <button v-if="auth.isAdmin" class="lp-nav-link" type="button" @click="viewAll">控制台</button>
         <div v-if="auth.isAuthed" class="lp-user-wrap" ref="userWrap">
           <button
             class="lp-user-btn"

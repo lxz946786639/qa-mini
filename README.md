@@ -43,7 +43,7 @@ npm start            # 或 node server.js
 
 启动后：
 
-- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；P8 官网首页四区块：Hero / 智能体选择 / 产品矩阵 / 工作流 → 智能体 → 工作区；项目文档 /doc/<文件名>.md）
+- Web 界面：http://127.0.0.1:8787/（新代前端站点根，v59 P7 切根；P8 官网首页四区块：Hero / 智能体选择 / 产品矩阵 / 工作流 → 智能体 → 工作区（落地页导航「控制台」P8.10 仅 admin 可见）；项目文档 /doc/<文件名>.md）
 - 控制台：http://127.0.0.1:8787/admin（仅 admin；管理密码未初始化时显示首启设置表单）
 - 推送接口：`POST http://<本机IP>:8787/api/push`（EchoScribe 填这里）
 - 配置：config.json（协议级配置，首次运行自动生成；内置默认为空模板——
@@ -287,7 +287,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**150 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**151 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -301,7 +301,7 @@ npm test           # node tests/run_tests.js
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
-- `tests/store_tests.js`：**38 项** v2/v3 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移）：
+- `tests/store_tests.js`：**40 项** v2/v3/v4 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移、P8.10 v3→v4 回填）：
   会话 CRUD/桶语义/历史 100 上限/访问码状态机/管理员迁移/审计日志。
 - 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`
