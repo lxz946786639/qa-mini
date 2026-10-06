@@ -3,7 +3,8 @@
 // 智能体管理（P3 多智能体：每智能体一个协议；config 空字段 = 回退全局协议默认）
 import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Microphone, Cpu } from "@element-plus/icons-vue";
+import { Cpu } from "@element-plus/icons-vue";
+import { AGENT_ICONS, AGENT_ICON_CHOICES, agentIconComponent, normalizeAgentIcon } from "../../utils/agentIcon";
 import { api } from "../../api";
 
 interface Agent {
@@ -53,9 +54,9 @@ const form = reactive({
 });
 const fields = computed(() => CFG_FIELDS[form.protocol] || []);
 
-// P8.11：图标改为点选（不再手输表情码）；留空 = 默认图标
-const ICON_CHOICES = ["🤖", "🧠", "💡", "🎓", "🎙️", "📚", "📖", "🔬", "🧪", "⚗️", "📋", "📝", "💬", "📊", "⚖️", "💼", "🏭", "🌐", "🎯", "🛠️"];
-const customIcon = computed(() => (form.icon && !ICON_CHOICES.includes(form.icon) ? [form.icon] : []));
+// P8.25：图标 = Element Plus 图标名（项目禁止 emoji 图标）；留空 = 默认图标（Cpu）。
+// P8.11 遗留 emoji 值经 normalizeAgentIcon 自动映射（编辑/渲染两处入口）。
+const customIcon = computed(() => (form.icon && !AGENT_ICON_CHOICES.includes(form.icon) ? [form.icon] : []));
 
 async function load() {
   loading.value = true;
@@ -73,7 +74,7 @@ function openEdit(a: Agent) {
   editing.value = a.code;
   atTab.value = "basic";
   Object.assign(form, {
-    code: a.code, name: a.name, description: a.description, icon: a.icon, sort: a.sort,
+    code: a.code, name: a.name, description: a.description, icon: normalizeAgentIcon(a.icon), sort: a.sort,
     enabled: a.enabled, protocol: a.protocol, prompt: a.prompt,
     allow_anon: a.allow_anon !== false, allow_code: a.allow_code !== false, allow_user: a.allow_user !== false,
     config: { url: "", api_key: "", chat_id: "", model: "", body: "", ...a.config }
@@ -125,7 +126,7 @@ onMounted(load);
     </div>
     <el-table v-loading="loading" :data="agents">
       <el-table-column label="图标" width="70">
-        <template #default="{ row }"><span v-if="row.icon" class="agent-ic">{{ row.icon }}</span><el-icon v-else class="agent-ic agent-ic-ui"><Microphone /></el-icon></template>
+        <template #default="{ row }"><el-icon class="agent-ic agent-ic-ui" :size="20"><component :is="agentIconComponent(row.icon)" /></el-icon></template>
       </el-table-column>
       <el-table-column label="名称" min-width="160">
         <template #default="{ row }">
@@ -179,11 +180,13 @@ onMounted(load);
             <el-form-item label="图标（点选；留空 = 默认图标）">
               <div class="at-icon-pick">
                 <button type="button" class="at-icon-opt" :class="{ on: form.icon === '' }"
-                  title="默认图标" @click="form.icon = ''"><el-icon :size="17"><Cpu /></el-icon></button>
-                <button v-for="e in [...ICON_CHOICES, ...customIcon]" :key="e" type="button"
-                  class="at-icon-opt" :class="{ on: form.icon === e }" :title="e" @click="form.icon = e">{{ e }}</button>
+                  title="默认图标" @click="form.icon = ''"><el-icon :size="18"><Cpu /></el-icon></button>
+                <button v-for="n in [...AGENT_ICON_CHOICES, ...customIcon]" :key="n" type="button"
+                  class="at-icon-opt" :class="{ on: form.icon === n }" :title="n" @click="form.icon = n">
+                  <el-icon :size="18"><component :is="AGENT_ICONS[n] || Cpu" /></el-icon>
+                </button>
               </div>
-              <div class="at-icon-hint">点击选择；再次点击已选项或「默认图标」可取消。所选图标显示在首页卡片与控制台列表。</div>
+              <div class="at-icon-hint">点击选择；再次点击已选项或「默认图标」可取消。图标统一使用 Element Plus 图标集（项目禁止 emoji）；所选图标显示在首页卡片与控制台列表。</div>
             </el-form-item>
             <el-form-item label="排序（小者优先）">
               <el-input-number v-model="form.sort" :min="0" :max="999" />

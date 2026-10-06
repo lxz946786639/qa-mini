@@ -34,8 +34,12 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
 8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 151 项断言全绿，
-   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 40 项）；
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 42 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
+9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
+   （Element Plus 图标）或官网首页内联 SVG；智能体图标字段 `agents.icon` 存
+   Element Plus 图标名（映射/归一化在 `web/src/utils/agentIcon.ts`），模板/样式
+   中不得再引入 emoji 字形作为图标。
 
 ## 3. 代码-文档同步规则（核心）
 
@@ -98,10 +102,11 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口 + P8.12 会话窗口交互对齐旧版：问题复制/输入框底部停止/重新生成确认（含错误卡）/「↓ 最新」浮钮 + 流式自动跟随/生成中实时秒数（后端配套：recordFromRow 回读补齐 status 字段）+ P8.14 卡片样式对齐旧版（问/答单卡/胶囊徽章/完成（N 字）/图标按钮/流式光标/发送图标）+ P8.15 顶栏品牌位 =「EchoAnswer · 智能体名」）)/
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
                  users/agents/codes/audit/sys 五模块 + P7 首启引导；
+                 P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
-                 utils: markdown 先转义后解析；landing.css P8 首页双主题变量）
+                 utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
                  + dist/（构建产物随仓库提交，根服务器以站点根提供）；npm 仅限本目录
 tests/           mock 后端 + 全量测试 + 真实 e2e（不进镜像）
@@ -115,7 +120,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
 npm test                                        # 151 项断言全绿
-node tests/store_tests.js                       # 40 项数据层单测全绿
+node tests/store_tests.js                       # 42 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health

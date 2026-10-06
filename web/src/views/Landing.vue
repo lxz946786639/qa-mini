@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // P8 官网首页：4 区块品牌页（Hero / 智能体选择 / 产品矩阵 / 完整工作流）。
 // 语义化标签 + 内联 SVG（2px 描边 currentColor）+ 纯 CSS（landing.css，--lp-* 变量双主题）；
-// 不使用 Element Plus 组件，不新增任何依赖。
+// 不使用 Element Plus 组件（P8.25 例外：智能体图标用 EP 图标名经 el-icon 渲染，项目禁止 emoji），不新增任何依赖。
 // 保留能力：GET /api/agents 动态列表（loading/错误重试/空态）、未登录提示、登录/控制台/退出。
 // 主题与全站共享 useTheme（data-theme；首次访问跟随系统，手动切换后 localStorage 记忆）。
 // P8.3：四区块各 100svh 满屏，滚轮「一步一区块」吸附（onWheel 归一，末区块含页脚）。
@@ -11,6 +11,7 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
+import { agentIconComponent, normalizeAgentIcon } from "../utils/agentIcon";
 import { APP_VERSION } from "../version";
 import "../landing.css";
 
@@ -87,8 +88,8 @@ interface Card {
   // P8.9：访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员）
   access: string;
   accessCls: string;
-  // P8.11：控制台配置的表情图标；空 = 按协议取默认 SVG
-  iconEmoji: string;
+  // P8.25：控制台配置的 Element Plus 图标名（P8.11 遗留 emoji 自动映射）；空 = 按协议取默认 SVG
+  iconName: string;
 }
 
 // P8.9：访问方式徽标（优先级 匿名 > 用户登录 > 访问码）
@@ -109,7 +110,7 @@ function allowedFor(a: AgentItem): boolean {
 }
 
 // P8.11：卡片全部来自控制台智能体配置（GET /api/agents，sort 序，前 4；
-// 不再有前端示例卡）；图标优先用控制台配置的表情符号，空 = 协议默认 SVG
+// 不再有前端示例卡）；P8.25：图标优先用控制台配置的 EP 图标名（遗留 emoji 自动映射），空 = 协议默认 SVG
 const cards = computed<Card[]>(() => agents.value.slice(0, 4).map((a, i) => {
   const p = PROTO[a.protocol] || PROTO.generic;
   const ab = accessBadge(a);
@@ -118,7 +119,7 @@ const cards = computed<Card[]>(() => agents.value.slice(0, 4).map((a, i) => {
     tag: p.label, tagCls: p.cls, icon: p.icon,
     href: "/agents/" + a.code, isDefault: i === 0,
     access: ab.label, accessCls: ab.cls,
-    iconEmoji: a.icon || ""
+    iconName: normalizeAgentIcon(a.icon)
   };
 }));
 
@@ -471,7 +472,7 @@ onBeforeUnmount(() => {
             @keydown.space.prevent="goCard(c)"
           >
             <div class="lp-agent-top">
-              <span v-if="c.iconEmoji" class="lp-agent-ic lp-agent-emoji">{{ c.iconEmoji }}</span>
+              <span v-if="c.iconName" class="lp-agent-ic"><el-icon :size="30"><component :is="agentIconComponent(c.iconName)" /></el-icon></span>
               <span v-else class="lp-agent-ic" v-html="ICONS[c.icon] || ICONS.mic"></span>
               <span class="lp-tags">
                 <span class="lp-tag" :class="c.tagCls">{{ c.tag }}</span>
