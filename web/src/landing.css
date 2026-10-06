@@ -447,10 +447,11 @@
 
 /* ---------- 页脚（P8.3：位于末区块内，底部对齐） ---------- */
 .lp-foot {
-  padding: 18px 16px 22px; text-align: center;
+  /* P8.17：文案换版权行 + 降低高度占用 */
+  padding: 12px 16px 14px; text-align: center;
   color: var(--lp-dim); font-size: 12px;
   border-top: 1px solid var(--lp-border);
-  margin-top: clamp(36px, 6vh, 72px);
+  margin-top: clamp(18px, 3.5vh, 40px);
 }
 
 /* ---------- 滚动渐入（IO 添加 .lp-in；无 IO 时 JS 直接加类） ---------- */
