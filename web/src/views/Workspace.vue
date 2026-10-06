@@ -9,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -624,8 +624,11 @@ onBeforeUnmount(() => {
       <div class="ws-side-head">
         <span class="ws-side-title">会话列表</span>
         <span class="ws-side-actions">
-          <el-button size="small" type="primary" plain class="ws-side-new" :icon="Plus" @click="createSession">新建</el-button>
-          <button class="ws-side-toggle" :title="sideCollapsed ? '展开会话列表' : '收起会话列表'" @click="toggleSide"><el-icon><Menu /></el-icon></button>
+          <!-- P8.29：新建改图标按钮（与收起/展开同款）；收起/展开用 Fold/Expand 语义图标（原汉堡图标易生歧义） -->
+          <button type="button" class="ws-side-new" title="新建会话" @click="createSession"><el-icon><Plus /></el-icon></button>
+          <button class="ws-side-toggle" :title="sideCollapsed ? '展开会话列表' : '收起会话列表'" @click="toggleSide">
+            <el-icon v-if="sideCollapsed"><Expand /></el-icon><el-icon v-else><Fold /></el-icon>
+          </button>
           <button class="ws-side-close" title="关闭会话列表" @click="sideOpen = false"><el-icon><Close /></el-icon></button>
         </span>
       </div>

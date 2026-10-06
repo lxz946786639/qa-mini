@@ -201,11 +201,11 @@ body {
 @media (min-width: 721px) {
   .ws-app.side-collapsed .ws-side { width: 44px; }
   .ws-app.side-collapsed .ws-side-title,
-  .ws-app.side-collapsed .ws-side-new,
   .ws-app.side-collapsed .ws-sess-list,
   .ws-app.side-collapsed .ws-side-empty,
   .ws-app.side-collapsed .ws-side-foot { display: none; }
-  .ws-app.side-collapsed .ws-side-head { justify-content: center; padding: 10px 6px; }
+  .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
+  .ws-app.side-collapsed .ws-side-actions { flex-direction: column; gap: 6px; }
 }
 .ws-side {
   width: 252px; flex: 0 0 auto; border-right: 1px solid var(--border);
@@ -217,7 +217,13 @@ body {
 }
 .ws-side-title { font-size: 13.5px; font-weight: 600; }
 .ws-side-actions { display: flex; align-items: center; gap: 6px; }
-.ws-side-new { padding: 3px 10px; font-size: 14px; line-height: 1.2; }
+/* P8.29：新建 = 图标按钮（与收起/展开同款对齐） */
+.ws-side-new {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  cursor: pointer; padding: 4px 7px; border-radius: 7px; line-height: 1; flex: none;
+}
+.ws-side-new:hover { color: var(--accent); border-color: var(--border); background: var(--card); }
 .ws-side-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   background: none; border: 1px solid transparent; color: var(--text-dim);

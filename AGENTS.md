@@ -99,7 +99,7 @@ public/          （P7 已退役：旧纯静态前端目录已删除，能力全
 web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
                  src/（views: Landing(P8 官网首页四区块：Hero/智能体选择/产品矩阵/工作流，
                  landing.css --lp-* 双主题 + 内联 SVG + IO 渐入)/Login/Workspace(P5 工作区 + P5.5 语音输入/
-                 音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口 + P8.12 会话窗口交互对齐旧版：问题复制/输入框底部停止/重新生成确认（含错误卡）/「↓ 最新」浮钮 + 流式自动跟随/生成中实时秒数（后端配套：recordFromRow 回读补齐 status 字段）+ P8.14 卡片样式对齐旧版（问/答单卡/胶囊徽章/完成（N 字）/图标按钮/流式光标/发送图标）+ P8.15 顶栏品牌位 =「EchoAnswer · 智能体名」）)/
+                 音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口 + P8.12 会话窗口交互对齐旧版：问题复制/输入框底部停止/重新生成确认（含错误卡）/「↓ 最新」浮钮 + 流式自动跟随/生成中实时秒数（后端配套：recordFromRow 回读补齐 status 字段）+ P8.14 卡片样式对齐旧版（问/答单卡/胶囊徽章/完成（N 字）/图标按钮/流式光标/发送图标）+ P8.15 顶栏品牌位 =「EchoAnswer · 智能体名」+ P8.30 会话栏头部：新建改图标按钮、收起/展开 Fold/Expand 语义图标）)/
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
                  users/agents/codes/audit/sys 五模块 + P7 首启引导；
                  P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
