@@ -562,6 +562,27 @@ function oldConfig(over) {
       assert(st.access_codes >= 1, "codes");
       assert(Number.isInteger(st.qa_today), "qa_today");
     });
+    await t("P8.21 normalizeLegacyFinished：空 finished_at → started_at（含幂等）", async () => {
+      const bob = store.listUsers().find((u) => u.username === "bob"); // 前测试作用域外，需本作用域取回
+      const fresh2 = store.createSession({ name: "P816", user_id: bob.id, agent_id: ib.id, access_mode: "user" });
+      store.appendRecord(fresh2.id, { id: "legacy-1", question: "q", answer: "a", protocol: "ragflow", ok: true, started_at: "2026-07-11T08:00:00.000Z" });
+      const n1 = store.normalizeLegacyFinished();
+      assert(n1 >= 1, "至少归一化 1 条（含环形上限测试遗留的 NULL 行）：" + n1);
+      const rec = store.listRecords(fresh2.id)[0];
+      eq(rec.finished_at, "2026-07-11T08:00:00.000Z", "回填 started_at");
+      eq(rec.status, "done", "回读 status=done");
+      eq(store.normalizeLegacyFinished(), 0, "幂等");
+    });
+
+    await t("P8.21 recordFromRow：ok=1 且 finished_at 为空串（迁移遗留形态）→ done", async () => {
+      const bob = store.listUsers().find((u) => u.username === "bob"); // 同上
+      const fresh3 = store.createSession({ name: "P816b", user_id: bob.id, agent_id: ib.id, access_mode: "user" });
+      store.appendRecord(fresh3.id, { id: "legacy-2", question: "q", answer: "a", protocol: "ragflow", ok: true, started_at: "2026-07-12T09:00:00.000Z", finished_at: "2026-07-12T09:00:01.000Z" });
+      store.db.prepare("UPDATE records SET finished_at = '' WHERE id = ? AND session_id = ?").run("legacy-2", fresh3.id);
+      const rec = store.listRecords(fresh3.id)[0];
+      eq(rec.status, "done", "ok=1 + 空串 finished_at → done");
+      eq(rec.finished_at, null, "空串读取时归一为 null");
+    });
     store.close();
   }
 

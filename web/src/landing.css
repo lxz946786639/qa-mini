@@ -289,7 +289,10 @@
    P8.1：区块高度由内容自然决定（不再 60/75/72vh 强制整屏 + 垂直居中）——
    强制整屏会形成大块留白，滚轮 notch / 触控板惯性一滚即「翻过」整个区块。 */
 .lp-agent-grid {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
+  /* P8.20：智能体不足 4 个时卡片居中（auto-fit + justify-content center；
+     满 4 个时 ≈280px×4 仍铺满 1180 容器，观感不变） */
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 280px));
+  gap: 16px; justify-content: center;
   max-width: 1180px; margin: 0 auto; width: 100%; align-items: stretch;
 }
 .lp-agent-card {

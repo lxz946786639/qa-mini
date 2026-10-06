@@ -161,6 +161,10 @@ function goCard(c: Card) {
 function viewAll() {
   router.push(auth.isAdmin ? "/admin" : "/login");
 }
+// P8.20：「查看文档」→ 敬请期待提示（原 /doc/03 链接移除）
+function comingSoon() {
+  ElMessage.info("敬请期待");
+}
 // P8.13：立即体验 = 滚动到智能体区块（不再直接跳入某智能体工作区）
 function goExperience() {
   scrollTo("agents");
@@ -503,7 +507,7 @@ onBeforeUnmount(() => {
 
         <div v-if="!loading && agents.length" class="lp-sec-foot lp-io">
           <p>选一个智能体，开始你的问答。</p>
-          <button class="lp-btn lp-btn-soft" type="button" @click="viewAll">查看全部智能体</button>
+          <button class="lp-btn lp-btn-soft" type="button" @click="scrollTo('matrix')">查看产品矩阵</button>
         </div>
       </section>
 
@@ -587,7 +591,7 @@ onBeforeUnmount(() => {
 
         <div class="lp-sec-foot lp-io">
           <p>听得见问题，给得出答案。你只管讲，答案我来。</p>
-          <a class="lp-btn lp-btn-soft" href="/doc/03-部署说明.md">查看部署文档</a>
+          <button class="lp-btn lp-btn-soft" type="button" @click="comingSoon">查看文档</button>
         </div>
         </div>
         <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2026 Echo Tech Co., Ltd. All rights reserved.</footer>
