@@ -148,6 +148,8 @@ async function load() {
 async function onLogout() {
   await auth.logout();
   ElMessage.success("已退出登录");
+  // P8.34：登出 → 登录页（登录成功后回首屏，next=/）
+  router.push("/login?next=/");
 }
 
 function goCard(c: Card) {

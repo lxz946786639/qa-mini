@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
+import { useRouter, useRoute } from "vue-router";
 import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
@@ -16,6 +17,8 @@ import SystemTab from "./admin/SystemTab.vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
 
 const auth = useAuthStore();
+const router = useRouter();
+const route = useRoute();
 const checked = ref(false);
 // 首启引导（对齐旧版 /admin 首屏）：admin 未初始化时（GET /api/status admin_set=false）
 // 显示「设置管理账号」表单（共享组件 AdminBootstrap，/login 首启访问同样展示）
@@ -73,6 +76,8 @@ async function onBootstrapDone() {
 async function onLogout() {
   await auth.logout();
   ElMessage.success("已退出登录");
+  // P8.34：登出 → 登录页，并记忆当前页（再次登录回跳原页，Login ?next 机制）
+  router.push("/login?next=" + encodeURIComponent(route.fullPath));
 }
 </script>
 
