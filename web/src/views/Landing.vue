@@ -416,12 +416,12 @@ onBeforeUnmount(() => {
             />
           </svg>
           <div class="lp-viz-flow">识别文字</div>
-          <div class="lp-viz-q">请问 RAGFlow 知识库如何接入我们的业务系统？</div>
+          <div class="lp-viz-q">请问你们如何保证回答准确、不编造？</div>
           <div class="lp-viz-flow">流式作答</div>
           <div class="lp-viz-card">
             <em>知识引擎 · 流式回答</em>
             <p>
-              <span class="lp-type">建议先建立专属知识库并批量导入文档，再在会话中开启知识引擎即可。</span><span class="lp-caret"></span>
+              <span class="lp-type">建立专属知识库并批量导入文档，知识引擎在会话中实时检索，答案都有出处，不编造。</span><span class="lp-caret"></span>
             </p>
           </div>
         </div>
