@@ -514,10 +514,10 @@ body {
 .ap-title { font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
 .ap-hint { font-size: 12px; color: var(--text-dim); }
 .ap-interim { color: var(--text-dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
-.ss-section {
-  font-size: 12px; font-weight: 700; color: var(--text-dim);
-  text-transform: none; margin: 14px 0 8px; padding-top: 12px; border-top: 1px solid var(--border);
-}
+/* P8.7 会话设置对话框：内容分类为 tab（基本/协议配置/EchoScribe/音频/管理） */
+.ss-tabs { margin-top: 2px; }
+.ss-tabs .el-tabs__header { margin-bottom: 14px; }
+.ss-pane-note { margin: 0 0 12px; }
 .ss-ok { color: var(--green); font-size: 13px; margin-left: 10px; }
 .ss-bad { color: var(--red); font-size: 13px; margin-left: 10px; }
 .ss-warn { font-size: 12px; color: #d29922; margin-left: 10px; }

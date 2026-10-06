@@ -1,9 +1,10 @@
 
 <script setup lang="ts">
-// 会话设置（P7.9 按重构前 public/ 会话抽屉重排版）：自含 el-dialog（头部/主体/底部）。
-// 顺序与内容对齐旧抽屉：名称 → 问答协议 → 提问续接 → 本会话协议配置（修改后需测试
-// 通过才能保存，含测试守护）→ EchoScribe 对接（会话ID/推送token/配置片段/body 值）
-// → 电脑输出音频接收 → 重置会话；底部 = 保存状态 + 删除会话 + 保存。
+// 会话设置（P7.9 按重构前 public/ 会话抽屉重排版；P8.7 内容分类为 5 个 tab，
+// 缩短弹窗高度）：自含 el-dialog（头部/主体/底部）。tab = 基本（名称/问答协议/
+// 提问续接）/ 协议配置（修改后需测试通过才能保存，含测试守护）/ EchoScribe（会话ID/
+// 推送token/配置片段/body 值，admin 页签）/ 音频（电脑输出音频接收 + 首选设备）/
+// 管理（重置后端上下文，admin 页签）；底部 = 保存状态 + 删除会话 + 保存。
 // 服务端契约：PUT /api/sessions/:id（admin 或本桶拥有者；protocol_config 按协议分组，
 // 空值丢弃 = 回退全局默认）；POST .../protocol-test（管理）；POST .../reset（管理）。
 import { computed, reactive, ref, watch } from "vue";
@@ -50,6 +51,7 @@ const form = reactive({
   audio_enabled: false, preferred_device: "",
   config: { url: "", api_key: "", chat_id: "", model: "", body: "" }
 });
+const tab = ref("basic");
 const testState = reactive({ running: false, text: "", ok: null as boolean | null });
 const saveState = reactive({ text: "", cls: "" });
 // 测试守护（对齐旧抽屉 protoDraftKey/protoDraftDirty/protoTested 语义）：
@@ -236,85 +238,96 @@ function copyText(t: string, tip?: string) {
     @update:model-value="() => emit('close')"
   >
     <div v-if="session" class="ss-body">
-      <el-form label-position="top">
-        <el-form-item label="会话名称（≤40）">
-          <el-input v-model="form.name" maxlength="40" show-word-limit placeholder="给这个会话起个名字" />
-        </el-form-item>
-        <el-form-item label="问答协议">
-          <el-select v-model="form.protocol">
-            <el-option v-for="p in PROTOCOLS" :key="p.value" :label="p.label" :value="p.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-switch v-model="form.continue_session" active-text="提问续接本会话（语音追问带上下文）" />
-        </el-form-item>
-
-        <div class="ss-section">
-          本会话协议配置 <span class="ss-small">（留空 = 回退全局默认；修改后需测试通过才能保存）</span>
-        </div>
-        <template v-for="f in fields" :key="f.key">
-          <el-form-item :label="f.label">
-            <el-input
-              v-model="form.config[f.key]"
-              :type="f.secret ? 'password' : (f.textarea ? 'textarea' : 'text')"
-              :show-password="f.secret"
-              :autosize="f.textarea ? { minRows: 2, maxRows: 6 } : undefined"
-              :placeholder="f.secret ? '留空 = 回退全局默认' : ''"
-            />
-          </el-form-item>
-        </template>
-        <el-form-item v-if="isAdmin">
-          <el-button size="small" :loading="testState.running" @click="test">测试连接（当前草稿值）</el-button>
-          <span v-if="testState.ok !== null" :class="testState.ok ? 'ss-ok' : 'ss-bad'">{{ testState.text }}</span>
-        </el-form-item>
-
-        <template v-if="isAdmin">
-          <div class="ss-section">EchoScribe 对接（推送模式）</div>
-          <el-form-item label="会话 ID">
-            <span class="ss-small ss-label-note">（EchoScribe 推送请求体需同时携带）</span>
-            <el-input :model-value="session.id" readonly class="ss-mono">
-              <template #append><el-button @click="copyText(session.id, '会话 ID 已复制')">复制</el-button></template>
-            </el-input>
-          </el-form-item>
-          <el-form-item label="推送 token">
-            <el-input :model-value="session.token || ''" type="password" readonly show-password class="ss-mono">
-              <template #append>
-                <el-button @click="copyText(session.token || '', '推送 token 已复制')">复制</el-button>
-                <el-button type="danger" plain @click="regenToken">重生成</el-button>
-              </template>
-            </el-input>
-          </el-form-item>
-          <el-form-item>
-            <span class="ss-small ss-warn">重新生成后旧 token 立即失效，对接方需同步更新 body</span>
-          </el-form-item>
-          <el-form-item label="EchoScribe 配置片段">
-            <span class="ss-small ss-label-note">（echoscribe.toml · 推送模式，可直接粘贴）</span>
-            <pre class="ss-pre">{{ snippet }}</pre>
-            <el-button size="small" @click="copyText(snippet, 'EchoScribe 配置片段已复制')">复制片段</el-button>
-          </el-form-item>
-          <el-form-item label="body 值">
-            <span class="ss-small ss-label-note">（EchoScribe 设置页「第三方接口 body」直接粘贴）</span>
-            <pre class="ss-pre">{{ pushBody }}</pre>
-            <el-button size="small" @click="copyText(pushBody, 'body 值已复制')">复制 body</el-button>
-          </el-form-item>
-        </template>
-
-        <div class="ss-section">电脑输出音频接收（EchoScribe 持续推流）</div>
-        <el-form-item>
-          <el-switch v-model="form.audio_enabled" active-text="启用电脑输出音频接收（EchoScribe「持续推流」到本会话）" />
-        </el-form-item>
-        <el-form-item label="首选设备（可空 = 首个推流设备）">
-          <el-input v-model="form.preferred_device" placeholder="如 Speakers (Realtek Audio)" />
-        </el-form-item>
-        <el-form-item>
-          <span class="ss-small">推流中的设备识别操作见底部 composer「🎧 音频」面板</span>
-        </el-form-item>
-
-        <el-form-item v-if="isAdmin">
-          <el-button size="small" plain @click="resetSession">重置会话（清空后端上下文）</el-button>
-          <span class="ss-warn">等同 EchoScribe「清空」，已显示记录保留；在途问答一并取消，下次提问重建</span>
-        </el-form-item>
-      </el-form>
+      <!-- P8.7：内容分类为 tab（基本 / 协议配置 / EchoScribe / 音频 / 管理），缩短弹窗高度 -->
+      <el-tabs v-model="tab" class="ss-tabs">
+        <el-tab-pane label="基本" name="basic">
+          <el-form label-position="top">
+            <el-form-item label="会话名称（≤40）">
+              <el-input v-model="form.name" maxlength="40" show-word-limit placeholder="给这个会话起个名字" />
+            </el-form-item>
+            <el-form-item label="问答协议">
+              <el-select v-model="form.protocol">
+                <el-option v-for="p in PROTOCOLS" :key="p.value" :label="p.label" :value="p.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-switch v-model="form.continue_session" active-text="提问续接本会话（语音追问带上下文）" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="协议配置" name="protocol">
+          <el-form label-position="top">
+            <p class="ss-small ss-pane-note">本会话协议配置：留空 = 回退全局默认；修改后需测试通过才能保存。</p>
+            <template v-for="f in fields" :key="f.key">
+              <el-form-item :label="f.label">
+                <el-input
+                  v-model="form.config[f.key]"
+                  :type="f.secret ? 'password' : (f.textarea ? 'textarea' : 'text')"
+                  :show-password="f.secret"
+                  :autosize="f.textarea ? { minRows: 2, maxRows: 6 } : undefined"
+                  :placeholder="f.secret ? '留空 = 回退全局默认' : ''"
+                />
+              </el-form-item>
+            </template>
+            <el-form-item v-if="isAdmin">
+              <el-button size="small" :loading="testState.running" @click="test">测试连接（当前草稿值）</el-button>
+              <span v-if="testState.ok !== null" :class="testState.ok ? 'ss-ok' : 'ss-bad'">{{ testState.text }}</span>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="isAdmin" label="EchoScribe" name="push">
+          <el-form label-position="top">
+            <el-form-item label="会话 ID">
+              <span class="ss-small ss-label-note">（EchoScribe 推送请求体需同时携带）</span>
+              <el-input :model-value="session.id" readonly class="ss-mono">
+                <template #append><el-button @click="copyText(session.id, '会话 ID 已复制')">复制</el-button></template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="推送 token">
+              <el-input :model-value="session.token || ''" type="password" readonly show-password class="ss-mono">
+                <template #append>
+                  <el-button @click="copyText(session.token || '', '推送 token 已复制')">复制</el-button>
+                  <el-button type="danger" plain @click="regenToken">重生成</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item>
+              <span class="ss-small ss-warn">重新生成后旧 token 立即失效，对接方需同步更新 body</span>
+            </el-form-item>
+            <el-form-item label="EchoScribe 配置片段">
+              <span class="ss-small ss-label-note">（echoscribe.toml · 推送模式，可直接粘贴）</span>
+              <pre class="ss-pre">{{ snippet }}</pre>
+              <el-button size="small" @click="copyText(snippet, 'EchoScribe 配置片段已复制')">复制片段</el-button>
+            </el-form-item>
+            <el-form-item label="body 值">
+              <span class="ss-small ss-label-note">（EchoScribe 设置页「第三方接口 body」直接粘贴）</span>
+              <pre class="ss-pre">{{ pushBody }}</pre>
+              <el-button size="small" @click="copyText(pushBody, 'body 值已复制')">复制 body</el-button>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="音频" name="audio">
+          <el-form label-position="top">
+            <el-form-item>
+              <el-switch v-model="form.audio_enabled" active-text="启用电脑输出音频接收（EchoScribe「持续推流」到本会话）" />
+            </el-form-item>
+            <el-form-item label="首选设备（可空 = 首个推流设备）">
+              <el-input v-model="form.preferred_device" placeholder="如 Speakers (Realtek Audio)" />
+            </el-form-item>
+            <el-form-item>
+              <span class="ss-small">推流中的设备识别操作见底部 composer「🎧 音频」面板</span>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane v-if="isAdmin" label="管理" name="advanced">
+          <el-form label-position="top">
+            <el-form-item>
+              <el-button size="small" plain @click="resetSession">重置会话（清空后端上下文）</el-button>
+              <span class="ss-warn">等同 EchoScribe「清空」，已显示记录保留；在途问答一并取消，下次提问重建</span>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
     </div>
     <template #footer>
       <div class="ss-footer">
