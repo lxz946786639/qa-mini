@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { Cpu } from "@element-plus/icons-vue";
 import { AGENT_ICONS, AGENT_ICON_CHOICES, agentIconComponent, normalizeAgentIcon } from "../../utils/agentIcon";
 import { api } from "../../api";
+import { useRouter } from "vue-router";
 
 interface Agent {
   id: string; code: string; name: string; description: string; icon: string;
@@ -41,6 +42,7 @@ const CFG_FIELDS: Record<string, { key: string; label: string; secret?: boolean 
   ]
 };
 
+const router = useRouter();
 const agents = ref<Agent[]>([]);
 const loading = ref(true);
 const dialog = ref(false);
@@ -115,6 +117,10 @@ async function toggleEnabled(a: Agent) {
   if (r.ok) { ElMessage.success(a.enabled ? "已停用（首屏不再展示）" : "已启用"); load(); }
   else ElMessage.error(r.data.detail || "操作失败");
 }
+// P8.36：启用智能体 = 操作栏「进入」快捷入口（直达该智能体工作区）
+function enterAgent(a: Agent) {
+  router.push("/agents/" + encodeURIComponent(a.code));
+}
 onMounted(load);
 </script>
 
@@ -155,6 +161,7 @@ onMounted(load);
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
+          <el-button v-if="row.enabled" size="small" type="primary" plain title="进入该智能体工作区" @click="enterAgent(row)">进入</el-button>
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
           <el-button size="small" :type="row.enabled ? 'danger' : 'success'" plain @click="toggleEnabled(row)">{{ row.enabled ? "停用" : "启用" }}</el-button>
         </template>
