@@ -3,6 +3,7 @@
 //  访问码生成/延期/清理/失效 + /api/config GET/PUT（深合并 → config.json + v2 库同步）
 const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf, uaOf } = require("../middleware");
 const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS } = require("../../lib/config");
+const { EventBus } = require("../services/event_bus");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
 
@@ -32,6 +33,68 @@ function register(router, ctx) {
   router.regex("DELETE", /^\/api\/admin\/access-codes\/([A-Za-z0-9]+)$/, (req, res, ctx_, urlObj, params) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
     ctx.codes.handleInvalidate(res, params[0]);
+    return Promise.resolve();
+  });
+
+  // ---- P8.33 访问控制：在线访问者 + 一键踢出（设备指纹 + IP 判定唯一） ----
+  const identityLabel = (pr) => {
+    if (!pr) return { kind: "unknown", label: "匿名" };
+    if (pr.kind === "admin") {
+      const u = pr.userId ? ctx.store.getUser(pr.userId) : null;
+      return { kind: "admin", label: "管理员" + (u ? "（" + u.username + "）" : "") };
+    }
+    if (pr.kind === "user") {
+      const u = pr.userId ? ctx.store.getUser(pr.userId) : null;
+      return { kind: "user", label: (u && u.username) || "用户" };
+    }
+    if (pr.kind === "code") return { kind: "code", label: "访问码" + (pr.code ? "••••" + pr.code.slice(-2) : "") };
+    return { kind: "anon", label: "匿名" };
+  };
+  router.exact("GET", "/api/admin/online", (req, res, ctx_, urlObj) => {
+    if (admin401(req, urlObj, res)) return Promise.resolve();
+    const groups = new Map();
+    for (const c of ctx.bus.listOnline()) {
+      const dev = (c.meta && c.meta.dev) || "";
+      const ip = (c.meta && c.meta.ip) || "";
+      const key = EventBus.keyOf(dev, ip);
+      let g = groups.get(key);
+      if (!g) {
+        g = { dev, ip, ua: (c.meta && c.meta.ua) || "", connections: 0, connected_at: (c.meta && c.meta.connectedAt) || "", principal: null };
+        groups.set(key, g);
+      }
+      g.connections += 1;
+      const ca = (c.meta && c.meta.connectedAt) || "";
+      if (ca && (!g.connected_at || ca < g.connected_at)) g.connected_at = ca;
+      if (c.principal) g.principal = c.principal; // 同设备主体一致；取最后一条非空
+    }
+    const online = [...groups.values()]
+      .map((g) => {
+        const id = identityLabel(g.principal);
+        return { dev: g.dev, ip: g.ip, ua: g.ua, kind: id.kind, label: id.label, connections: g.connections, connected_at: g.connected_at };
+      })
+      .sort((a, b) => (a.connected_at < b.connected_at ? 1 : -1));
+    sendJSON(res, 200, { ok: true, count: online.length, online });
+    return Promise.resolve();
+  });
+  router.exact("POST", "/api/admin/online/kick", async (req, res, ctx_, urlObj) => {
+    if (admin401(req, urlObj, res)) return Promise.resolve();
+    let body;
+    try { body = await parseJSONBody(req); }
+    catch (e) { return sendJSON(res, 400, { ok: false, detail: e.__badBody ? e.message : "请求体必须是 JSON" }); }
+    const dev = String((body && body.dev) || "").slice(0, 32);
+    const ip = String((body && body.ip) || "");
+    const { targets, none } = ctx.bus.kick(dev, ip);
+    if (none) return sendJSON(res, 404, { ok: false, detail: "目标已不在线" });
+    if (targets.length === 0) return sendJSON(res, 400, { ok: false, detail: "管理员不可被下线" });
+    let id = { kind: "unknown", label: "匿名" };
+    for (const c of targets) {
+      if (c.meta && c.meta.sid) ctx.store.revokeAuthSessionByToken(c.meta.sid);
+      if (c.principal && id.kind === "unknown") id = identityLabel(c.principal);
+    }
+    ctx.bus.markKicked(dev, ip);
+    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "access.kick", targetType: "online",
+      targetId: dev || ip, detail: { kind: id.kind, label: id.label, ip, dev, connections: targets.length }, ip: ipOf(req), userAgent: uaOf(req) });
+    sendJSON(res, 200, { ok: true, kicked: targets.length });
     return Promise.resolve();
   });
 

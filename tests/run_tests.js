@@ -2184,6 +2184,59 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(typeof clRec.user_agent === "string", "审计带设备指纹字段（P8.29）");
     assert.ok(String(clRec.detail.code || "").includes("•••"), "访问码详情脱敏（P8.29）");
   });
+  await test("p8.33: 访问控制 在线列表 + 一键踢出", async () => {
+    // 匿名 + 访问码主体建立 SSE 长连接（带设备指纹 dev）
+    const sA = await collectSse({ query: "?dev=devA123" });
+    await sA.wait("sessions");
+    const ck = await adminFetch("POST", "/api/admin/access-codes", { code: "666677" }, adminTok);
+    assert.strictEqual(ck.status, 201, ck.data && ck.data.detail);
+    const kJar = makeJar();
+    const kl = await jarFetch(kJar, "POST", "/api/auth/access-code", { code: "666677" });
+    assert.strictEqual(kl.status, 200, kl.data && kl.data.detail);
+    const sB = await collectSse({ query: "?dev=devB456", headers: kJar.header() });
+    await sB.wait("sessions");
+    // 在线列表：设备指纹 + IP 判定唯一
+    const ol = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    assert.strictEqual(ol.status, 200);
+    assert.ok(ol.data.online.length >= 2, "在线列表 ≥ 2 个身份");
+    const aRow = ol.data.online.find((x) => x.dev === "devA123");
+    const bRow = ol.data.online.find((x) => x.dev === "devB456");
+    assert.ok(aRow && aRow.kind === "anon" && aRow.label === "匿名", "匿名身份行");
+    assert.ok(bRow && bRow.kind === "code" && String(bRow.label).includes("••••77"), "访问码身份行（脱敏）");
+    assert.strictEqual(bRow.ip, "127.0.0.1", "身份行带 IP");
+    // 踢匿名：evicted 控制事件 + 冷却期内探针 403 + 重建长连接 403
+    const kA = await adminFetch("POST", "/api/admin/online/kick", { dev: "devA123", ip: "127.0.0.1" }, adminTok);
+    assert.strictEqual(kA.status, 200, "踢出匿名 200");
+    assert.strictEqual(kA.data.kicked, 1, "kicked=1");
+    await sA.wait("evicted");
+    await sleep(200);
+    const probe = await fetch(BASE + "/api/events/check?dev=devA123");
+    assert.strictEqual(probe.status, 403, "冷却期探针 403");
+    assert.ok((await probe.json()).evicted, "探针 evicted 标记");
+    const reopen = await fetch(BASE + "/api/events?dev=devA123");
+    assert.strictEqual(reopen.status, 403, "冷却期重建长连接 403");
+    if (reopen.body && reopen.body.cancel) reopen.body.cancel();
+    // 踢访问码主体：cookie 会话吊销
+    const kB = await adminFetch("POST", "/api/admin/online/kick", { dev: "devB456", ip: "127.0.0.1" }, adminTok);
+    assert.strictEqual(kB.status, 200, "踢出访问码 200");
+    await sB.wait("evicted");
+    const meB = await jarFetch(kJar, "GET", "/api/auth/me");
+    assert.strictEqual(meB.data.principal, null, "cookie 已吊销（principal 空）");
+    // 管理员不可踢；已不在线目标 404
+    const sC = await collectSse({ query: "?admin=" + adminTok + "&dev=devC789" });
+    await sC.wait("sessions");
+    const ol2 = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    const cRow = ol2.data.online.find((x) => x.dev === "devC789");
+    assert.ok(cRow && cRow.kind === "admin", "管理员身份行");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/online/kick", { dev: "devC789", ip: "127.0.0.1" }, adminTok)).status, 400, "管理员不可被下线");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/online/kick", { dev: "devA123", ip: "127.0.0.1" }, adminTok)).status, 404, "目标已不在线 404");
+    // 审计留痕
+    const au3 = await adminFetch("GET", "/api/admin/audit?limit=200", undefined, adminTok);
+    const kickRec = au3.data.items.find((x) => x.action === "access.kick");
+    assert.ok(kickRec, "access.kick 留痕");
+    assert.ok(kickRec.detail && kickRec.detail.ip, "kick 详情带 ip");
+    sA.close(); sB.close(); sC.close();
+  });
   await test("p3: 最后一个 active 管理员守护", async () => {
     const b = await adminFetch("POST", "/api/admin/users", { username: "bob", password: "bobpw123", role: "admin" }, adminTok);
     assert.strictEqual(b.status, 201);

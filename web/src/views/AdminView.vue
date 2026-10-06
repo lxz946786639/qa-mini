@@ -5,12 +5,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
 import AuditTab from "./admin/AuditTab.vue";
+import OnlineTab from "./admin/OnlineTab.vue";
 import SystemTab from "./admin/SystemTab.vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
 
@@ -26,6 +27,7 @@ const MENU = [
   { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码）" },
   { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
   { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期；访问码主体共享会话桶" },
+  { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（访问码 / 匿名 / 用户）：设备指纹 + IP 判定唯一，支持一键下线（5 分钟禁入冷却）" },
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
   { key: "sys", icon: Setting, label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
 ];
@@ -141,6 +143,7 @@ async function onLogout() {
           <UsersTab v-if="tab === 'users'" />
           <AgentsTab v-else-if="tab === 'agents'" />
           <CodesTab v-else-if="tab === 'codes'" />
+          <OnlineTab v-else-if="tab === 'online'" />
           <AuditTab v-else-if="tab === 'audit'" />
           <SystemTab v-else-if="tab === 'sys'" />
         </div>

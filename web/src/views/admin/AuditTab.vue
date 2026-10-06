@@ -34,7 +34,8 @@ const ACTION_ZH: Record<string, string> = {
   "codes.create": "新建访问码",
   "codes.update": "修改访问码",
   "codes.delete": "删除访问码",
-  "config.update": "修改配置"
+  "config.update": "修改配置",
+  "access.kick": "下线访问者"
 };
 function actionZh(a: string): string { return ACTION_ZH[a] || a; }
 const ACTOR_ZH: Record<string, string> = { admin: "管理员", user: "用户", code: "访问码", system: "系统" };
