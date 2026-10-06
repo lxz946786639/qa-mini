@@ -34,6 +34,13 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+/* P8.23：全站可点击元素统一小手光标（全局兜底，覆盖各视图自定义
+   按钮/链接/role=button；禁用态保持 not-allowed） */
+a,
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
+button:disabled,
+[role="button"][aria-disabled="true"] { cursor: not-allowed; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -436,6 +443,11 @@ body {
 .md blockquote { margin: 6px 0; padding: 4px 12px; border-left: 3px solid var(--border); color: var(--text-dim); }
 .md a { color: var(--accent); }
 .md hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+/* P8.19：「答」徽章与答案首行平行对齐——徽章是 inline-block，其基线随所在行的行盒定位，
+   而首个子块的 margin-top 会把首个行盒整体下压同等距离，徽章却停在区块顶端，
+   于是「答」比首行文字高出这一截（首块为标题时偏差更大）。
+   去掉首个子块的顶部外边距即可对齐（问行文字无此边距，故「答」与「问」自然同列同高）。 */
+.md > :first-child { margin-top: 0; }
 
 /* 底部输入（对齐旧版 footer + .composer：与主区卡片同 --qa-maxw 中心线） */
 .ws-foot {
