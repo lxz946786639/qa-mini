@@ -204,7 +204,16 @@ function scheduleRender(card: Card) {
         c.html = renderMarkdown(c.answer);
       }
     }
+    scrollBottom(false); // P8.12 对齐旧版：流式输出中贴近底部时自动跟随（不打断上滑阅读）
   });
+}
+const showToLatest = ref(false); // P8.12：上滑阅读时显示「↓ 最新」浮钮（对齐旧版）
+function isNearBottom(): boolean {
+  const el = chatEl.value;
+  return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+}
+function onChatScroll() {
+  showToLatest.value = cards.value.length > 0 && !isNearBottom();
 }
 
 function rebuildCards() {
@@ -216,8 +225,9 @@ function rebuildCards() {
 function scrollBottom(force = false) {
   const el = chatEl.value;
   if (!el) return;
-  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-  if (force || nearBottom) el.scrollTop = el.scrollHeight;
+  // P8.12 对齐旧版：force（切会话/新提问/浮钮）平滑；流式跟随时 instant
+  if (force || isNearBottom()) el.scrollTo({ top: el.scrollHeight, behavior: force ? "smooth" : "instant" });
+  showToLatest.value = cards.value.length > 0 && !isNearBottom();
 }
 
 function runningCard(qaId: string): Card | undefined {
@@ -413,10 +423,27 @@ async function cancelQa(qaId: string) {
   const r = await sess.cancel(qaId);
   if (!r.ok) ElMessage.warning(r.data.detail || "取消失败");
 }
+// P8.12 对齐旧版：输入框底部「停止」（仅当前会话有在途问题时可用）
+const currentRunningId = computed(() => cards.value.find((c) => c.status === "running")?.id || "");
+async function stopCurrent() {
+  if (currentRunningId.value) await cancelQa(currentRunningId.value);
+}
+// P8.12 对齐旧版：生成中实时计时「生成中… Xs」（最终时长以服务端 duration_s 为准）
+const nowTick = ref(Date.now());
+let tickTimer: number | null = null;
+watch(runningCount, (n) => {
+  if (n > 0 && tickTimer == null) tickTimer = window.setInterval(() => (nowTick.value = Date.now()), 250);
+  if (n === 0 && tickTimer != null) { clearInterval(tickTimer); tickTimer = null; }
+});
+function runElapsed(c: Card): string {
+  const s = (nowTick.value - new Date(c.started_at).getTime()) / 1000;
+  if (!(s >= 0)) return "0.0";
+  return s < 10 ? s.toFixed(1) : String(Math.round(s));
+}
 
 async function deleteCard(rec: RecordView) {
   try {
-    await ElMessageBox.confirm("删除这条记录？", "删除记录", { confirmButtonText: "删除", cancelButtonText: "取消", type: "warning" });
+    await ElMessageBox.confirm("删除这条问答记录？（各端同步删除，不可恢复）", "删除记录", { confirmButtonText: "删除", cancelButtonText: "取消", type: "warning" });
   } catch { return; }
   const r = await sess.removeRecord(sess.currentSid!, rec.id);
   if (r.ok) ElMessage.success("已删除");
@@ -424,7 +451,10 @@ async function deleteCard(rec: RecordView) {
 }
 
 async function regen(rec: RecordView) {
-  // 与现役界面一致：删该条记录 + 用同一问题重发
+  // 与旧版一致：删该条记录 + 用同一问题重发（先确认）
+  try {
+    await ElMessageBox.confirm("重新生成回答？\n将删除这条记录，并按相同上下文重新提问。", "重新生成", { confirmButtonText: "重新生成", cancelButtonText: "取消", type: "warning" });
+  } catch { return; }
   const r = await sess.removeRecord(sess.currentSid!, rec.id);
   if (!r.ok) { ElMessage.error("重新生成失败"); return; }
   await sendQuestionOnly(rec.question);
@@ -439,13 +469,28 @@ async function sendQuestionOnly(q: string) {
 }
 
 function canRegen(c: Card): boolean {
-  // 与现役界面一致：仅最新一条非生成中的记录可重新生成
+  // P8.12 对齐旧版：仅最新一条非生成中的记录可重新生成（含错误卡；
+  // 更早的记录重提问会带上其后新增的上下文，故不提供）
   const last = cards.value[cards.value.length - 1];
-  return !!last && last.id === c.id && last.status === "done" && last.ok;
+  return !!last && last.id === c.id && last.status === "done";
 }
 
 function copyText(t: string) {
-  navigator.clipboard.writeText(t).then(() => ElMessage.success("已复制"));
+  // P8.12 对齐旧版：无内容提示 + 非安全上下文（http 局域网 IP）execCommand 降级
+  if (!t) { ElMessage.info("暂无可复制内容"); return; }
+  const done = () => ElMessage.success("已复制");
+  const fallback = () => {
+    const ta = document.createElement("textarea");
+    ta.value = t;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch { ElMessage.error("复制失败"); }
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, fallback);
+  else fallback();
 }
 
 function fmtTime(ts: string | null): string {
@@ -475,10 +520,13 @@ onMounted(async () => {
   await loadAgent();
   if (!agentErr.value) await initSessions();
   document.addEventListener("click", onUserDocClick);
+  chatEl.value?.addEventListener("scroll", onChatScroll, { passive: true });
 });
 onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf);
+  if (tickTimer != null) { clearInterval(tickTimer); tickTimer = null; }
   document.removeEventListener("click", onUserDocClick);
+  chatEl.value?.removeEventListener("scroll", onChatScroll);
 });
 </script>
 
@@ -597,6 +645,13 @@ onBeforeUnmount(() => {
 
     <!-- 主列（P8.5：顶栏已上移为满宽 .ws-top；本列仅 main#chat / footer composer） -->
     <div class="ws-col">
+      <button
+        v-if="sess.currentSid && cards.length && showToLatest"
+        class="ws-to-latest"
+        type="button"
+        title="回到底部（最新）"
+        @click="scrollBottom(true)"
+      >↓ 最新</button>
       <main ref="chatEl" class="ws-main">
         <div v-if="agentErr" class="ws-err">{{ agentErr }}<button v-if="agentNeedLogin" type="button" class="ws-err-go" @click="goLogin">去登录 →</button></div>
         <div v-else-if="!sess.currentSid" class="ws-empty-main">
@@ -625,13 +680,14 @@ onBeforeUnmount(() => {
                 <em class="src">{{ c.source === 'push' ? '语音推送' : '网页' }}</em>
                 <em class="tm">{{ fmtTime(c.started_at) }}</em>
               </span>
+              <button class="q-copy" type="button" title="复制问题" @click="copyText(c.question)">复制</button>
             </div>
             <div class="a-block">
               <span class="tag tag-a">答</span>
               <div class="a-body md" v-html="c.html"></div>
               <div class="a-status">
                 <template v-if="c.status === 'running'">
-                  <span class="st st-run">生成中…</span>
+                  <span class="st st-run">生成中… {{ runElapsed(c) }}s</span>
                   <button class="st-btn" @click="cancelQa(c.id)">停止</button>
                 </template>
                 <template v-else>
@@ -640,10 +696,8 @@ onBeforeUnmount(() => {
                     <template v-if="c.duration_s != null"> · {{ c.duration_s }}s</template>
                   </span>
                   <span class="st-btns">
-                    <template v-if="c.ok && c.answer">
-                      <button class="st-btn" @click="copyText(c.answer)">复制</button>
-                      <button class="st-btn" :disabled="!canRegen(c)" @click="regen(c)">重新生成</button>
-                    </template>
+                    <button v-if="c.ok && c.answer" class="st-btn" @click="copyText(c.answer)">复制</button>
+                    <button class="st-btn" :disabled="!canRegen(c)" @click="regen(c)">重新生成</button>
                     <button class="st-btn" @click="deleteCard(c)">删除</button>
                   </span>
                 </template>
@@ -667,12 +721,15 @@ onBeforeUnmount(() => {
             class="ws-input"
             rows="2"
             placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+            autofocus
             @keydown.enter.exact.prevent="send"
           ></textarea>
           <div v-if="mic.st.value.interim" class="mic-interim">… {{ mic.st.value.interim }}</div>
           <div class="ws-composer-bar">
             <span class="ws-composer-proto" title="当前会话与协议（协议在「会话设置」中修改）">{{ composerProto }}</span>
             <div class="ws-composer-actions">
+              <button class="st-btn ws-stop" :disabled="!currentRunningId" @click="stopCurrent"
+                title="停止生成（当前会话在途的问题）">停止</button>
               <label class="asr-autosend" title="语音识别定稿后自动发送（无需点「发送」）；不勾选则识别结果填入输入框待确认（默认）">
                 <input type="checkbox" v-model="mic.st.value.autosend" @change="saveAutosend"> 识别后自动发送
               </label>
