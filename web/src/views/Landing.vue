@@ -183,14 +183,72 @@ function onScroll() {
   }
 }
 
+// ---------- P8.1 滚轮规整 ----------
+// 鼠标滚轮大步长（OS「每次滚动行数」偏大 / 整页滚动 / 触控板惯性甩动，
+// 单事件位移可达 1200px+）会让一滚「翻过」整个区块。此处只做轻量规整：
+// 大 notch → 单步平滑滑动（~24% 视口，上限 220px）+ 惯性尾吸收；
+// 触控板像素级细滚（|Δ|<60px 的 deltaMode=0）保持浏览器原生行为不干预；
+// 动画期间的大 notch 累计（最多 3 步连滑）；prefers-reduced-motion 时回退原生。
+let glideRaf = 0;
+let glidePending = 0;
+let lastStepAt = 0;
+function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
+function wheelStep() { return Math.round(Math.min(220, Math.max(150, window.innerHeight * 0.24))); }
+function glideBy(dy: number) {
+  if (glideRaf) return;
+  const start = window.scrollY;
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  const end = Math.max(0, Math.min(max, start + dy));
+  if (end === start) { glidePending = 0; return; } // 已到滚动边界
+  const t0 = performance.now();
+  const dur = 380;
+  glideRaf = requestAnimationFrame(function tick(now) {
+    const t = Math.min(1, (now - t0) / dur);
+    window.scrollTo(0, start + (end - start) * easeOutCubic(t));
+    if (t < 1) glideRaf = requestAnimationFrame(tick);
+    else {
+      glideRaf = 0;
+      if (glidePending !== 0) {
+        const p = Math.max(-3, Math.min(3, glidePending));
+        glidePending = 0;
+        glideBy(p * wheelStep());
+      }
+    }
+  });
+}
+function onWheel(e: WheelEvent) {
+  const now = performance.now();
+  const big = e.deltaMode !== 0 || Math.abs(e.deltaY) >= 60;
+  if (glideRaf) { // 动画中：大 notch 累计连滑，其余（惯性尾）吸收
+    if (big) glidePending += e.deltaY >= 0 ? 1 : -1;
+    e.preventDefault();
+    return;
+  }
+  if (!big && now - lastStepAt < 250) { e.preventDefault(); return; } // 刚滑完的惯性尾
+  if (!big) return; // 细滚（触控板）：原生
+  e.preventDefault();
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollBy(0, Math.max(-320, Math.min(320, e.deltaY)));
+    return;
+  }
+  glidePending = 0;
+  lastStepAt = now;
+  glideBy(e.deltaY >= 0 ? wheelStep() : -wheelStep());
+}
+
 onMounted(() => {
   auth.me();
   load();
   revealInit();
   window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("wheel", onWheel, { passive: false });
 });
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
+  window.removeEventListener("wheel", onWheel);
+  if (glideRaf) cancelAnimationFrame(glideRaf);
+  glideRaf = 0;
+  glidePending = 0;
   if (io) io.disconnect();
   io = null;
 });

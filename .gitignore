@@ -17,3 +17,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.tmp
+
+# 本地临时目录（CDP 截图/测试 profile）
+.tmp-*/
+.tmp-shots/
