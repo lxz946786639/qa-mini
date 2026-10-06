@@ -50,9 +50,11 @@ const ICONS: Record<string, string> = {
   ans: S('<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9 9 0 0 1-3.8-.8L4 20.5l1.2-4A8.3 8.3 0 1 1 21 11.5z"/><path d="m9 11.5 2 2 4-4.5"/>'),
   sun: S('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
   moon: S('<path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/>'),
-  arrowD: S('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  // P8.13：箭头去掉中间竖线，改为双 V 形（chevron）
+  arrowD: S('<path d="m6 8 6 6 6-6"/><path d="m6 15 6 6 6-6"/>', "0 0 24 26"),
   arrowR: S('<path d="M5 12h14M13 6l6 6-6 6"/>'),
-  arrowVD: S('<path d="M12 3v20M6.5 17.5 12 23l5.5-5.5"/>', "0 0 24 26"),
+  arrowVD: S('<path d="m6 8 6 6 6-6"/><path d="m6 15 6 6 6-6"/>', "0 0 24 26"),
+  chevU: S('<path d="m6 18 6-6 6 6"/><path d="m6 11 6-6 6 6"/>', "0 0 24 26"),
   chevD: S('<path d="m6 9 6 6 6-6"/>')
 };
 const waveHeights = [18, 30, 12, 38, 22, 44, 28, 16, 34, 20, 10, 46, 26, 14];
@@ -158,8 +160,9 @@ function goCard(c: Card) {
 function viewAll() {
   router.push(auth.isAdmin ? "/admin" : "/login");
 }
+// P8.13：立即体验 = 滚动到智能体区块（不再直接跳入某智能体工作区）
 function goExperience() {
-  router.push("/agents/industry-brain");
+  scrollTo("agents");
 }
 function scrollTo(id: string) {
   const el = document.getElementById(id);
@@ -202,14 +205,6 @@ function onDocClick(e: MouseEvent) {
   }
 }
 
-// ---------- 滚动提示淡出（一次性） ----------
-const scrolled = ref(false);
-function onScroll() {
-  if (!scrolled.value) {
-    scrolled.value = true;
-    window.removeEventListener("scroll", onScroll);
-  }
-}
 
 // ---------- P8.3 满屏区块 + 滚轮区块吸附 ----------
 // 四个区块各 100svh 满屏（末区块内含页脚，整页 = 4 × 100svh）。
@@ -281,6 +276,26 @@ function snapAnimate(to: number) {
     }
   });
 }
+// ---------- P8.13 区块边缘指引 ----------
+// 仅当区块停在吸附位（顶边对齐视口顶 / 末区块停底）时显示：
+// 顶右 = 上一区块、底右 = 下一区块（Hero 的「向下探索」按钮自身即其下一区块指引）
+const EDGE_TOL = 10; // 吸附位判定容差（px）
+const edgeIdx = ref(-1); // 当前停在吸附位的区块索引；-1 = 滚动中
+const SEC_LABELS: Record<string, string> = { top: "首页", agents: "智能体", matrix: "产品矩阵", workflow: "工作流" };
+function edgeRest() {
+  const idx = snapIndex();
+  if (Math.abs(window.scrollY - snapSectionTop(idx)) <= EDGE_TOL) { edgeIdx.value = idx; return; }
+  if (idx === SNAP_IDS.length - 1 && Math.abs(window.scrollY - snapMaxScroll()) <= EDGE_TOL) { edgeIdx.value = idx; return; }
+  edgeIdx.value = -1;
+}
+let edgeRaf = 0;
+function onEdgeScroll() {
+  if (edgeRaf) return;
+  edgeRaf = requestAnimationFrame(() => { edgeRaf = 0; edgeRest(); });
+}
+function snapGoNext() { snapAnimate(Math.min(SNAP_IDS.length - 1, snapIndex() + 1)); }
+function snapGoPrev() { snapAnimate(Math.max(0, snapIndex() - 1)); }
+
 function onWheel(e: WheelEvent) {
   e.preventDefault(); // 满屏区块页：全部滚轮输入归一为区块步
   const now = performance.now();
@@ -304,12 +319,15 @@ onMounted(() => {
   auth.me();
   load();
   revealInit();
-  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("scroll", onEdgeScroll, { passive: true });
+  edgeRest();
   window.addEventListener("wheel", onWheel, { passive: false });
   document.addEventListener("click", onDocClick);
 });
 onBeforeUnmount(() => {
-  window.removeEventListener("scroll", onScroll);
+  window.removeEventListener("scroll", onEdgeScroll);
+  if (edgeRaf) cancelAnimationFrame(edgeRaf);
+  edgeRaf = 0;
   window.removeEventListener("wheel", onWheel);
   document.removeEventListener("click", onDocClick);
   if (snapRaf) cancelAnimationFrame(snapRaf);
@@ -367,7 +385,7 @@ onBeforeUnmount(() => {
 
     <main>
       <!-- 区块一：Hero（100vh 视口） -->
-      <section id="top" class="lp-hero" :class="{ 'lp-scrolled': scrolled }">
+      <section id="top" class="lp-hero" :class="{ 'lp-scrolled': edgeIdx !== 0 }">
         <div class="lp-hero-copy">
           <h1 class="lp-io">回响答</h1>
           <p class="lp-hero-sub lp-io">一款面向线上答辩的即时问答神器</p>
@@ -408,10 +426,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="lp-scroll-cue" aria-hidden="true">
+        <button class="lp-scroll-cue" type="button" aria-label="向下探索：进入智能体区块" @click="snapGoNext()">
           <span>向下探索</span>
           <span v-html="ICONS.arrowD"></span>
-        </div>
+        </button>
       </section>
 
       <!-- 区块二：智能体选择（55–70vh） -->
@@ -557,5 +575,13 @@ onBeforeUnmount(() => {
         <footer class="lp-foot">EchoAnswer v59 · 局域网 AI 问答平台</footer>
       </section>
     </main>
+
+    <!-- P8.13：区块边缘指引（仅在吸附位显示；Hero 用其自身「向下探索」按钮） -->
+    <button v-if="edgeIdx >= 1" class="lp-edge lp-edge-top" type="button" @click="snapGoPrev()">
+      <span v-html="ICONS.chevU"></span><span>上一区块 · {{ SEC_LABELS[SNAP_IDS[edgeIdx - 1]] }}</span>
+    </button>
+    <button v-if="edgeIdx >= 1 && edgeIdx < SNAP_IDS.length - 1" class="lp-edge lp-edge-bottom" type="button" @click="snapGoNext()">
+      <span>下一区块 · {{ SEC_LABELS[SNAP_IDS[edgeIdx + 1]] }}</span><span v-html="ICONS.arrowD"></span>
+    </button>
   </div>
 </template>

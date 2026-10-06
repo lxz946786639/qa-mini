@@ -253,13 +253,34 @@
 /* 滚动提示 */
 .lp-scroll-cue {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
   color: var(--lp-dim); font-size: 11px; letter-spacing: 0.12em;
   opacity: 0.9; transition: opacity 0.5s;
+  /* P8.13：可点击按钮（背景/边框重置） */
+  background: none; border: 0; cursor: pointer; font-family: inherit; padding: 4px 12px;
 }
+.lp-scroll-cue:hover { color: var(--lp-text); opacity: 1; }
 .lp-scroll-cue svg { width: 16px; height: 16px; animation: lp-cue 1.8s ease-in-out infinite; }
 @keyframes lp-cue { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
-.lp-hero.lp-scrolled .lp-scroll-cue { opacity: 0; }
+.lp-hero.lp-scrolled .lp-scroll-cue { opacity: 0; pointer-events: none; }
+
+/* P8.13：区块边缘指引（仅在吸附位显示：顶右 = 上一区块 / 底右 = 下一区块） */
+.lp-edge {
+  position: fixed; right: 22px; z-index: 40;
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px;
+  background: color-mix(in srgb, var(--lp-bg-soft) 82%, transparent);
+  border: 1px solid var(--lp-border); border-radius: 999px;
+  color: var(--lp-dim); font-size: 12px; letter-spacing: 0.06em;
+  font-family: inherit; cursor: pointer;
+  backdrop-filter: blur(6px); box-shadow: var(--lp-shadow);
+  animation: lp-edge-in 0.28s ease;
+  transition: color 0.15s, border-color 0.15s;
+}
+.lp-edge:hover { color: var(--lp-text); border-color: var(--lp-accent); }
+.lp-edge svg { width: 14px; height: 14px; flex: none; }
+.lp-edge-top { top: 66px; }
+.lp-edge-bottom { bottom: 18px; }
+@keyframes lp-edge-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1024px) {
   .lp-hero { grid-template-columns: minmax(0, 1fr); gap: 34px; padding-top: 44px; }
   .lp-viz { max-width: 400px; }
