@@ -242,9 +242,8 @@
   box-shadow: var(--lp-shadow);
 }
 .lp-viz-card em { display: block; font-style: normal; font-size: 12px; color: var(--lp-accent); margin-bottom: 6px; }
-.lp-viz-card p { margin: 0; font-size: 14px; line-height: 1.65; }
-.lp-type { clip-path: inset(0 0 0 0); animation: lp-typing 2.6s steps(26, end) 0.9s both; }
-@keyframes lp-typing { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.lp-viz-card p { margin: 0; font-size: 14px; line-height: 1.65; min-height: calc(2 * 1.65em); } /* P8.16：预留两行，打字时卡片不跳动 */
+/* P8.16：打字动画改由 JS 逐字驱动（.lp-type 只放已打出的文字） */
 .lp-caret {
   display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -0.12em;
   background: var(--lp-accent-2); animation: lp-blink 1s steps(1) infinite;

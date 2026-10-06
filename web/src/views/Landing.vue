@@ -196,6 +196,21 @@ function revealInit() {
   });
 }
 
+// ---------- P8.16 演示打字（JS 逐字，替换旧 clip-path 擦除：两行不再同时露出） ----------
+const DEMO_ANSWER = "建立专属知识库并批量导入文档，知识引擎在会话中实时检索，答案都有出处，不编造。";
+const typed = ref("");
+let typeTimer: ReturnType<typeof setInterval> | null = null;
+function startTyping() {
+  if (typeTimer || typed.value) return; // 只打一次
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { typed.value = DEMO_ANSWER; return; }
+  let i = 0;
+  typeTimer = setInterval(() => {
+    i++;
+    typed.value = DEMO_ANSWER.slice(0, i);
+    if (i >= DEMO_ANSWER.length) { clearInterval(typeTimer); typeTimer = null; }
+  }, 45);
+}
+
 // ---------- P8.2 用户名下拉（点外部关闭） ----------
 const userMenuOpen = ref(false);
 const userWrap = ref<HTMLElement | null>(null);
@@ -323,6 +338,7 @@ onMounted(() => {
   edgeRest();
   window.addEventListener("wheel", onWheel, { passive: false });
   document.addEventListener("click", onDocClick);
+  window.setTimeout(startTyping, 900);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onEdgeScroll);
@@ -330,6 +346,7 @@ onBeforeUnmount(() => {
   edgeRaf = 0;
   window.removeEventListener("wheel", onWheel);
   document.removeEventListener("click", onDocClick);
+  if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
   if (snapRaf) cancelAnimationFrame(snapRaf);
   snapRaf = 0;
   snapBuffer = 0;
@@ -421,7 +438,7 @@ onBeforeUnmount(() => {
           <div class="lp-viz-card">
             <em>知识引擎 · 流式回答</em>
             <p>
-              <span class="lp-type">建立专属知识库并批量导入文档，知识引擎在会话中实时检索，答案都有出处，不编造。</span><span class="lp-caret"></span>
+              <span class="lp-type">{{ typed }}</span><span class="lp-caret"></span>
             </p>
           </div>
         </div>
