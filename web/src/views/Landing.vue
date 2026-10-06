@@ -4,6 +4,7 @@
 // 不使用 Element Plus 组件，不新增任何依赖。
 // 保留能力：GET /api/agents 动态列表（loading/错误重试/空态）、未登录提示、登录/控制台/退出。
 // 主题与全站共享 useTheme（data-theme；首次访问跟随系统，手动切换后 localStorage 记忆）。
+// P8.3：四区块各 100svh 满屏，滚轮「一步一区块」吸附（onWheel 归一，末区块含页脚）。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -197,57 +198,93 @@ function onScroll() {
   }
 }
 
-// ---------- P8.1 滚轮规整 ----------
-// 鼠标滚轮大步长（OS「每次滚动行数」偏大 / 整页滚动 / 触控板惯性甩动，
-// 单事件位移可达 1200px+）会让一滚「翻过」整个区块。此处只做轻量规整：
-// 大 notch → 单步平滑滑动（~24% 视口，上限 220px）+ 惯性尾吸收；
-// 触控板像素级细滚（|Δ|<60px 的 deltaMode=0）保持浏览器原生行为不干预；
-// 动画期间的大 notch 累计（最多 3 步连滑）；prefers-reduced-motion 时回退原生。
-let glideRaf = 0;
-let glidePending = 0;
-let lastStepAt = 0;
-function easeOutCubic(t: number) { return 1 - Math.pow(1 - t, 3); }
-function wheelStep() { return Math.round(Math.min(220, Math.max(150, window.innerHeight * 0.24))); }
-function glideBy(dy: number) {
-  if (glideRaf) return;
+// ---------- P8.3 满屏区块 + 滚轮区块吸附 ----------
+// 四个区块各 100svh 满屏（末区块内含页脚，整页 = 4 × 100svh）。
+// 滚轮归一为「一步一区块」：
+//  · 任意滚动手势（鼠标 notch / OS 整页滚动 / 触控板细滚累计 ≥45px / 惯性甩动）
+//    都只前进或后退一个区块，easeInOutCubic 动画到区块顶（= 吸附位）；
+//  · 动画开始 220ms 内的再次滚动缓冲 1 步（快速双击 = 连走两区块），
+//    之后的惯性尾全部吸收；连步完成后 320ms 冷却，防一次甩动连翻多区块；
+//  · prefers-reduced-motion → 无动画，直接跳区块。
+const SNAP_IDS = ["top", "agents", "matrix", "workflow"];
+const SNAP_ACC_THRESHOLD = 45;   // 触控板细滚累计阈值（px）
+const SNAP_BUFFER_MS = 220;      // 动画开始后的缓冲窗口（连击判定）
+const SNAP_COOLDOWN_MS = 320;    // 连步完成后的惯性尾冷却
+let snapRaf = 0;
+let snapStartAt = 0;
+let snapBuffer = 0;
+let snapAcc = 0;
+let snapCooldownUntil = 0;
+function snapSectionTop(i: number) {
+  if (i === 0) return 0; // 首区块对齐页面顶（导航在文档流占 60px，scrollY=0 为首屏）
+  const el = document.getElementById(SNAP_IDS[i]);
+  if (!el) return 0;
+  return el.getBoundingClientRect().top + window.scrollY;
+}
+function snapMaxScroll() {
+  return document.documentElement.scrollHeight - window.innerHeight;
+}
+// 当前视口中点所在的区块索引
+function snapIndex() {
+  const mid = window.scrollY + window.innerHeight * 0.5;
+  let idx = 0;
+  for (let i = 0; i < SNAP_IDS.length; i++) {
+    if (snapSectionTop(i) <= mid) idx = i;
+  }
+  return idx;
+}
+function snapEase(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; // easeInOutCubic
+}
+function snapFinish() {
+  const buf = snapBuffer;
+  snapBuffer = 0;
+  if (buf !== 0) {
+    const to = Math.max(0, Math.min(SNAP_IDS.length - 1, snapIndex() + buf));
+    if (to !== snapIndex()) { snapAnimate(to); return; } // 缓冲的连步（最多一次）
+  }
+  snapCooldownUntil = performance.now() + SNAP_COOLDOWN_MS;
+}
+function snapAnimate(to: number) {
+  if (snapRaf) return;
   const start = window.scrollY;
-  const max = document.documentElement.scrollHeight - window.innerHeight;
-  const end = Math.max(0, Math.min(max, start + dy));
-  if (end === start) { glidePending = 0; return; } // 已到滚动边界
+  const end = Math.max(0, Math.min(snapMaxScroll(), snapSectionTop(to)));
+  if (end === start || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, end);
+    snapFinish();
+    return;
+  }
+  const dist = Math.abs(end - start);
+  const dur = Math.max(420, Math.min(720, dist / 1.3));
   const t0 = performance.now();
-  const dur = 380;
-  glideRaf = requestAnimationFrame(function tick(now) {
+  snapStartAt = t0;
+  snapRaf = requestAnimationFrame(function tick(now) {
     const t = Math.min(1, (now - t0) / dur);
-    window.scrollTo(0, start + (end - start) * easeOutCubic(t));
-    if (t < 1) glideRaf = requestAnimationFrame(tick);
+    window.scrollTo(0, start + (end - start) * snapEase(t));
+    if (t < 1) snapRaf = requestAnimationFrame(tick);
     else {
-      glideRaf = 0;
-      if (glidePending !== 0) {
-        const p = Math.max(-3, Math.min(3, glidePending));
-        glidePending = 0;
-        glideBy(p * wheelStep());
-      }
+      snapRaf = 0;
+      snapFinish();
     }
   });
 }
 function onWheel(e: WheelEvent) {
+  e.preventDefault(); // 满屏区块页：全部滚轮输入归一为区块步
   const now = performance.now();
-  const big = e.deltaMode !== 0 || Math.abs(e.deltaY) >= 60;
-  if (glideRaf) { // 动画中：大 notch 累计连滑，其余（惯性尾）吸收
-    if (big) glidePending += e.deltaY >= 0 ? 1 : -1;
-    e.preventDefault();
+  if (snapRaf) {
+    if (now - snapStartAt < SNAP_BUFFER_MS) snapBuffer = e.deltaY > 0 ? 1 : -1; // 连击缓冲
     return;
   }
-  if (!big && now - lastStepAt < 250) { e.preventDefault(); return; } // 刚滑完的惯性尾
-  if (!big) return; // 细滚（触控板）：原生
-  e.preventDefault();
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    window.scrollBy(0, Math.max(-320, Math.min(320, e.deltaY)));
-    return;
+  if (now < snapCooldownUntil) return; // 惯性尾冷却
+  snapAcc += e.deltaY;
+  if (Math.abs(snapAcc) >= SNAP_ACC_THRESHOLD) {
+    const dir = snapAcc > 0 ? 1 : -1;
+    snapAcc = 0;
+    const from = snapIndex();
+    const to = Math.max(0, Math.min(SNAP_IDS.length - 1, from + dir));
+    if (to === from) return; // 已到边界
+    snapAnimate(to);
   }
-  glidePending = 0;
-  lastStepAt = now;
-  glideBy(e.deltaY >= 0 ? wheelStep() : -wheelStep());
 }
 
 onMounted(() => {
@@ -262,9 +299,10 @@ onBeforeUnmount(() => {
   window.removeEventListener("scroll", onScroll);
   window.removeEventListener("wheel", onWheel);
   document.removeEventListener("click", onDocClick);
-  if (glideRaf) cancelAnimationFrame(glideRaf);
-  glideRaf = 0;
-  glidePending = 0;
+  if (snapRaf) cancelAnimationFrame(snapRaf);
+  snapRaf = 0;
+  snapBuffer = 0;
+  snapAcc = 0;
   if (io) io.disconnect();
   io = null;
 });
@@ -477,6 +515,7 @@ onBeforeUnmount(() => {
 
       <!-- 区块四：完整工作流（70–85vh） -->
       <section id="workflow" class="lp-section lp-workflow">
+        <div class="lp-wf-body">
         <div class="lp-sec-head lp-io">
           <h2>从声音到答案</h2>
           <p>四步闭环，实时流动。</p>
@@ -500,9 +539,9 @@ onBeforeUnmount(() => {
           <p>听得见问题，给得出答案。你只管讲，答案我来。</p>
           <a class="lp-btn lp-btn-soft" href="/doc/03-部署说明.md">查看部署文档</a>
         </div>
+        </div>
+        <footer class="lp-foot">EchoAnswer v59 · 局域网 AI 问答平台</footer>
       </section>
     </main>
-
-    <footer class="lp-foot">EchoAnswer v59 · 局域网 AI 问答平台</footer>
   </div>
 </template>

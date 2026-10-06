@@ -4,7 +4,8 @@
    与全站主题机制（useTheme / index.html 内联防闪烁脚本）共用同一 data-theme 驱动；
    浅色为完整重着色（视觉元素重新着色，无破坏主题的硬编码颜色）。
    动效：CSS animation/transition 为主；JS 只做主题切换 + IO 滚动渐入 + 滚动提示淡出。
-   断点：>1024 桌面 / 641–1024 平板 / ≤640 手机；区块上下间距三档 --lp-pad。
+   断点：>1024 桌面 / 641–1024 平板 / ≤640 手机。
+   P8.3：四区块各满屏 100svh + 滚轮区块吸附；页脚位于末区块内。
    ============================================================ */
 :root {
   --lp-bg: #0B0F1A;
@@ -23,7 +24,6 @@
   --lp-btn-text: #061826;
   --lp-wf-bg: #0D1322;
   --lp-step-no: rgba(56, 189, 248, 0.18);
-  --lp-pad: 96px;
   --lp-tag-kn: #38BDF8;     --lp-tag-kn-bg: rgba(56, 189, 248, 0.14);
   --lp-tag-orch: #A78BFA;   --lp-tag-orch-bg: rgba(167, 139, 250, 0.14);
   --lp-tag-gen: #FBBF24;    --lp-tag-gen-bg: rgba(251, 191, 36, 0.13);
@@ -49,8 +49,6 @@
   --lp-tag-orch: #6D28D9;   --lp-tag-orch-bg: rgba(109, 40, 217, 0.08);
   --lp-tag-gen: #B45309;    --lp-tag-gen-bg: rgba(180, 83, 9, 0.10);
 }
-@media (max-width: 1024px) { :root { --lp-pad: 76px; } }
-@media (max-width: 640px)  { :root { --lp-pad: 52px; } }
 
 /* ---------- 页面壳 ---------- */
 .lp-root {
@@ -143,10 +141,15 @@
 }
 
 /* ---------- 区块通用 ---------- */
+/* P8.3：四个区块各占满 100svh（flex 垂直居中；顶部留白越过 60px 吸顶导航）；
+   滚轮按「区块」吸附（Landing.vue onWheel），区块顶 = 吸附位（无 scroll-margin）。
+   内容超高时区块自然撑开（min-height 不裁切）。 */
 .lp-section {
-  padding: var(--lp-pad) clamp(20px, 6vw, 84px);
-  scroll-margin-top: 60px;
+  min-height: 100svh;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 100px clamp(20px, 6vw, 84px) 48px;
 }
+@media (max-width: 640px) { .lp-section { padding: 84px 20px 36px; } }
 .lp-sec-head { text-align: center; max-width: 720px; margin: 0 auto clamp(28px, 4vw, 44px); }
 .lp-sec-head h2 { margin: 0 0 10px; font-size: clamp(26px, 3.4vw, 38px); font-weight: 800; letter-spacing: 0.01em; }
 .lp-sec-head p { margin: 0; color: var(--lp-dim); font-size: clamp(14px, 1.6vw, 16px); }
@@ -184,9 +187,8 @@
   align-items: center; gap: 40px;
   padding: 32px clamp(20px, 6vw, 84px) 60px;
 }
-@media (min-width: 1025px) {
-  .lp-hero { min-height: calc(100svh - 60px); }
-}
+/* P8.3：Hero 恒为满屏（导航在文档流占 60px，100svh-60 恰好填满首屏） */
+.lp-hero { min-height: calc(100svh - 60px); }
 .lp-hero::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background:
@@ -362,7 +364,9 @@
 }
 
 /* ---------- 区块四：完整工作流 ---------- */
-.lp-workflow { background: var(--lp-wf-bg); }
+.lp-workflow { background: var(--lp-wf-bg); justify-content: flex-start; }
+/* P8.3：内容垂直居中 + 页脚固定区块底部（整页 = 4 × 100svh，无独立页脚面板） */
+.lp-wf-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .lp-flow {
   position: relative;
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -406,11 +410,12 @@
   .lp-step-arrow { display: flex; }
 }
 
-/* ---------- 页脚 ---------- */
+/* ---------- 页脚（P8.3：位于末区块内，底部对齐） ---------- */
 .lp-foot {
   padding: 18px 16px 22px; text-align: center;
   color: var(--lp-dim); font-size: 12px;
   border-top: 1px solid var(--lp-border);
+  margin-top: clamp(36px, 6vh, 72px);
 }
 
 /* ---------- 滚动渐入（IO 添加 .lp-in；无 IO 时 JS 直接加类） ---------- */
