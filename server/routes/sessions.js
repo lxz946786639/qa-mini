@@ -4,7 +4,7 @@ const { sendJSON, parseJSONBody } = require("../middleware");
 const { sessionView, PROTOCOLS } = require("../../lib/config");
 const { testProtocol } = require("../../lib/protocol_test");
 const { QaError } = require("../../lib/sse");
-const { canView } = require("../services/principal");
+const { canView, agentAllows } = require("../services/principal");
 
 // P3 IDOR：会话级操作需对该会话有查看权（admin 直通）；不可见 = 404（不泄露存在性）
 // 属主写权：user 主体对自己的 'user' 私有会话可 改/删/删记录
@@ -57,13 +57,24 @@ function register(router, ctx) {
       return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
     }
     // P3：智能体归属（agent_id 或 agent_code；缺省 = 遗留 industry-brain 桶）
+    // P8.8：归属智能体对主体未放行 → 403（访问控制：console·智能体管理·安全）
     let pp = p;
     if (pp) {
       let agentId = null;
-      if (typeof body.agent_id === "string" && body.agent_id) agentId = body.agent_id;
-      else if (typeof body.agent_code === "string" && body.agent_code) {
+      if (typeof body.agent_id === "string" && body.agent_id) {
+        agentId = body.agent_id;
+        const ag = ctx.store.getAgent(agentId);
+        if (ag && !agentAllows(pp, ag)) {
+          return sendJSON(res, 403, { ok: false, detail: "该智能体未允许此访问方式（控制台·智能体管理·安全）" });
+        }
+      } else if (typeof body.agent_code === "string" && body.agent_code) {
         const ag = ctx.store.getAgentByCode(body.agent_code);
-        agentId = ag ? ag.id : null;
+        if (ag) {
+          if (!agentAllows(pp, ag)) {
+            return sendJSON(res, 403, { ok: false, detail: "该智能体未允许此访问方式（控制台·智能体管理·安全）" });
+          }
+          agentId = ag.id;
+        }
       }
       pp = agentId ? Object.assign({}, pp, { agentId }) : pp;
     }

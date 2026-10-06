@@ -181,12 +181,12 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
 | GET | `/api/auth/me` | 当前主体 `{principal（admin/user/code）, anonymous?}` |
 | POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
-| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…） |
-| GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏） |
+| GET | `/api/agents` | 启用中智能体列表（落地页选择器：code/name/description/protocol/…；P8.8 按主体访问控制过滤） |
+| GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
 | PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie） |
-| GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?}`（每智能体一个协议，存 agent_configs） |
-| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?}`（协议/配置变更清空该智能体会话后端会话 ID） |
+| GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
+| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
 
 > **v59（P3）多用户隔离**：会话按桶归属（`user` 私有 (user_id,agent_id) / `code` (access_code_id,agent_id) /
@@ -252,7 +252,9 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   + 用户名下拉「退出」，与官网首页同排版/交互）+ 图标（P7.5：全站 emoji 换 Element Plus
   图标库 @element-plus/icons-vue）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：用户 / 智能体 / 访问码 / 审计日志 /
   系统设置五页签，仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
-  对齐旧版 /admin 首屏）。开发：`cd web && npm install && npm run dev`（vite dev
+  对齐旧版 /admin 首屏；P8.8 智能体新增/编辑对话框分类为 tab（基本/协议/安全），
+  安全页 = 访问控制三开关（允许匿名访问 / 允许访问码访问 / 允许普通用户登录访问，
+  不同访问方式会话落独立桶互不可见，全关 = 仅管理员））。开发：`cd web && npm install && npm run dev`（vite dev
   代理 /api → 127.0.0.1:8787）；构建：`npm run build` → `web/dist`（构建产物随仓库
   提交，服务器直接挂载，部署不跑前端构建）。
 - **旧前端（P7 退役）**：原根路径纯静态界面（`public/` 目录：index.html / app.js /
@@ -282,7 +284,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**149 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**150 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -296,7 +298,7 @@ npm test           # node tests/run_tests.js
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
-- `tests/store_tests.js`：**35 项** v2 数据层单测（`node tests/store_tests.js`）：
+- `tests/store_tests.js`：**38 项** v2/v3 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移）：
   会话 CRUD/桶语义/历史 100 上限/访问码状态机/管理员迁移/审计日志。
 - 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`

@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 2, "user_version");
+      eq(v, 3, "user_version（P8.8 起 v3）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -268,12 +268,43 @@ function oldConfig(over) {
     buildV1Db(dir, { sessions: defaultV1Sessions().slice(0, 1), records: [], setVersion: true });
     const cfgFile = writeConfig(dir, oldConfig());
     let store;
-    await t("user_version 1 → 2 + 归属", async () => {
+    await t("user_version 1 → v3 + 归属", async () => {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 2, "v2");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 3, "v3");
       eq(store.listSessions({}).length, 1, "会话保留");
+    });
+    store.close();
+  }
+
+  console.log("\n[T3b] v2 → v3 迁移（P8.8 agents 访问控制列）");
+  {
+    const dir = mk();
+    buildV1Db(dir, { sessions: defaultV1Sessions().slice(0, 1), records: [] });
+    const cfgFile = writeConfig(dir, oldConfig());
+    let store;
+    await t("存量 v2 库补列 allow_*（默认 = 允许）+ 版本 3", async () => {
+      const res0 = initDataDir(dir, { configFile: cfgFile, log: noop }); // v1 → v3
+      assert(res0.migrated === true, "首次迁移");
+      // 模拟遗留 v2 库：版本拨回 2 + 摘掉一个 P8.8 列
+      const d = new DatabaseSync(res0.dbFile);
+      d.exec("PRAGMA user_version = 2;");
+      d.exec("ALTER TABLE agents DROP COLUMN allow_user");
+      d.close();
+      const res = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(res.migrated === true, "v2 → v3 migrated");
+      store = Store.open(res.dbFile);
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 3, "版本 3");
+      const brain = store.getAgentByCode("industry-brain");
+      eq(brain.allow_user, true, "补列默认 = 允许");
+      eq(brain.allow_anon, true, "allow_anon 不变");
+      eq(brain.allow_code, true, "allow_code 不变");
+      eq(store.listSessions({}).length, 1, "会话保留");
+    });
+    await t("v3 幂等：二次启动跳过", async () => {
+      const res2 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(res2.migrated === false, "跳过");
     });
     store.close();
   }
@@ -337,6 +368,21 @@ function oldConfig(over) {
       throws(() => store.createAgent({ code: "qa-math", name: "x" }), "重复码拒绝");
       store.removeAgent(a.id);
       assert(store.getAgentByCode("qa-math") === null, "删除");
+    });
+
+    await t("agents：访问控制列（P8.8 默认全放行 / 创建时全关 / 更新回写）", async () => {
+      const a = store.createAgent({ code: "qa-sec", name: "安全体" });
+      eq(store.getAgent(a.id).allow_anon, true, "默认允许匿名");
+      eq(store.getAgent(a.id).allow_code, true, "默认允许码");
+      eq(store.getAgent(a.id).allow_user, true, "默认允许用户");
+      const b = store.createAgent({ code: "qa-sec2", name: "安全体2", allow_anon: false, allow_code: false, allow_user: false });
+      eq(b.allow_anon, false, "创建时全关");
+      store.updateAgent(b.id, { allow_user: true });
+      const g = store.getAgent(b.id);
+      eq(g.allow_user, true, "更新回写");
+      eq(g.allow_anon, false, "其余不变");
+      store.removeAgent(a.id);
+      store.removeAgent(b.id);
     });
 
     await t("agent_configs：upsert + 非法协议拒绝", async () => {

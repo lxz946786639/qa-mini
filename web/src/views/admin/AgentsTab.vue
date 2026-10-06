@@ -9,6 +9,7 @@ import { api } from "../../api";
 interface Agent {
   id: string; code: string; name: string; description: string; icon: string;
   enabled: boolean; sort: number; prompt: string; protocol: string; config: Record<string, any>;
+  allow_anon: boolean; allow_code: boolean; allow_user: boolean; // P8.8 访问控制
 }
 const PROTOCOLS = [
   { value: "ragflow", label: "知识引擎（RAGFlow）" },
@@ -43,9 +44,11 @@ const agents = ref<Agent[]>([]);
 const loading = ref(true);
 const dialog = ref(false);
 const editing = ref<string | null>(null); // code 或 null=新建
+const atTab = ref("basic"); // P8.8 对话框 tab（基本/协议/安全）
 const form = reactive({
   code: "", name: "", description: "", icon: "", sort: 0,
   enabled: true, protocol: "ragflow", prompt: "",
+  allow_anon: true, allow_code: true, allow_user: true, // P8.8 访问控制
   config: { url: "", api_key: "", chat_id: "", model: "", body: "" }
 });
 const fields = computed(() => CFG_FIELDS[form.protocol] || []);
@@ -58,17 +61,28 @@ async function load() {
 }
 function openCreate() {
   editing.value = null;
-  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", prompt: "", config: { url: "", api_key: "", chat_id: "", model: "", body: "" } });
+  atTab.value = "basic";
+  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", prompt: "", allow_anon: true, allow_code: true, allow_user: true, config: { url: "", api_key: "", chat_id: "", model: "", body: "" } });
   dialog.value = true;
 }
 function openEdit(a: Agent) {
   editing.value = a.code;
+  atTab.value = "basic";
   Object.assign(form, {
     code: a.code, name: a.name, description: a.description, icon: a.icon, sort: a.sort,
     enabled: a.enabled, protocol: a.protocol, prompt: a.prompt,
+    allow_anon: a.allow_anon !== false, allow_code: a.allow_code !== false, allow_user: a.allow_user !== false,
     config: { url: "", api_key: "", chat_id: "", model: "", body: "", ...a.config }
   });
   dialog.value = true;
+}
+function accessLabel(a: Agent): string {
+  // P8.8 列表徽标：当前放行范围（admin 恒可用，不在此列示）
+  if (a.allow_anon) return "全部";
+  const parts: string[] = [];
+  if (a.allow_code) parts.push("访问码");
+  if (a.allow_user) parts.push("用户登录");
+  return parts.length ? parts.join(" + ") : "仅管理员";
 }
 function cfgPayload(): Record<string, string> {
   // 只提交该协议的字段；掩码值（…已设置）不回传（留空 = 不变）
@@ -82,7 +96,8 @@ function cfgPayload(): Record<string, string> {
 async function save() {
   const body: Record<string, any> = {
     name: form.name, description: form.description, icon: form.icon, sort: Number(form.sort) || 0,
-    enabled: form.enabled, protocol: form.protocol, prompt: form.prompt, config: cfgPayload()
+    enabled: form.enabled, protocol: form.protocol, prompt: form.prompt, config: cfgPayload(),
+    allow_anon: form.allow_anon, allow_code: form.allow_code, allow_user: form.allow_user // P8.8
   };
   let r;
   if (editing.value) r = await api("/api/admin/agents/" + encodeURIComponent(editing.value), { method: "PATCH", body });
@@ -119,6 +134,11 @@ onMounted(load);
           <el-tag size="small" effect="plain">{{ row.protocol }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="访问" width="120">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.allow_anon ? 'success' : (accessLabel(row) === '仅管理员' ? 'danger' : 'warning')" effect="plain">{{ accessLabel(row) }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="排序" prop="sort" width="70" />
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
@@ -136,42 +156,77 @@ onMounted(load);
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialog" :title="editing ? '编辑智能体：' + editing : '新建智能体'" width="560px">
-      <el-form label-position="top">
-        <template v-if="!editing">
-          <el-form-item label="Code（2-32 位小写字母/数字/-/_，创建后不可改）">
-            <el-input v-model="form.code" placeholder="如 legal-qa" />
-          </el-form-item>
-        </template>
-        <el-form-item label="名称（≤40）">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="描述（≤200）">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
-        </el-form-item>
-        <el-form-item label="图标（表情符号，可空）">
-          <el-input v-model="form.icon" placeholder="留空 = 默认图标" style="max-width: 120px" />
-        </el-form-item>
-        <el-form-item label="协议（每智能体一个）">
-          <el-select v-model="form.protocol" :disabled="!!editing">
-            <el-option v-for="p in PROTOCOLS" :key="p.value" :label="p.label" :value="p.value" />
-          </el-select>
-        </el-form-item>
-        <template v-for="f in fields" :key="f.key">
-          <el-form-item :label="f.label + '（留空 = 回退全局默认' + (f.key === 'api_key' && editing ? '；已设置项不回显）' : '）')">
-            <el-input v-model="form.config[f.key]" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" />
-          </el-form-item>
-        </template>
-        <el-form-item label="系统提示词 Prompt（≤4000，可空 = 回退全局）">
-          <el-input v-model="form.prompt" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item label="排序（小者优先）">
-          <el-input-number v-model="form.sort" :min="0" :max="999" />
-        </el-form-item>
-        <el-form-item>
-          <el-switch v-model="form.enabled" active-text="启用（落地页展示）" />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialog" :title="editing ? '编辑智能体：' + editing : '新建智能体'" width="600px">
+      <!-- P8.8 对话框内容分类为 tab（基本 / 协议 / 安全） -->
+      <el-tabs v-model="atTab" class="at-tabs">
+        <el-tab-pane label="基本" name="basic">
+          <el-form label-position="top">
+            <template v-if="!editing">
+              <el-form-item label="Code（2-32 位小写字母/数字/-/_，创建后不可改）">
+                <el-input v-model="form.code" placeholder="如 legal-qa" />
+              </el-form-item>
+            </template>
+            <el-form-item label="名称（≤40）">
+              <el-input v-model="form.name" />
+            </el-form-item>
+            <el-form-item label="描述（≤200）">
+              <el-input v-model="form.description" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item label="图标（表情符号，可空）">
+              <el-input v-model="form.icon" placeholder="留空 = 默认图标" style="max-width: 120px" />
+            </el-form-item>
+            <el-form-item label="排序（小者优先）">
+              <el-input-number v-model="form.sort" :min="0" :max="999" />
+            </el-form-item>
+            <el-form-item>
+              <el-switch v-model="form.enabled" active-text="启用（落地页展示）" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="协议" name="protocol">
+          <el-form label-position="top">
+            <el-form-item label="协议（每智能体一个）">
+              <el-select v-model="form.protocol" :disabled="!!editing">
+                <el-option v-for="p in PROTOCOLS" :key="p.value" :label="p.label" :value="p.value" />
+              </el-select>
+            </el-form-item>
+            <template v-for="f in fields" :key="f.key">
+              <el-form-item :label="f.label + '（留空 = 回退全局默认' + (f.key === 'api_key' && editing ? '；已设置项不回显）' : '）')">
+                <el-input v-model="form.config[f.key]" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" />
+              </el-form-item>
+            </template>
+            <el-form-item label="系统提示词 Prompt（≤4000，可空 = 回退全局）">
+              <el-input v-model="form.prompt" type="textarea" :rows="3" />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="安全" name="security">
+          <div class="at-sec">
+            <div class="at-sec-row">
+              <el-switch v-model="form.allow_anon" />
+              <div>
+                <div class="at-sec-title">允许匿名访问</div>
+                <div class="at-sec-sub">未登录访客可直接查看并使用该智能体；开启后下方两种访问方式天然放行（超集语义）</div>
+              </div>
+            </div>
+            <div class="at-sec-row">
+              <el-switch v-model="form.allow_code" :disabled="form.allow_anon" />
+              <div>
+                <div class="at-sec-title">允许访问码访问</div>
+                <div class="at-sec-sub">用 6 位访问码登录的用户可创建并使用会话</div>
+              </div>
+            </div>
+            <div class="at-sec-row">
+              <el-switch v-model="form.allow_user" :disabled="form.allow_anon" />
+              <div>
+                <div class="at-sec-title">允许普通用户登录访问</div>
+                <div class="at-sec-sub">用户名/密码登录的普通用户可创建并使用会话（管理员始终可用）</div>
+              </div>
+            </div>
+            <p class="at-sec-note">会话隔离：不同访问方式的会话落独立桶（匿名 = 共享桶、访问码 = 码私有桶、登录用户 = 用户私有桶），彼此互不可见，管理员可见全部。三项全关 = 仅管理员可用。</p>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
         <el-button type="primary" @click="save">保存</el-button>

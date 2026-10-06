@@ -518,6 +518,15 @@ body {
 .ss-tabs { margin-top: 2px; }
 .ss-tabs .el-tabs__header { margin-bottom: 14px; }
 .ss-pane-note { margin: 0 0 12px; }
+/* P8.8 智能体新增/编辑对话框：内容分类为 tab（基本/协议/安全）+ 安全页访问方式列表 */
+.at-tabs { margin-top: 2px; }
+.at-tabs .el-tabs__header { margin-bottom: 14px; }
+.at-sec-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; }
+.at-sec-row + .at-sec-row { border-top: 1px solid var(--border); }
+.at-sec-row .el-switch { margin-top: 3px; flex: none; }
+.at-sec-title { font-weight: 600; font-size: 14px; }
+.at-sec-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
+.at-sec-note { margin: 12px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 .ss-ok { color: var(--green); font-size: 13px; margin-left: 10px; }
 .ss-bad { color: var(--red); font-size: 13px; margin-left: 10px; }
 .ss-warn { font-size: 12px; color: #d29922; margin-left: 10px; }

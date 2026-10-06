@@ -162,7 +162,7 @@ function register(router, ctx) {
     const cfg = ctx.store.getAgentConfig(x.id);
     const m = JSON.parse(JSON.stringify((cfg && cfg.config) || {}));
     if (m && typeof m.api_key === "string" && m.api_key) m.api_key = "…已设置";
-    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, prompt: x.prompt || "", protocol: (cfg && cfg.protocol) || "ragflow", config: m };
+    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, prompt: x.prompt || "", protocol: (cfg && cfg.protocol) || "ragflow", config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
   };
 
   router.exact("GET", "/api/admin/agents", (req, res, ctx_, urlObj) => {
@@ -186,7 +186,7 @@ function register(router, ctx) {
       return sendJSON(res, 400, { ok: false, detail: "config 必须是对象" });
     }
     if (ctx.store.getAgentByCode(code)) return sendJSON(res, 409, { ok: false, detail: "code 已存在" });
-    const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0 });
+    const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0, allow_anon: body.allow_anon !== false, allow_code: body.allow_code !== false, allow_user: body.allow_user !== false });
     ctx.store.setAgentConfig(ag.id, protocol, body.config || {});
     ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.create", targetType: "agent", targetId: ag.id, detail: { code, name, protocol }, ip: ipOf(req) });
     return sendJSON(res, 201, { ok: true, agent: agentViewFull(ctx.store.getAgent(ag.id)) });
@@ -224,6 +224,13 @@ function register(router, ctx) {
     if (body.sort !== undefined) {
       if (typeof body.sort !== "number") return sendJSON(res, 400, { ok: false, detail: "sort 必须是数字" });
       patch.sort = body.sort; changed.sort = body.sort;
+    }
+    // P8.8 访问控制（布尔）
+    for (const k of ["allow_anon", "allow_code", "allow_user"]) {
+      if (body[k] !== undefined) {
+        if (typeof body[k] !== "boolean") return sendJSON(res, 400, { ok: false, detail: k + " 必须是布尔" });
+        patch[k] = body[k]; changed[k] = body[k];
+      }
     }
     let protoChanged = false;
     if (body.protocol !== undefined) {

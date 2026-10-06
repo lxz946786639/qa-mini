@@ -4,6 +4,7 @@
 //  GET /api/agents/:code  （查看级）工作区初始化上下文（agent + 该主体可见的该智能体会话）
 //  每智能体一个协议：agents 表无 protocol 列，协议与配置存 agent_configs（每智能体一行）。
 const { sendJSON } = require("../middleware");
+const { agentAllows } = require("../services/principal");
 
 function maskCfg(cfg) {
   const m = JSON.parse(JSON.stringify(cfg || {}));
@@ -30,7 +31,11 @@ function register(router, ctx) {
 
   router.exact("GET", "/api/agents", (req, res, ctx_, urlObj) => {
     if (viewer403(req, urlObj, res)) return Promise.resolve();
-    const agents = ctx.store.listAgents({ enabledOnly: true }).map((a) => agentView(ctx, a));
+    // P8.8：按主体过滤访问控制（anon 只看 allow_anon；user/code 含超集；admin 全量）
+    const p = ctx.auth.principal(req, urlObj);
+    const agents = ctx.store.listAgents({ enabledOnly: true })
+      .filter((a) => agentAllows(p, a))
+      .map((a) => agentView(ctx, a));
     return sendJSON(res, 200, { agents });
   });
 
@@ -39,6 +44,8 @@ function register(router, ctx) {
     const a = ctx.store.getAgentByCode(params[0]);
     if (!a || a.enabled !== true) return sendJSON(res, 404, { ok: false, detail: "智能体不存在: " + params[0] });
     const p = ctx.auth.principal(req, urlObj);
+    // P8.8：主体未被该智能体放行 → 404（与不存在同码，不泄露存在性）
+    if (!agentAllows(p, a)) return sendJSON(res, 404, { ok: false, detail: "智能体不存在: " + params[0] });
     // 该主体在该智能体下的可见会话（user=私有桶 / code=该码桶 / admin=全部 / anon=共享桶）
     const sessions = ctx.manager.list(false, p).filter((s) => (s.agent_id || null) === a.id);
     const cfg = ctx.store.getAgentConfig(a.id);

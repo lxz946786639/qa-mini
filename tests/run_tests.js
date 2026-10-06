@@ -2051,6 +2051,62 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/qa-assist", { protocol: "bogus" }, adminTok)).status, 400, "未知协议 400");
   });
 
+  await test("p8.8: 智能体访问控制（anon/code/user 三开关 + 超集语义 + 桶隔离）", async () => {
+    // v3 默认：存量智能体全放行（行为不变）
+    const list0 = await adminFetch("GET", "/api/admin/agents", undefined, adminTok);
+    const brain = list0.data.agents.find((a) => a.code === "industry-brain");
+    assert.strictEqual(brain.allow_anon, true, "种子智能体默认允许匿名");
+    assert.strictEqual(brain.allow_code, true);
+    assert.strictEqual(brain.allow_user, true);
+    // 新建智能体 + 仅允许访问码
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "sec-a", name: "安全测试体", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
+    const setc = await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: false, allow_code: true, allow_user: false }, adminTok);
+    assert.strictEqual(setc.status, 200, setc.data && setc.data.detail);
+    assert.strictEqual(setc.data.agent.allow_anon, false);
+    assert.strictEqual(setc.data.agent.allow_user, false);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: "yes" }, adminTok)).status, 400, "非布尔 → 400");
+    // anon 不可见 / 不可打开
+    assert.ok(!(await api("GET", "/api/agents")).data.agents.some((a) => a.code === "sec-a"), "anon 列表隐藏 sec-a");
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "anon 打开 sec-a 404");
+    // user 主体被拒
+    const u1 = await adminFetch("POST", "/api/admin/users", { username: "carol", password: "carolpw1" }, adminTok);
+    assert.strictEqual(u1.status, 201, u1.data && u1.data.detail);
+    const carolJar = makeJar();
+    const lg = await jarFetch(carolJar, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
+    assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { name: "c1", agent_code: "sec-a" })).status, 403, "未放行 user 建会话 403");
+    // code 主体放行 → 码私有桶
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "888888", hours: 1 }, adminTok);
+    assert.strictEqual(gen.status, 201, gen.data && gen.data.detail);
+    const code2 = makeJar();
+    const cl = await jarFetch(code2, "POST", "/api/auth/access-code", { code: "888888" });
+    assert.strictEqual(cl.status, 200, cl.data && cl.data.detail);
+    const cs = await jarFetch(code2, "POST", "/api/sessions", { name: "码会话", agent_code: "sec-a" });
+    assert.strictEqual(cs.status, 201, cs.data && cs.data.detail);
+    assert.strictEqual((await adminFetch("GET", "/api/sessions/" + cs.data.session.id, undefined, adminTok)).data.session.access_mode, "code", "码主体落码桶");
+    assert.strictEqual((await jarFetch(code2, "GET", "/api/agents/sec-a")).status, 200, "码主体可打开 sec-a");
+    // 放行 user → 用户私有桶；两桶互不可见
+    const setu = await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_user: true }, adminTok);
+    assert.strictEqual(setu.status, 200);
+    const us = await jarFetch(carolJar, "POST", "/api/sessions", { name: "用户会话", agent_code: "sec-a" });
+    assert.strictEqual(us.status, 201, us.data && us.data.detail);
+    assert.strictEqual((await adminFetch("GET", "/api/sessions/" + us.data.session.id, undefined, adminTok)).data.session.access_mode, "user", "用户主体落用户桶");
+    assert.ok(!(await jarFetch(code2, "GET", "/api/sessions")).data.sessions.some((s) => s.id === us.data.session.id), "码主体不可见用户私有会话");
+    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/sessions/" + cs.data.session.id)).status, 404, "用户读码桶会话 404");
+    // 超集语义：允许匿名 → 一切访问方式放行
+    const seta = await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: true }, adminTok);
+    assert.strictEqual(seta.status, 200);
+    assert.ok((await api("GET", "/api/agents")).data.agents.some((a) => a.code === "sec-a"), "允许匿名 → anon 回列表");
+    // 全关 → 仅管理员
+    const setn = await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: false, allow_code: false, allow_user: false }, adminTok);
+    assert.strictEqual(setn.status, 200);
+    assert.strictEqual((await jarFetch(code2, "GET", "/api/agents/sec-a")).status, 404, "全关 → code 404");
+    assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { agent_code: "sec-a" })).status, 403, "全关 → user 403");
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "全关 → anon 404");
+    assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
+  });
+
   await test("p3: 审计日志（admin 操作留痕）", async () => {
     assert.strictEqual((await api("GET", "/api/admin/audit")).status, 401, "非管理 401");
     const au = await adminFetch("GET", "/api/admin/audit?limit=200", undefined, adminTok);
@@ -2059,8 +2115,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(acts.includes("users.create"), "users.create 留痕");
     assert.ok(acts.includes("agents.create"), "agents.create 留痕");
     assert.ok(acts.includes("auth.login"), "auth.login 留痕");
-    const uRec = au.data.items.find((x) => x.action === "users.create");
-    assert.strictEqual(uRec.detail.username, "alice");
+    const uRec = au.data.items.find((x) => x.action === "users.create" && x.detail.username === "alice");
+    assert.ok(uRec, "alice users.create 留痕");
     assert.ok(uRec.actor_id, "审计带 actor_id");
   });
   await test("p3: 最后一个 active 管理员守护", async () => {

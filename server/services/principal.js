@@ -37,6 +37,21 @@ function canCreate(principal, mode) {
   return false;
 }
 
+// P8.8 智能体级访问控制：主体能否使用该智能体（agent = store.getAgent()，含 allow_* 三列）。
+//   admin —— 恒允许（管理台始终可管可用）
+//   anon  —— allow_anon（allow_anonymous=false 时主体为 null，同样按此列）
+//   user  —— allow_anon || allow_user（匿名放行时一切访问方式天然可用，超集语义）
+//   code  —— allow_anon || allow_code（同上）
+function agentAllows(principal, agent) {
+  if (!agent) return false;
+  if (!principal) return agent.allow_anon === true;
+  if (principal.kind === "admin") return true;
+  if (principal.kind === "anon") return agent.allow_anon === true;
+  if (principal.kind === "user") return agent.allow_anon === true || agent.allow_user === true;
+  if (principal.kind === "code") return agent.allow_anon === true || agent.allow_code === true;
+  return false;
+}
+
 // 按主体解析新建会话的归属桶（legacy = ctx.legacy 遗留桶兜底）
 function bucketFor(principal, legacy) {
   if (principal && principal.kind === "user") {
@@ -49,4 +64,4 @@ function bucketFor(principal, legacy) {
   return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: legacy ? legacy.agentId : null, access_code_id: null };
 }
 
-module.exports = { canView, canCreate, bucketFor };
+module.exports = { canView, canCreate, bucketFor, agentAllows };
