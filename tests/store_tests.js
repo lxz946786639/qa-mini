@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 4, "user_version（P8.10 起 v4）");
+      eq(v, 5, "user_version（P8.29 起 v5）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -268,11 +268,11 @@ function oldConfig(over) {
     buildV1Db(dir, { sessions: defaultV1Sessions().slice(0, 1), records: [], setVersion: true });
     const cfgFile = writeConfig(dir, oldConfig());
     let store;
-    await t("user_version 1 → v4 + 归属", async () => {
+    await t("user_version 1 → v5 + 归属", async () => {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 4, "v4");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "v5");
       eq(store.listSessions({}).length, 1, "会话保留");
     });
     store.close();
@@ -293,9 +293,9 @@ function oldConfig(over) {
       d.exec("ALTER TABLE agents DROP COLUMN allow_user");
       d.close();
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(res.migrated === true, "v2 → v4 migrated");
+      assert(res.migrated === true, "v2 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 4, "版本 4");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "版本 5");
       const brain = store.getAgentByCode("industry-brain");
       eq(brain.allow_user, true, "补列默认 = 允许");
       eq(brain.allow_anon, true, "allow_anon 不变");
@@ -328,9 +328,9 @@ function oldConfig(over) {
       d.prepare("UPDATE sessions SET user_id=NULL WHERE id='6402e6ea' OR id='5516abef'").run();
       d.close();
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(res.migrated === true, "v3 → v4 migrated");
+      assert(res.migrated === true, "v3 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 4, "版本 4");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "版本 5");
       eq(store.getSession("0fd50fcc").access_mode, "user", "切换点后管理员新建 → 私有桶");
       eq(store.getSession("8b14dd80").access_mode, "shared", "重构前会话保持共享");
       eq(store.getSession("6402e6ea").access_mode, "shared", "user_id=NULL 新建保持共享（无可归属）");
@@ -471,12 +471,13 @@ function oldConfig(over) {
     });
 
     await t("audit_logs：插入/倒序/详情 JSON", async () => {
-      store.insertAudit({ actorType: "admin", actorId: admin.id, action: "user.create", targetType: "user", targetId: "u1", detail: { username: "alice" }, ip: "2.2.2.2" });
+      store.insertAudit({ actorType: "admin", actorId: admin.id, action: "user.create", targetType: "user", targetId: "u1", detail: { username: "alice" }, ip: "2.2.2.2", userAgent: "Mozilla/5.0 (X11; test) Chrome/143" });
       store.insertAudit({ actorType: "admin", actorId: admin.id, action: "agent.update", detail: { enabled: false } });
       const list = store.listAuditLogs({ limit: 10 });
       eq(list.length, 2, "条数");
       eq(list[0].action, "agent.update", "倒序");
       eq(list[1].detail, { username: "alice" }, "detail JSON");
+      eq(list[1].user_agent, "Mozilla/5.0 (X11; test) Chrome/143", "P8.29 设备指纹回读");
     });
 
     await t("sessions：桶列表 + canViewSession 隔离矩阵", async () => {

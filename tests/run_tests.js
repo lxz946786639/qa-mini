@@ -2171,6 +2171,18 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const uRec = au.data.items.find((x) => x.action === "users.create" && x.detail.username === "alice");
     assert.ok(uRec, "alice users.create 留痕");
     assert.ok(uRec.actor_id, "审计带 actor_id");
+    // P8.29：访问码登录/登出留痕 + 设备指纹字段（访问码脱敏）
+    const cJar = makeJar();
+    const clg = await jarFetch(cJar, "POST", "/api/auth/access-code", { code: "555556" });
+    assert.strictEqual(clg.status, 200, clg.data && clg.data.detail);
+    assert.strictEqual((await jarFetch(cJar, "POST", "/api/auth/logout")).status, 200, "访问码登出");
+    const au2 = await adminFetch("GET", "/api/admin/audit?limit=200", undefined, adminTok);
+    const acts2 = au2.data.items.map((x) => x.action);
+    assert.ok(acts2.includes("access.login"), "access.login 留痕（P8.29）");
+    assert.ok(acts2.includes("access.logout"), "access.logout 留痕（P8.29）");
+    const clRec = au2.data.items.find((x) => x.action === "access.login");
+    assert.ok(typeof clRec.user_agent === "string", "审计带设备指纹字段（P8.29）");
+    assert.ok(String(clRec.detail.code || "").includes("•••"), "访问码详情脱敏（P8.29）");
   });
   await test("p3: 最后一个 active 管理员守护", async () => {
     const b = await adminFetch("POST", "/api/admin/users", { username: "bob", password: "bobpw123", role: "admin" }, adminTok);

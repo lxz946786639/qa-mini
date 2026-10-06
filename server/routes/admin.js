@@ -1,7 +1,7 @@
 "use strict";
 // 管理路由（双轨期）：
 //  访问码生成/延期/清理/失效 + /api/config GET/PUT（深合并 → config.json + v2 库同步）
-const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf } = require("../middleware");
+const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf, uaOf } = require("../middleware");
 const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS } = require("../../lib/config");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
@@ -58,7 +58,7 @@ function register(router, ctx) {
     const display_name = typeof body.display_name === "string" ? body.display_name.trim().slice(0, 32) : username;
     if (ctx.store.getUserByUsername(username)) return sendJSON(res, 409, { ok: false, detail: "用户名已存在" });
     const u = ctx.store.createUser({ username, passwordHash: hashPassword(pw), displayName: display_name, role });
-    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "users.create", targetType: "user", targetId: u.id, detail: { username, role }, ip: ipOf(req) });
+    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "users.create", targetType: "user", targetId: u.id, detail: { username, role }, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 201, { ok: true, user: userView(u) });
   });
   router.regex("PATCH", /^\/api\/admin\/users\/([a-zA-Z0-9]+)$/, async (req, res, ctx_, urlObj, params) => {
@@ -96,7 +96,7 @@ function register(router, ctx) {
     }
     const updated = ctx.store.updateUser(u.id, patch);
     if (patch.status === "disabled") ctx.store.revokeAuthSessionsForUser(u.id); // 停用 → cookie 会话全吊销
-    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "users.update", targetType: "user", targetId: u.id, detail: changed, ip: ipOf(req) });
+    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "users.update", targetType: "user", targetId: u.id, detail: changed, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 200, { ok: true, user: userView(updated) });
   });
 
@@ -188,7 +188,7 @@ function register(router, ctx) {
     if (ctx.store.getAgentByCode(code)) return sendJSON(res, 409, { ok: false, detail: "code 已存在" });
     const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0, allow_anon: body.allow_anon !== false, allow_code: body.allow_code !== false, allow_user: body.allow_user !== false });
     ctx.store.setAgentConfig(ag.id, protocol, body.config || {});
-    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.create", targetType: "agent", targetId: ag.id, detail: { code, name, protocol }, ip: ipOf(req) });
+    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.create", targetType: "agent", targetId: ag.id, detail: { code, name, protocol }, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 201, { ok: true, agent: agentViewFull(ctx.store.getAgent(ag.id)) });
   });
   router.regex("PATCH", /^\/api\/admin\/agents\/([a-zA-Z0-9][a-zA-Z0-9_-]*)$/, async (req, res, ctx_, urlObj, params) => {
@@ -255,7 +255,7 @@ function register(router, ctx) {
       }
       if (invalidated) ctx.manager.save();
     }
-    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.update", targetType: "agent", targetId: ag0.id, detail: changed, ip: ipOf(req) });
+    ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.update", targetType: "agent", targetId: ag0.id, detail: changed, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 200, { ok: true, agent: agentViewFull(ctx.store.getAgent(ag0.id)) });
   });
 

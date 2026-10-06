@@ -8,7 +8,7 @@
 const crypto = require("crypto");
 const { hashPassword, verifyPassword } = require("../../lib/auth");
 const { backfillSessionsForAdmin } = require("../../lib/migrations");
-const { ipOf, safeEqual, parseJSONBody, sendJSON, cookieValue } = require("../middleware");
+const { ipOf, uaOf, safeEqual, parseJSONBody, sendJSON, cookieValue } = require("../middleware");
 
 const ADMIN_TOKEN_TTL = 12 * 3600e3;   // 管理 token 12h
 const ACCESS_TOKEN_TTL = 24 * 3600e3;  // 访问 token 24h（不超过码自身有效期）
@@ -169,7 +169,7 @@ function createAuthService(ctx) {
       if (u) store.updateUser(u.id, { password_hash: hashPassword(pw), status: "active" });
       else u = store.createUser({ username, passwordHash: hashPassword(pw), displayName: "管理员", role: "admin" });
       backfillSessionsForAdmin(store.db, u.id); // 存量会话归属回填（幂等）
-      store.insertAudit({ actorType: "admin", actorId: u.id, action: "admin.bootstrap", detail: { username }, ip });
+      store.insertAudit({ actorType: "admin", actorId: u.id, action: "admin.bootstrap", detail: { username }, ip, userAgent: uaOf(req) });
       const t = issueAdminToken();
       issueSidCookie(res, req, { principalType: "admin", userId: u.id });
       return sendJSON(res, 200, { ok: true, initialized: true, ...t, detail: "已初始化并登录" });
@@ -177,7 +177,7 @@ function createAuthService(ctx) {
     const u = store.getUserByUsername("admin");
     if (u && u.password_hash && verifyPassword(pw, u.password_hash)) {
       store.updateUser(u.id, { last_login_at: new Date().toISOString() });
-      store.insertAudit({ actorType: "admin", actorId: u.id, action: "admin.login", ip });
+      store.insertAudit({ actorType: "admin", actorId: u.id, action: "admin.login", ip, userAgent: uaOf(req) });
       const t = issueAdminToken();
       issueSidCookie(res, req, { principalType: "admin", userId: u.id });
       return sendJSON(res, 200, { ok: true, initialized: false, ...t });
@@ -205,6 +205,8 @@ function createAuthService(ctx) {
     }
     const t = issueAccessToken(valid.code);
     issueSidCookie(res, req, { principalType: "code", accessCodeId: valid.id });
+    store.insertAudit({ actorType: "code", actorId: valid.id, action: "access.login", targetType: "access_code",
+      targetId: valid.id, detail: { code: "••••" + valid.code.slice(-2) }, ip, userAgent: uaOf(req) });
     return sendJSON(res, 200, { ok: true, anonymous: false, ...t, expires_at_code: valid.expires_at });
   }
 
@@ -223,7 +225,7 @@ function createAuthService(ctx) {
     const okPw = verifyPassword(pw, u && u.password_hash ? u.password_hash : DUMMY_HASH);
     if (u && u.status === "active" && okPw) {
       store.updateUser(u.id, { last_login_at: new Date().toISOString() });
-      store.insertAudit({ actorType: u.role === "admin" ? "admin" : "user", actorId: u.id, action: "auth.login", detail: { username }, ip });
+      store.insertAudit({ actorType: u.role === "admin" ? "admin" : "user", actorId: u.id, action: "auth.login", detail: { username }, ip, userAgent: uaOf(req) });
       const expires_at = issueSidCookie(res, req, {
         principalType: u.role === "admin" ? "admin" : "user", userId: u.id
       });
@@ -236,10 +238,28 @@ function createAuthService(ctx) {
     return sendJSON(res, 401, { ok: false, detail: "用户名或密码错误" });
   }
 
-  // ---- P3 /api/auth/logout：吊销 cookie 会话 ----
+  // ---- P3 /api/auth/logout：吊销 cookie 会话（P8.29 登出留痕，含访问码登出） ----
+  function auditLogout(sid, req) {
+    const sess = store.getValidAuthSessionByToken(sid);
+    if (!sess) return;
+    const ip = ipOf(req), ua = uaOf(req);
+    if (sess.principal_type === "code" && sess.access_code_id) {
+      const c = store.getAccessCode(sess.access_code_id);
+      store.insertAudit({ actorType: "code", actorId: sess.access_code_id, action: "access.logout",
+        targetType: "access_code", targetId: sess.access_code_id,
+        detail: c ? { code: "••••" + c.code.slice(-2) } : {}, ip, userAgent: ua });
+    } else if (sess.user_id) {
+      const u = store.getUser(sess.user_id);
+      store.insertAudit({ actorType: u && u.role === "admin" ? "admin" : "user", actorId: sess.user_id, action: "auth.logout",
+        detail: u ? { username: u.username } : {}, ip, userAgent: ua });
+    }
+  }
   async function handleAuthLogout(req, res) {
     const sid = cookieValue(req, SID_COOKIE);
-    if (sid) store.revokeAuthSessionByToken(sid);
+    if (sid) {
+      auditLogout(sid, req);
+      store.revokeAuthSessionByToken(sid);
+    }
     clearSidCookie(res);
     return sendJSON(res, 200, { ok: true });
   }
@@ -275,6 +295,8 @@ function createAuthService(ctx) {
       return sendJSON(res, 401, { ok: false, detail: "访问码无效或已过期" });
     }
     const expires_at = issueSidCookie(res, req, { principalType: "code", accessCodeId: valid.id });
+    store.insertAudit({ actorType: "code", actorId: valid.id, action: "access.login", targetType: "access_code",
+      targetId: valid.id, detail: { code: "••••" + valid.code.slice(-2) }, ip, userAgent: uaOf(req) });
     return sendJSON(res, 200, { ok: true, expires_at, expires_at_code: valid.expires_at });
   }
 

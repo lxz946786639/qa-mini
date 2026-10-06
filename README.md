@@ -295,14 +295,14 @@ npm test           # node tests/run_tests.js
   **P3 多用户隔离**：cookie 登录/me/登出、用户创建仅管理、用户私有桶跨主体
   不可见（列表/读/chat 404）、SSE principal 作用域（私有事件不外泄 + agent_id
   补齐）、访问码私有桶、IDOR 写保护（他人桶 401）、智能体 API（列表/详情/管理
-  CRUD）、审计日志留痕、最后 active 管理员守护、访问码失效吊销 cookie、
+  CRUD）、审计日志留痕（含访问码登录/登出 + 设备指纹，P8.29）、最后 active 管理员守护、访问码失效吊销 cookie、
   **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
   测试连接含鉴权/SSE 广播脱敏/客户端断开中止上游（lib 级 + E2E）、
   **电脑输出音频流**：node 模拟推流端（chunked POST + Deflate 帧）覆盖
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
-- `tests/store_tests.js`：**40 项** v2/v3/v4 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移、P8.10 v3→v4 回填）：
+- `tests/store_tests.js`：**42 项** v2/v3/v4/v5 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移、P8.10 v3→v4 回填、P8.29 v4→v5 审计设备指纹列）：
   会话 CRUD/桶语义/历史 100 上限/访问码状态机/管理员迁移/审计日志。
 - 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`

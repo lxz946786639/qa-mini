@@ -118,6 +118,9 @@ function withTimeout(promise, ms, onExpire) {
 
 function ipOf(req) { return req.socket ? (req.socket.remoteAddress || "?") : "?"; }
 
+// P8.29：访问设备浏览器特征（User-Agent，截断 256 字符；审计设备识别码来源）
+function uaOf(req) { return String((req && req.headers && req.headers["user-agent"]) || "").slice(0, 256); }
+
 // 解析 Cookie 头中指定 name 的值（无则 null）
 function cookieValue(req, name) {
   const h = req && req.headers && req.headers.cookie;
@@ -151,6 +154,6 @@ function maskConfigForBroadcast(c) {
 
 module.exports = {
   sendJSON, readBody, readRawBody, parseJSONBody,
-  MIME, serveStatic, withTimeout, ipOf, cookieValue, safeEqual,
+  MIME, serveStatic, withTimeout, ipOf, uaOf, cookieValue, safeEqual,
   maskConfigForBroadcast
 };
