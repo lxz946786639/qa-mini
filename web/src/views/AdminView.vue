@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 控制台（P6，路由 /admin；P7.3 布局对齐 Ant Design Admin 参考：左侧纵向导航 + 顶栏标题 + 内容卡片）
 // 用户 / 智能体 / 访问码 / 审计日志 / 系统设置。仅 admin 主体可访问。
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
@@ -34,8 +34,28 @@ const MENU = [
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
   { key: "sys", icon: Setting, label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
 ];
-const tab = ref("users");
+// P8.39：当前页签写入 URL（/admin?tab=<key>）——刷新/分享链接保持在对应菜单页；
+// 默认页签 users 不带参数（URL 干净）
+const tab = ref(
+  typeof route.query.tab === "string" && MENU.some((m) => m.key === route.query.tab)
+    ? (route.query.tab as string)
+    : "users"
+);
 const activeMeta = computed(() => MENU.find((m) => m.key === tab.value) || MENU[0]);
+function syncTabQuery() {
+  const q: Record<string, string> = {};
+  for (const [k, v] of Object.entries(route.query)) if (k !== "tab" && typeof v === "string") q[k] = v;
+  if (tab.value !== "users") q.tab = tab.value;
+  if (JSON.stringify(q) !== JSON.stringify(route.query)) router.replace({ path: route.path, query: q });
+}
+watch(tab, syncTabQuery);
+watch(
+  () => route.query.tab,
+  (v) => {
+    if (v === undefined) { if (tab.value !== "users") tab.value = "users"; return; }
+    if (typeof v === "string" && v !== tab.value && MENU.some((m) => m.key === v)) tab.value = v;
+  }
+);
 
 // 侧栏收起 / 窄屏抽屉（与工作区同款语义）
 const sideCollapsed = ref(false);
