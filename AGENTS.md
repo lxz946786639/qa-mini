@@ -119,7 +119,11 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，
                  缺省启用）；停用协议 → 智能体管理列表「协议」列红色「已停用」标签 + 新建对话框协议下拉
                  禁用该选项（加「（已停用）」后缀）+ 编辑停用协议智能体显示警示条；提问被拒（400「已停用」）、
-                 新建/改选停用协议 400；PUT /api/config 显式清空管理密码才停用 admin（UI 保存不携带该字段））；
+                 新建/改选停用协议 400；PUT /api/config 显式清空管理密码才停用 admin（UI 保存不携带该字段）；
+                 P8.44 匿名访问开关移除：「系统设置」访问控制页签退役（仅留协议全局默认 / 语音输入 ASR）；
+                 匿名恒放行（无凭证 = 匿名主体，首屏与问答恒公开）；显式携带的凭证无效仍 403（principal 不匿名
+                 回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
+                 security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；

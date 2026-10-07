@@ -1581,10 +1581,10 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("GET", "/api/config", undefined, adminTok)).status, 200);
   });
   let accessTok = "";
-  await test("security: 关闭匿名 → 403；访问码登录 → 放行", async () => {
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { allow_anonymous: false } }, adminTok)).status, 200);
-    assert.strictEqual((await api("GET", "/api/sessions")).status, 403);
-    assert.strictEqual((await api("GET", "/api/history")).status, 403);
+  await test("security: 匿名恒放行（P8.44 移除匿名开关）；访问码登录 → 放行", async () => {
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { allow_anonymous: false } }, adminTok)).status, 200, "allow_anonymous 字段保留兼容，可保存");
+    assert.strictEqual((await api("GET", "/api/sessions")).status, 200, "P8.44：allow_anonymous=false 不再拦截匿名");
+    assert.strictEqual((await api("GET", "/api/history")).status, 200, "P8.44：匿名 history 放行");
     assert.strictEqual((await api("POST", "/api/access/login", { code: "999999" })).status, 401);
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "123456", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201);
@@ -1600,7 +1600,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.notStrictEqual(chat.status, 403, "持访问 token 不应被 403: " + chat.status);
     // 会话详情（聊天记录）持访问 token 应可取（前端按 GET+访问 token 加载）
     assert.strictEqual((await api("GET", "/api/sessions/" + tgt.id + "?access=" + accessTok)).status, 200, "会话详情?access 应 200");
-    assert.strictEqual((await api("GET", "/api/events?access=bogus_token")).status, 403, "SSE 事件流无效访问 token 应 403（前端探测依据）");
+    assert.strictEqual((await api("GET", "/api/events?access=bogus_token")).status, 403, "SSE 事件流显式携带的无效 token 仍 403（前端探针确认凭证失效，P8.44 语义保留）");
     // 管理 token 走 ?access= 通道（/admin 页 SSE/XHR 无法带 X-Admin-Token 头）
     assert.strictEqual((await api("GET", "/api/sessions?access=" + adminTok)).status, 200, "管理 token 经 ?access= 应放行会话列表");
     {
@@ -1659,7 +1659,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // 收尾：清掉本测试段生成的码
     for (const c of batchCodes) await adminFetch("DELETE", "/api/admin/access-codes/" + c, undefined, adminTok);
   });
-  await test("security: 过期码 401；恢复匿名", async () => {
+  await test("security: 过期码 401；清空码（allow_anonymous 字段保留兼容）", async () => {
     const put = await adminFetch("PUT", "/api/config", {
       security: { access_codes: [{ code: "777777", expires_at: "2020-01-01T00:00:00.000Z", created_at: "2020-01-01T00:00:00.000Z" }] }
     }, adminTok);
@@ -1997,11 +1997,11 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   await test("p3: 访问码私有桶（access_code_id, agent_id）", async () => {
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "666667", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201);
-    // 遗留 /api/access/login 在匿名 ON 时走匿名捷径（无 token）——双轨兼容语义；
-    // 码主体 cookie 走新端点 /api/auth/access-code
+    // P8.44：遗留 /api/access/login 无匿名捷径——统一校验码、签发访问 token + cookie；
+    // 码主体 cookie 亦可走新端点 /api/auth/access-code
     const legacy = await api("POST", "/api/access/login", { code: "666667" });
     assert.strictEqual(legacy.status, 200);
-    assert.strictEqual(legacy.data.anonymous, true, "匿名 ON 时代码登录走匿名捷径");
+    assert.ok(legacy.data.token && legacy.data.anonymous === false, "码登录应签发访问 token（P8.44）");
     const codeJar = makeJar();
     const lg = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "666667" });
     assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);

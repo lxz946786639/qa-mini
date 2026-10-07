@@ -72,7 +72,8 @@ function createAuthService(ctx) {
     if (!findValidCode(e.code)) { accessTokens.delete(t); return false; } // 码已失效/过期
     return true;
   }
-  function allowAnonymous() { return ctx.config.security.allow_anonymous !== false; }
+  // P8.44：移除匿名访问开关——首屏与匿名问答恒公开（config.security.allow_anonymous 字段保留兼容、不再生效）
+  function allowAnonymous() { return true; }
 
   // 遗留管理主体兜底 userId（多管理员取第一个 active）
   function firstAdminUser() {
@@ -81,10 +82,14 @@ function createAuthService(ctx) {
   }
 
   // ---- P3 主体解析：cookie ea_sid → 遗留管理 token → 遗留访问 token → 匿名 ----
+  // P8.44：显式携带的凭证（cookie / ?admin= / ?access= / x-access-token）无效 → null（查看级 403，
+  // 前端 SSE 探针据此确认凭证失效）；完全无凭证 → 匿名主体（匿名恒放行）
   function principal(req, urlObj) {
+    let explicit = false;
     // 1) cookie（P3，auth_sessions 表）
     const sid = cookieValue(req, SID_COOKIE);
     if (sid) {
+      explicit = true;
       const row = store.getValidAuthSessionByToken(sid);
       if (row) {
         // P8.35：会话活动快照（键 = 会话行 id；每次有效请求刷新 ip/ua；dev 由 /api/events 登记）
@@ -107,6 +112,10 @@ function createAuthService(ctx) {
     }
     // 2) 遗留管理 token（X-Admin-Token / ?admin=，shim 一个版本）
     const at = req.headers["x-admin-token"] || (urlObj && urlObj.searchParams.get("admin")) || "";
+    if (typeof at === "string" && at !== "") {
+      explicit = true;
+      if (!validAdminToken(at)) return null; // P8.44：显式凭证无效 → 未认证（不匿名回退）
+    }
     if (typeof at === "string" && at !== "" && validAdminToken(at)) {
       const a = firstAdminUser();
       return { kind: "admin", userId: a ? a.id : null, role: "admin" };
@@ -114,6 +123,7 @@ function createAuthService(ctx) {
     // 3) 遗留访问 token（?access= / x-access-token；管理 token 亦可走此通道，SSE 兼容）
     const t = (urlObj && urlObj.searchParams.get("access")) || req.headers["x-access-token"] || "";
     if (typeof t === "string" && t !== "") {
+      explicit = true;
       const e = accessTokens.get(t);
       if (e && Date.now() <= e.expires_at) {
         const c = findValidCode(e.code);
@@ -123,8 +133,10 @@ function createAuthService(ctx) {
         const a = firstAdminUser();
         return { kind: "admin", userId: a ? a.id : null, role: "admin" };
       }
+      return null; // P8.44：访问 token 无效/已吊销 → 未认证（不匿名回退）
     }
     // 4) 匿名
+    if (explicit) return null;
     if (allowAnonymous()) return { kind: "anon" };
     return null;
   }
@@ -148,15 +160,22 @@ function createAuthService(ctx) {
     const p = principal(req, urlObj);
     return !!(p && p.kind === "admin");
   }
-  // 查看级鉴权：存在任一有效主体即放行（匿名需 allow_anonymous）
+  // 查看级鉴权：存在任一有效主体即放行；
+  // P8.44：匿名恒放行（无任何凭证 = 匿名主体，首屏与问答恒公开）；但**显式携带的凭证无效**
+  // （cookie 失效 / ?admin= / ?access= / x-access-token 无效）→ 403——前端 SSE 探针据此
+  // 确认凭证失效（踢出/过期 → 跳登录页），该语义自 v2 起保留，不因匿名放行而放宽。
   function viewerOk(req, urlObj, extraAccess) {
-    if (allowAnonymous()) return true;
     const p = principal(req, urlObj);
     if (p) return true;
-    // 兼容：显式传入的访问 token（旧调用签名保留）
-    const t = extraAccess || "";
-    if (typeof t === "string" && t !== "") return validAccessToken(t) || (adminEnabled() && validAdminToken(t));
-    return false;
+    const qs = (urlObj && urlObj.searchParams) || {};
+    const hasExplicit = !!(cookieValue(req, SID_COOKIE)
+      || qs.get("admin") || qs.get("access")
+      || req.headers["x-admin-token"] || req.headers["x-access-token"]);
+    const t = extraAccess || qs.get("access") || req.headers["x-access-token"] || "";
+    if (hasExplicit || typeof t === "string" && t !== "") {
+      return validAccessToken(t) || (adminEnabled() && validAdminToken(t));
+    }
+    return true;
   }
 
   function issueAdminToken() {
@@ -207,11 +226,9 @@ function createAuthService(ctx) {
     return sendJSON(res, 401, { ok: false, detail: "管理密码错误" });
   }
 
-  // ---- POST /api/access/login：访问码 → 访问 token（遗留端点；成功同时签发 cookie） ----
+  // ---- POST /api/access/login：访问码 → 访问 token（遗留端点；成功同时签发 cookie）
+  //      P8.44：匿名捷径已移除（匿名恒放行，无需「匿名登录」），统一校验码签发 token ----
   async function handleAccessLogin(req, res) {
-    if (allowAnonymous()) {
-      return sendJSON(res, 200, { ok: true, anonymous: true });
-    }
     const ip = ipOf(req);
     if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
     let body;

@@ -32,7 +32,7 @@ const MENU = [
   { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（登录用户 / 访问码用户按会话、匿名按长连接；设备指纹 + IP 判定唯一），支持一键下线（会话吊销 / 5 分钟禁入冷却）" },
   { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码 / 权限范围；管理员恒全量）" },
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
-  { key: "sys", icon: Setting, label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
+  { key: "sys", icon: Setting, label: "系统设置", sub: "两类配置分 tab：协议全局默认 / 语音识别 ASR（P8.44 移除匿名访问开关：首屏与匿名问答恒公开）" }
 ];
 // P8.39：当前页签写入 URL（/admin?tab=<key>）——刷新/分享链接保持在对应菜单页；
 // 默认页签（第一项「智能体管理」agents）不带参数（URL 干净）

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // 系统设置（P7：移植自旧前端「⚙ 设置」抽屉，仅 admin 控制台可达）
-// 协议全局默认（config.protocols）/ 语音输入 ASR（config.asr + /api/asr/test 草稿探测）/
-// 访问控制（security.allow_anonymous）。PUT /api/config 深合并：清空字段保存 = 清除该字段。
-// P8.41 布局重构：三类配置改为 el-tabs 分类页签切换（各自独立保存）。
+// 协议全局默认（config.protocols）/ 语音输入 ASR（config.asr + /api/asr/test 草稿探测）。
+// PUT /api/config 深合并：清空字段保存 = 清除该字段。
+// P8.41 布局重构：配置分类改为 el-tabs 分类页签切换（各自独立保存）。
+// P8.44：「访问控制」页签移除（匿名访问开关退役：首屏与匿名问答恒公开；
+// config.security.allow_anonymous 字段保留兼容、不再生效）。
 // P8.43 协议启用状态：每协议卡片「启用协议」开关（config.protocols.<p>.enabled，
 // 缺省 = 启用；停用后该协议智能体提问被拒，智能体管理端同步标注「已停用」）。
 import { onMounted, reactive, ref } from "vue";
@@ -14,8 +16,7 @@ const emptyProto = (): ProtoForm => ({ url: "", api_key: "", chat_id: "", model:
 
 const form = reactive({
   protocols: { openai: emptyProto(), dify: emptyProto(), generic: emptyProto(), ragflow: emptyProto() } as Record<string, ProtoForm>,
-  asr: { url: "", api_key: "", model: "", language: "", timeout: 60 },
-  allow_anonymous: true
+  asr: { url: "", api_key: "", model: "", language: "", timeout: 60 }
 });
 // P8.43：协议启用状态（全局；protoEnabled[p] !== false = 启用）
 const protoEnabled = reactive<Record<string, boolean>>({ openai: true, dify: true, generic: true, ragflow: true });
@@ -52,8 +53,8 @@ const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret
 function protoVal(p: string, k: string) { return String(form.protocols[p][k as keyof ProtoForm] ?? ""); }
 function setProto(p: string, k: string, v: string) { (form.protocols[p] as Record<string, string>)[k] = v; }
 
-const tab = ref<"proto" | "asr" | "sec">("proto");
-const busy = ref<"" | "proto" | "asr" | "sec">("");
+const tab = ref<"proto" | "asr">("proto");
+const busy = ref<"" | "proto" | "asr">("");
 const asrTest = reactive({ running: false, text: "", ok: null as boolean | null });
 
 onMounted(load);
@@ -72,7 +73,6 @@ async function load() {
   const a = (c.asr && typeof c.asr === "object" ? c.asr : {}) as Record<string, any>;
   for (const k of ["url", "api_key", "model", "language"]) form.asr[k] = typeof a[k] === "string" ? a[k] : "";
   form.asr.timeout = typeof a.timeout === "number" ? a.timeout : 60;
-  form.allow_anonymous = c.security ? !!c.security.allow_anonymous : true;
 }
 
 function protoPayload() {
@@ -100,15 +100,6 @@ async function saveAsr() {
   try {
     const { ok, data } = await api<any>("/api/config", { method: "PUT", body: { asr: { url: form.asr.url, api_key: form.asr.api_key, model: form.asr.model, language: form.asr.language, timeout: t } } });
     if (ok) ElMessage.success("语音输入配置已保存（url 留空 = 停用网页语音输入）");
-    else ElMessage.error(data.detail || "保存失败");
-  } finally { busy.value = ""; }
-}
-
-async function saveSec() {
-  busy.value = "sec";
-  try {
-    const { ok, data } = await api<any>("/api/config", { method: "PUT", body: { security: { allow_anonymous: form.allow_anonymous } } });
-    if (ok) ElMessage.success(form.allow_anonymous ? "已允许匿名访问" : "已关闭匿名访问（打开应用需 6 位访问码，见「访问码」页签）");
     else ElMessage.error(data.detail || "保存失败");
   } finally { busy.value = ""; }
 }
@@ -193,16 +184,6 @@ async function testAsr() {
     </section>
       </el-tab-pane>
 
-      <el-tab-pane label="访问控制" name="sec">
-    <section class="sys-sec">
-      <div class="sys-row">
-        <label>允许匿名访问（可看/可问）</label>
-        <el-switch v-model="form.allow_anonymous"></el-switch>
-      </div>
-      <p class="tab-note">关闭后打开应用需 6 位访问码（「访问码」模块生成/管理）；控制台与 API 管理端点始终需管理登录。管理密码修改在「用户管理」模块（重置密码）。</p>
-      <el-button type="primary" :loading="busy === 'sec'" @click="saveSec">应用</el-button>
-    </section>
-      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
