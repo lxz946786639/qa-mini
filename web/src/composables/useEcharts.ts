@@ -2,23 +2,26 @@
 // 主题机制 = useTheme（<html> data-theme="light" / 缺省深色；EP 变量由 style.css 按主题映射），
 // 因此图表文字/轴线色从容器计算样式读取 --el-* 变量即可自动跟随主题。
 import * as echarts from "echarts/core";
-import { BarChart, LineChart, PieChart } from "echarts/charts";
+import { BarChart, HeatmapChart, LineChart, PieChart } from "echarts/charts";
 import {
   GridComponent,
   LegendComponent,
   MarkPointComponent,
-  TooltipComponent
+  TooltipComponent,
+  VisualMapComponent
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 
 echarts.use([
   BarChart,
+  HeatmapChart, // P8.50：24h 活跃热力图
   LineChart,
   PieChart,
   GridComponent,
   LegendComponent,
   MarkPointComponent,
   TooltipComponent,
+  VisualMapComponent, // P8.50：热力图颜色映射
   CanvasRenderer
 ]);
 
@@ -41,7 +44,10 @@ export function themeOf(el: HTMLElement) {
   return {
     text: cs.getPropertyValue("--el-text-color-regular").trim() || "#c8cdd6",
     sub: cs.getPropertyValue("--el-text-color-secondary").trim() || "#8c95a3",
-    axis: cs.getPropertyValue("--el-border-color-light").trim() || "#2a3140"
+    axis: cs.getPropertyValue("--el-border-color-light").trim() || "#2a3140",
+    // P8.50：主题强调色 / 浮层背景（tooltip、面积图、热力图用）
+    accent: cs.getPropertyValue("--el-color-primary").trim() || "#409eff",
+    overlay: cs.getPropertyValue("--el-bg-color-overlay").trim() || "#1d2430"
   };
 }
 
@@ -76,4 +82,24 @@ export function disposeChart(c: Chart | null | undefined) {
   const fn = (c as unknown as { __cleanup?: () => void }).__cleanup;
   if (typeof fn === "function") fn();
   else if (!c.isDisposed()) c.dispose();
+}
+
+// P8.50：统一 tooltip（圆角 + 主题浮层背景，全仪表盘共用，避免各图各一套）
+export function softTooltip(t: { text: string; axis: string; overlay: string }) {
+  return {
+    backgroundColor: t.overlay,
+    borderColor: t.axis,
+    borderWidth: 1,
+    padding: [6, 10],
+    textStyle: { color: t.text, fontSize: 12 },
+    extraCssText: "border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);"
+  };
+}
+
+// P8.50：hex 颜色加透明度（面积图/热力图渐变用）；非 hex 原样返回
+export function hexAlpha(hex: string, a: number): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
 }

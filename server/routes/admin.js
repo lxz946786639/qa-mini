@@ -487,7 +487,7 @@ function register(router, ctx) {
       const a = r.aid ? agentById.get(r.aid) : null;
       const n = Number(r.n), okn = Number(r.okn || 0);
       return {
-        id: r.aid || "", code: a ? a.code : "", name: a ? a.name : "未知",
+        id: r.aid || "", code: a ? a.code : "", name: a ? a.name : "未知", icon: a ? a.icon || "" : "", // P8.50：仪表盘智能体排行图标
         questions: n, ok: okn, err: n - okn,
         rate_pct: n ? Math.round((okn / n) * 1000) / 10 : 0,
         avg_duration_s: r.avg_s != null ? Math.round(Number(r.avg_s) * 10) / 10 : 0,

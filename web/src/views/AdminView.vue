@@ -29,7 +29,7 @@ const { lightTheme, toggleTheme } = useTheme();
 
 // 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
 const MENU = [
-  { key: "dash", icon: Odometer, label: "仪表盘", sub: "访问 / 提问 / 活跃 / 运行 多维统计（图表；近 7/14/30 天 + 实时运行情况）" },
+  { key: "dash", icon: Odometer, label: "仪表盘", sub: "系统运行与问答数据概览（核心指标 / 提问趋势 / 用户活跃 / 智能体·协议 / 异常状态；近 7/14/30 天 + 实时运行情况）" },
   { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
   { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期 / 权限范围（允许全部或指定智能体）；访问码主体共享会话桶" },
   { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（登录用户 / 访问码用户按会话、匿名按长连接；设备指纹 + IP 判定唯一），支持一键下线（会话吊销 / 5 分钟禁入冷却）" },
