@@ -183,9 +183,22 @@ body {
 .login-back:hover { color: var(--accent); }
 .ws-back { display: inline-block; color: var(--text-dim); text-decoration: none; font-size: 14px; margin-bottom: 18px; }
 .ws-back:hover { color: var(--accent); }
-.ws-err { color: var(--red); padding: 30px 0; }
-.ws-err-go { margin-left: 10px; padding: 4px 12px; border-radius: 8px; border: 1px solid var(--red); background: none; color: var(--red); font-size: 13px; cursor: pointer; }
-.ws-err-go:hover { background: rgba(239, 68, 68, 0.12); }
+/* P8.37：被拒/不存在 → 居中卡片（原红色裸文案 + 「去登录 →」废弃；匿名直访已自动跳登录页） */
+.ws-err { padding: 40px 20px; display: flex; justify-content: center; }
+.ws-err-card { max-width: 440px; text-align: center; }
+.ws-err-ic { font-size: 34px; color: var(--text-dim); margin-bottom: 10px; }
+.ws-err-card b { font-size: 15px; display: block; margin-bottom: 6px; }
+.ws-err-card p { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
+.ws-err-btns { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.ws-err-home { font-size: 13px; color: var(--text-dim); }
+.ws-err-home:hover { color: var(--accent); }
+/* P8.37：一键分享（复制智能体链接）—— 顶栏 ghost 图标按钮（与会话栏按钮同款） */
+.ws-share-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  font-size: 15px; cursor: pointer; padding: 4px 7px; border-radius: 7px; line-height: 1; flex: none;
+}
+.ws-share-btn:hover { color: var(--accent); border-color: var(--border); background: var(--card); }
 .ws-box {
   background: var(--card); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 34px; text-align: center;

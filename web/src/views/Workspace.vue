@@ -9,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -328,6 +328,38 @@ function goLogin() {
   router.push({ path: "/login", query: { next: route.fullPath } });
 }
 
+// P8.37：一键分享 = 复制当前智能体链接（分享出去后他人直接打开；无权限时自动先进登录页再回跳）
+const shared = ref(false);
+let sharedTimer: ReturnType<typeof setTimeout> | null = null;
+async function copyToClipboard(t: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(t);
+      return true;
+    }
+  } catch { /* 回退下方 execCommand */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = t;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+async function shareAgent() {
+  // 只复制智能体根链接（不带 ?sid：会话按主体桶隔离，他人无此会话，带上反而误导）
+  const url = location.origin + "/agents/" + encodeURIComponent(agentCode.value);
+  const ok = await copyToClipboard(url);
+  shared.value = ok;
+  ElMessage[ok ? "success" : "error"](ok ? "链接已复制，发送给他人即可打开" : "复制失败，请手动复制地址栏链接");
+  if (sharedTimer) clearTimeout(sharedTimer);
+  sharedTimer = setTimeout(() => { shared.value = false; }, 2000);
+}
+
 async function loadAgent() {
   listLoading.value = true;
   const { ok, data } = await api<{ ok: boolean; agent?: { id: string; name: string; protocol: string }; detail?: string }>(
@@ -336,10 +368,13 @@ async function loadAgent() {
   if (!ok) {
     listLoading.value = false;
     // P8.9：入口门控 404（智能体不存在/停用 或 当前主体未被放行，不泄露存在性）
-    agentNeedLogin.value = !auth.isAuthed;
-    agentErr.value = auth.isAuthed
-      ? "当前登录身份无权访问该智能体（可在 控制台·智能体管理·安全 中调整访问控制）"
-      : "此智能体需要登录或访问码，登录后进入";
+    if (!auth.isAuthed) {
+      // P8.37：匿名直访智能体链接 → 自动跳登录页（?next 记忆本页，登录成功回跳，替代原红色提示页）
+      router.replace({ path: "/login", query: { next: route.fullPath } });
+      return;
+    }
+    agentNeedLogin.value = false;
+    agentErr.value = "该智能体不存在 / 已停用，或当前账号未被放行（可在 控制台·智能体管理·安全 中调整访问控制）";
     return;
   }
   agentId.value = data.agent?.id || null;
@@ -541,7 +576,7 @@ async function onLogout() {
 }
 
 onMounted(async () => {
-  auth.me();
+  await auth.me(); // P8.37：主体确认后再做入口门控判断（匿名自动跳登录依赖准确身份）
   await loadAgent();
   if (!agentErr.value) await initSessions();
   document.addEventListener("click", onUserDocClick);
@@ -551,6 +586,7 @@ onBeforeUnmount(() => {
   if (raf) cancelAnimationFrame(raf);
   if (tickTimer != null) { clearInterval(tickTimer); tickTimer = null; }
   if (copiedTimer) clearTimeout(copiedTimer);
+  if (sharedTimer) clearTimeout(sharedTimer);
   document.removeEventListener("click", onUserDocClick);
   chatEl.value?.removeEventListener("scroll", onChatScroll);
 });
@@ -606,6 +642,8 @@ onBeforeUnmount(() => {
         </el-popover>
         <button v-if="auth.isAdmin && currentSession" class="prefs-btn" title="会话设置（管理）" @click="openSettings"><el-icon><Setting /></el-icon>会话设置</button>
         <span class="nav-sep" aria-hidden="true"></span>
+        <!-- P8.37：一键分享 = 复制当前智能体链接 -->
+        <button type="button" class="ws-share-btn" :title="shared ? '链接已复制' : '复制智能体链接（分享）'" @click="shareAgent"><el-icon><Check v-if="shared" /><Share v-else /></el-icon></button>
         <button class="prefs-btn prefs-btn-theme" :title="lightTheme ? '切换深色主题' : '切换浅色主题'" @click="toggleTheme"><el-icon><Moon v-if="lightTheme" /><Sunny v-else /></el-icon></button>
         <router-link v-if="auth.isAdmin" to="/admin" class="topnav-link">控制台</router-link>
         <!-- P8.4：用户名下拉（与首页一致：点击展开「退出」，点外部 / Esc 关闭） -->
@@ -682,7 +720,17 @@ onBeforeUnmount(() => {
         @click="scrollBottom(true)"
       >↓ 最新</button>
       <main ref="chatEl" class="ws-main">
-        <div v-if="agentErr" class="ws-err">{{ agentErr }}<button v-if="agentNeedLogin" type="button" class="ws-err-go" @click="goLogin">去登录 →</button></div>
+        <div v-if="agentErr" class="ws-err">
+          <div class="ws-err-card">
+            <el-icon class="ws-err-ic"><Lock /></el-icon>
+            <b>无权访问该智能体</b>
+            <p>{{ agentErr }}</p>
+            <div class="ws-err-btns">
+              <el-button type="primary" size="small" @click="goLogin">去登录 / 切换账号</el-button>
+              <router-link to="/" class="ws-err-home">返回首屏</router-link>
+            </div>
+          </div>
+        </div>
         <div v-else-if="!sess.currentSid" class="ws-empty-main">
           <p>左侧选择或新建一个会话开始问答</p>
           <el-button v-if="auth.isAuthed" type="primary" @click="createSession">新建会话</el-button>
