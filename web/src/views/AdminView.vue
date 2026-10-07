@@ -96,8 +96,8 @@ async function onBootstrapDone() {
 async function onLogout() {
   await auth.logout();
   ElMessage.success("已退出登录");
-  // P8.34：登出 → 登录页，并记忆当前页（再次登录回跳原页，Login ?next 机制）
-  router.push("/login?next=" + encodeURIComponent(route.fullPath));
+  // P8.45：控制台登出 → 返回首屏（首屏公开，无需登录页）
+  router.push("/");
 }
 </script>
 

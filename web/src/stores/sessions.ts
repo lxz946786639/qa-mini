@@ -15,6 +15,10 @@ export interface SessionView {
   last_at: string | null;
   agent_id: string | null;
   audio_remote: { enabled: boolean; preferred_device: string };
+  // P8.47：桶标记（shared / user / code）；user_id / owner_name 仅管理端视图携带
+  access_mode?: string;
+  user_id?: string | null;
+  owner_name?: string | null;
 }
 export interface RecordView {
   id: string;

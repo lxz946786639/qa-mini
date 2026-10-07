@@ -1446,6 +1446,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const ids = list.data.sessions.map((s) => s.id);
     assert.strictEqual(ids[0], sX, "刚对话的会话应排第一: " + ids.join(","));
     const arr = list.data.sessions;
+    assert.ok(arr.length && arr.every((s) => typeof s.access_mode === "string"), "P8.47: 列表项含 access_mode 桶标记");
     for (let i = 1; i < arr.length; i++) {
       assert.ok(new Date(arr[i - 1].updated_at) >= new Date(arr[i].updated_at), "updated_at 应降序");
     }
@@ -1949,6 +1950,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const codeTok = acl.data.token;
     const listCode = await api("GET", "/api/sessions?access=" + codeTok);
     assert.ok(!listCode.data.sessions.some((s) => s.id === aliceSid), "码主体列表不含用户私有会话");
+    // P8.47：管理列表标注私有桶属主；非管理列表不含 user_id
+    const admList = await adminFetch("GET", "/api/sessions", undefined, adminTok);
+    const admIt = admList.data.sessions.find((s) => s.id === aliceSid);
+    assert.ok(admIt && admIt.access_mode === "user" && admIt.user_id === aliceId, "P8.47: 管理列表含 access_mode/user_id");
+    assert.strictEqual(admIt.owner_name, "alice", "P8.47: 管理列表标注私有会话属主");
+    assert.ok(listCode.data.sessions.every((s) => s.user_id === undefined), "P8.47: 非管理列表不含 user_id");
     assert.strictEqual((await api("GET", "/api/sessions/" + aliceSid + "?access=" + codeTok)).status, 404, "码主体读私有会话 404");
     assert.strictEqual((await api("POST", "/api/chat", { session_id: aliceSid, question: "x" })).status, 404, "匿名问私有会话 404");
     // 属主本人可问
@@ -2017,6 +2024,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // 同码可见；其他主体不可见
     const listC = await jarFetch(codeJar, "GET", "/api/sessions");
     assert.ok(listC.data.sessions.some((s) => s.id === codeSid), "码主体可见码桶会话");
+    assert.strictEqual(listC.data.sessions.find((s) => s.id === codeSid).access_mode, "code", "P8.47: 码桶列表项 access_mode=code");
     assert.ok(!listC.data.sessions.some((s) => s.id === aliceSid), "码主体不可见用户私有会话");
     assert.ok(!(await jarFetch(aliceJar, "GET", "/api/sessions")).data.sessions.some((s) => s.id === codeSid), "用户不可见码桶会话");
     assert.strictEqual((await jarFetch(aliceJar, "GET", "/api/sessions/" + codeSid)).status, 404, "用户读码桶会话 404");

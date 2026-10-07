@@ -32,7 +32,14 @@ function register(router, ctx) {
   router.exact("GET", "/api/sessions", (req, res, ctx_, urlObj) => {
     if (viewer403(req, urlObj, res)) return Promise.resolve();
     const p = ctx.auth.principal(req, urlObj);
-    sendJSON(res, 200, { sessions: ctx.manager.list(ctx.auth.isAdmin(req, urlObj), p) });
+    const admin = ctx.auth.isAdmin(req, urlObj);
+    // P8.47：列表项含桶类型 access_mode；管理端另带 user_id / owner_name（私有桶属主用户名）
+    const sessions = ctx.manager.list(admin, p, admin).map((s) =>
+      admin && s.access_mode === "user" && s.user_id
+        ? Object.assign({}, s, { owner_name: (ctx.store.getUser(s.user_id) || {}).username || null })
+        : s
+    );
+    sendJSON(res, 200, { sessions });
     return Promise.resolve();
   });
 

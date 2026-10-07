@@ -6,7 +6,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
 import { LOGO_SVG } from "../utils/brandLogo";
 import { useAuthStore } from "../stores/auth";
-import { useSessionsStore, RecordView } from "../stores/sessions";
+import { useSessionsStore, RecordView, SessionView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
 import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock } from "@element-plus/icons-vue";
@@ -35,6 +35,27 @@ const listLoading = ref(true);
 // P7.2 布局对齐旧版：左固定会话栏（252px）+ 主列（header / main / footer）；
 // 内容列宽沿用 --qa-maxw（窄 860 / 宽 1180 / 铺满，「⚙ 显示」记忆于 localStorage）
 const PROTO_NAMES: Record<string, string> = { openai: "OpenAI 兼容", dify: "编排引擎", generic: "第三方通用", ragflow: "知识引擎" };
+// P8.47：会话列表桶标记——共享（所有人可见）/ 我的（私有，仅自己+管理）/ 访问码（码桶）
+  // P8.47：会话列表桶标记——共享（所有人可见）/ 我的（私有，仅自己+管理）/ 访问码（码桶）
+function bucketKey(s: SessionView): string {
+  const m = s.access_mode || "shared";
+  if (m === "user") return "mine";
+  if (m === "code" || m === "access_code") return "code";
+  return "shared";
+}
+function bucketLabel(s: SessionView): string {
+  const m = s.access_mode || "shared";
+  if (m === "user") return s.owner_name ? "私有·" + s.owner_name : "我的";
+  if (m === "code" || m === "access_code") return "访问码";
+  return "共享";
+}
+function bucketTip(s: SessionView): string {
+  const m = s.access_mode || "shared";
+  if (m === "shared") return "共享会话：所有人（含匿名访客）可见";
+  if (m === "user") return s.owner_name ? "私有会话：仅属主 " + s.owner_name + " 与管理员可见" : "私有会话：仅你与管理员可见";
+  return "访问码会话：仅该访问码持有者与管理员可见";
+}
+
 const sideCollapsed = ref(false); // 桌面：☰ 收起会话栏（旧版 .app.collapsed 语义）
 const sideOpen = ref(false);      // 窄屏 ≤720px：会话栏左滑出抽屉
 function toggleSide() {
@@ -48,7 +69,7 @@ const connCls = computed(() => (sse.status.value === "open" ? "conn-on" : sse.st
 const composerProto = computed(() => {
   const s = currentSession.value;
   if (!s) return "无会话";
-  const proto = PROTO_NAMES[s.protocol] || s.protocol || "";
+const proto = PROTO_NAMES[s.protocol] || s.protocol || "";
   return (proto ? proto + " · " : "") + (s.name || "未命名会话");
 });
 // 主题（对齐旧版键 echoanswer-theme；useTheme 共享：工作区 / 控制台顶栏 ☀️/🌙）
@@ -699,6 +720,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="ws-sess-meta">
             <span class="ws-badge">{{ PROTO_NAMES[s.protocol] || s.protocol }}</span>
+            <span class="ws-badge ws-badge-bucket" :class="'ws-bucket-' + bucketKey(s)" :title="bucketTip(s)">{{ bucketLabel(s) }}</span>
             <span v-if="audioN(s.id) > 0" class="ws-badge ws-badge-audio" :title="'正在接收 ' + audioN(s.id) + ' 个电脑设备的输出音频'"><el-icon><Headset /></el-icon>{{ audioN(s.id) }}</span>
             <span class="ws-sess-time">{{ s.active > 0 ? '生成中…' : (s.last_at ? fmtTime(s.last_at) : fmtTime(s.updated_at)) }}</span>
           </div>

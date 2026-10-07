@@ -57,8 +57,8 @@ class V2SessionManager extends SessionManager {
     for (const s of this.ctx.sessions) if (!principal || canView(principal, s)) ids.add(s.id);
     return ids;
   }
-  list(isAdmin, principal) {
-    const all = super.list(isAdmin);
+  list(isAdmin, principal, includeUser) {
+    const all = super.list(isAdmin, includeUser);
     if (!principal) return all;
     const ids = this._visibleIds(principal);
     return all.filter((v) => ids.has(v.id));

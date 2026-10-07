@@ -155,7 +155,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/audio/listen`（+ `/stop`、`/cancel`） | **实时识别**（提问框「音频」按钮）。body `{token, device?}`：开始监听，每 2.5s 全段重提一次，SSE `audio_listen`（partial/stopped/cancelled/stream_stopped，均带 session_id）；`/stop` 定稿返回 `{ok, text, elapsed_s}`；`/cancel` 丢弃。同设备已有任务 409，设备未接收 409，ASR 未配置 400 |
 | POST | `/api/audio/capture` | **识别并提问**（一键 API）。body `{token, device?, seconds?}`：截取最近 N 秒推流（默认 30，范围 5-60 可配）→ ASR → `QaRunner.start(source:"remote_audio")` → 200 `{ok, text, qa_id, session_id, device, duration_s}`；无设备流 409 / ASR 未配置 400 / 无声 422 / ASR 失败 502 |
 | GET | `/api/audio/stream?token=` | 该会话正在接收的设备列表 `{ok, enabled, streams:[{device, bytes, frames, ms_since_last_frame}]}`（会话设置抽屉实时刷新用） |
-| GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at）；P3：按主体作用域（只看可见桶） |
+| GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at/access_mode（**P8.47** 桶标记 shared/user/code；管理端另含 user_id/owner_name））；P3：按主体作用域（只看可见桶） |
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?, agent_id?/agent_code?}` → 201 会话；P3：管理/登录用户（自身私有桶）/访问码主体（自身码桶），匿名 401 |
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖 / 电脑输出音频 `{enabled, preferred_device}`） |

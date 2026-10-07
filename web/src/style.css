@@ -272,6 +272,11 @@ body {
   background: var(--card); border: 1px solid var(--border); color: var(--text-dim);
 }
 .ws-badge-audio { border-color: var(--accent-soft); color: var(--accent); }
+/* P8.47：会话列表桶标记（共享 / 我的 / 访问码） */
+.ws-badge-bucket { font-size: 11px; }
+.ws-bucket-shared { color: var(--tx-3); border-color: var(--bd); }
+.ws-bucket-mine { color: var(--accent); border-color: var(--accent-soft); }
+.ws-bucket-code { color: #e8a33d; border-color: rgba(232, 163, 61, 0.4); }
 .ws-sess-time { color: var(--text-dim); font-size: 11px; flex: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-sess-last {
   font-size: 11.5px; color: var(--text-dim); margin-top: 4px;
