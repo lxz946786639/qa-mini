@@ -1563,6 +1563,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await api("POST", "/api/admin/login", { password: "nope9999" })).status, 401);
     assert.strictEqual((await api("POST", "/api/admin/login", { password: "ab" })).status, 401);
   });
+  await test("p8.49: 全量测试期间抬高自动封禁阈值（config 实时生效；防 127.0.0.1 累计失败自封）", async () => {
+    const r = await adminFetch("PUT", "/api/config", { security: { auto_ban: { enabled: true, login_fails: 100000, qa_per_min: 100000, ban_minutes: 1 } } }, adminTok);
+    assert.strictEqual(r.status, 200, "config 更新: " + (r.data && r.data.detail));
+    const g = await adminFetch("GET", "/api/config", undefined, adminTok);
+    assert.strictEqual(g.data.security.auto_ban.login_fails, 100000, "阈值实时生效");
+  });
   await test("security: 管理接口需 token（config / 会话 CRUD / 全局重置）", async () => {
     assert.strictEqual((await api("GET", "/api/config")).status, 401);
     assert.strictEqual((await api("POST", "/api/sessions", { name: "x" })).status, 401);
@@ -2550,6 +2556,106 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(a.errors.every((e) => typeof e.protocol === "string" && e.count >= 1), "错误行形状");
     assert.ok(a.summary.uptime_s >= 0, "uptime");
     assert.ok(a.summary.online.sse >= 0 && a.summary.online.auth_sessions >= 0 && a.summary.online.groups >= 0, "online 形状");
+  });
+
+  // ================= P8.49：/api/admin/security 安全监控 + IP 封禁 =================
+  const rawReq = async (method, p, body, headers) => {
+    const resp = await fetch(BASE + p, { method, headers: Object.assign({ "Content-Type": "application/json" }, headers || {}), body: body === undefined ? undefined : JSON.stringify(body) });
+    let data = null;
+    try { data = await resp.json(); } catch {}
+    return { status: resp.status, data };
+  };
+  await test("p8.49: /api/admin/security 鉴权（匿名/普通用户 401）", async () => {
+    const anon = await api("GET", "/api/admin/security");
+    assert.strictEqual(anon.status, 401, "无凭证 401");
+    const ju = makeJar();
+    const lu = await jarFetch(ju, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(lu.status, 200, "carol 登录: " + (lu.data && lu.data.detail));
+    const cu = await jarFetch(ju, "GET", "/api/admin/security");
+    assert.strictEqual(cu.status, 401, "普通用户 401");
+  });
+  await test("p8.49: days 参数（缺省 7 / 999→90 / 0→400）+ 顶层形状", async () => {
+    const r0 = await adminFetch("GET", "/api/admin/security?days=0", undefined, adminTok);
+    assert.strictEqual(r0.status, 400, "days=0 → 400");
+    const r9 = await adminFetch("GET", "/api/admin/security?days=999&fresh=1", undefined, adminTok);
+    assert.strictEqual(r9.status, 200);
+    assert.strictEqual(r9.data.days, 90, "999 截断 90");
+    assert.strictEqual(r9.data.daily.length, 90, "daily 90 天");
+    const rd = await adminFetch("GET", "/api/admin/security?fresh=1", undefined, adminTok);
+    assert.strictEqual(rd.data.days, 7, "缺省 7 天");
+    assert.strictEqual(rd.data.daily.length, 7, "daily 7 天");
+    assert.strictEqual(rd.data.hour24.length, 24, "hour24 24 桶");
+    for (const k of ["ok", "summary", "alerts", "top_ips", "bans", "events"]) assert.ok(k in rd.data, "缺字段 " + k);
+    for (const k of ["qa_today", "logins_today", "fails_today", "events_24h", "alerts", "bans_active", "bans_total", "qa_24h", "error_rate_24h"]) assert.ok(k in rd.data.summary, "缺 summary." + k);
+    assert.ok(rd.data.hour24.every((x) => "logins" in x && "fails" in x && "qa" in x && typeof x.h === "string"), "hour24 行形状");
+  });
+  await test("p8.49: 手动封禁（XFF 假 IP 拦截 / admin 豁免 / 幂等解封）", async () => {
+    const p1 = await adminFetch("POST", "/api/admin/security/bans", { ip: "203.0.113.7", minutes: 5, reason: "e2e 手动封禁" }, adminTok);
+    assert.strictEqual(p1.status, 201, "封禁 201: " + (p1.data && p1.data.detail));
+    assert.strictEqual(p1.data.ban.ip, "203.0.113.7");
+    assert.strictEqual(p1.data.ban.permanent, false, "5 分钟非永久");
+    const pBad = await adminFetch("POST", "/api/admin/security/bans", { ip: "999.1.1.1", minutes: 5 }, adminTok);
+    assert.strictEqual(pBad.status, 400, "非法 ip 400");
+    const pBad2 = await adminFetch("POST", "/api/admin/security/bans", { ip: "203.0.113.7", minutes: -1 }, adminTok);
+    assert.strictEqual(pBad2.status, 400, "负 minutes 400");
+    const pDup = await adminFetch("POST", "/api/admin/security/bans", { ip: "203.0.113.7", minutes: 5 }, adminTok);
+    assert.strictEqual(pDup.status, 409, "重复封禁 409");
+    const b1 = await rawReq("GET", "/api/agents", undefined, { "x-forwarded-for": "203.0.113.7" });
+    assert.strictEqual(b1.status, 403, "被封 IP 403");
+    assert.ok(String(b1.data.detail).includes("限制"), "403 文案: " + (b1.data && b1.data.detail));
+    const b2 = await rawReq("GET", "/api/agents", undefined, { "x-forwarded-for": "203.0.113.7", "X-Admin-Token": adminTok });
+    assert.strictEqual(b2.status, 200, "admin 豁免 200");
+    const b3 = await rawReq("GET", "/api/agents", undefined, {});
+    assert.strictEqual(b3.status, 200, "未封 IP 不受影响");
+    const b4 = await rawReq("GET", "/api/health", undefined, { "x-forwarded-for": "203.0.113.7" });
+    assert.strictEqual(b4.status, 200, "health 豁免 200");
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/security/bans/203.0.113.7", undefined, adminTok)).status, 200, "解封 200");
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/security/bans/203.0.113.7", undefined, adminTok)).status, 404, "无封禁再解 404");
+    const b5 = await rawReq("GET", "/api/agents", undefined, { "x-forwarded-for": "203.0.113.7" });
+    assert.strictEqual(b5.status, 200, "解封后恢复 200");
+    const bl = await adminFetch("GET", "/api/admin/security/bans", undefined, adminTok);
+    assert.strictEqual(bl.status, 200);
+    assert.ok(Array.isArray(bl.data.bans), "bans 数组");
+  });
+  await test("p8.49: 登录爆破自动封禁（10 次失败 → auto: 封禁 + 审计）", async () => {
+    // 场景内把阈值调回 10（爆破源 = XFF 假 IP，与 127.0.0.1 隔离；测试末恢复）
+    const cfgSet = await adminFetch("PUT", "/api/config", { security: { auto_ban: { login_fails: 10 } } }, adminTok);
+    assert.strictEqual(cfgSet.status, 200, "阈值 10: " + (cfgSet.data && cfgSet.data.detail));
+    const victim = "203.0.113.9";
+    await adminFetch("DELETE", "/api/admin/security/bans/" + victim, undefined, adminTok);
+    const codes = [];
+    for (let i = 0; i < 10; i++) {
+      const r = await rawReq("POST", "/api/auth/login", { username: "nosuchuser" + i, password: "bad-pass-" + i }, { "x-forwarded-for": victim });
+      codes.push(r.status);
+    }
+    assert.ok(codes.every((s) => s === 401 || s === 429), "均为登录失败: " + codes.join(","));
+    assert.ok(codes.filter((s) => s === 401).length >= 9, "前 N 次 401: " + codes.join(","));
+    const bl = await adminFetch("GET", "/api/admin/security/bans", undefined, adminTok);
+    const hit = (bl.data.bans || []).find((b) => b.ip === victim);
+    assert.ok(hit, "自动封禁记录存在");
+    assert.ok(String(hit.reason).startsWith("auto:"), "原因为 auto: " + hit.reason);
+    assert.strictEqual(hit.active, true, "封禁生效");
+    const after = await rawReq("POST", "/api/auth/login", { username: "nosuchuser", password: "x" }, { "x-forwarded-for": victim });
+    assert.strictEqual(after.status, 403, "被封 IP 再登录 403");
+    const ev = await adminFetch("GET", "/api/admin/security/events?limit=50", undefined, adminTok);
+    assert.strictEqual(ev.status, 200);
+    assert.ok(ev.data.events.some((e) => e.action === "security.auto_ban" && e.target_id === victim), "审计 security.auto_ban");
+    assert.ok(ev.data.events.some((e) => e.action === "auth.login_failed"), "审计 auth.login_failed");
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/security/bans/" + victim, undefined, adminTok)).status, 200, "清理自动封禁");
+    await adminFetch("PUT", "/api/config", { security: { auto_ban: { login_fails: 100000 } } }, adminTok);
+  });
+  await test("p8.49: 安全事件流（动作集合 + 分页形状 + 总览内嵌）", async () => {
+    const ev = await adminFetch("GET", "/api/admin/security/events?limit=100", undefined, adminTok);
+    assert.strictEqual(ev.status, 200);
+    assert.ok(typeof ev.data.total === "number" && ev.data.total > 0, "total > 0（本轮有登录/封禁事件）");
+    assert.ok(ev.data.events.length > 0 && ev.data.events.length <= 100, "events 分页");
+    const allowed = new Set(["auth.login", "auth.login_failed", "admin.login", "admin.login_failed", "access.login", "access.login_failed", "access.kick", "security.ban", "security.unban", "security.auto_ban"]);
+    assert.ok(ev.data.events.every((e) => allowed.has(e.action)), "动作均在安全集合内");
+    assert.ok(ev.data.events.every((e) => typeof e.created_at === "string" && e.created_at.length > 0), "事件含 created_at");
+    assert.ok(ev.data.events.some((e) => e.action === "security.ban" && e.target_id === "203.0.113.7"), "含手动 security.ban");
+    assert.ok(ev.data.events.some((e) => e.action === "security.unban" && e.target_id === "203.0.113.7"), "含 security.unban");
+    const ov = await adminFetch("GET", "/api/admin/security?fresh=1", undefined, adminTok);
+    assert.ok(ov.data.events.length > 0 && ov.data.events.length <= 20, "总览 events ≤20");
   });
 
   // 收尾

@@ -29,6 +29,7 @@ function register(router, ctx) {
     }
     const question = typeof body.question === "string" ? body.question : "";
     if (!question.trim()) return sendJSON(res, 400, { ok: false, detail: "question 为空" });
+    ctx.security.noteQa(req); // P8.49：提问高频监控（安全维度 IP 1 分钟滑动窗）
     let started;
     try {
       started = ctx.manager.runnerFor(session).start({

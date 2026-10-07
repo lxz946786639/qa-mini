@@ -8,7 +8,7 @@
 const crypto = require("crypto");
 const { hashPassword, verifyPassword } = require("../../lib/auth");
 const { backfillSessionsForAdmin } = require("../../lib/migrations");
-const { ipOf, uaOf, safeEqual, parseJSONBody, sendJSON, cookieValue } = require("../middleware");
+const { ipOf, secIpOf, uaOf, safeEqual, parseJSONBody, sendJSON, cookieValue } = require("../middleware");
 
 const ADMIN_TOKEN_TTL = 12 * 3600e3;   // 管理 token 12h
 const ACCESS_TOKEN_TTL = 24 * 3600e3;  // 访问 token 24h（不超过码自身有效期）
@@ -17,7 +17,8 @@ const SID_TTL = 12 * 3600e3;           // cookie 会话 12h
 // 恒定时间占位哈希（防用户名枚举时序差异）
 const DUMMY_HASH = hashPassword("echoanswer-dummy");
 
-function createAuthService(ctx) {
+function createAuthService(ctx, opts) {
+  opts = opts || {};
   const store = ctx.store;
   const adminTokens = new Map();   // token -> { expires_at: ms }
   const accessTokens = new Map();  // token -> { code, expires_at: ms }
@@ -55,6 +56,10 @@ function createAuthService(ctx) {
     const n = loginFails.get(ip) || { count: 0, reset_at: Date.now() + 10 * 60e3 };
     n.count += 1;
     loginFails.set(ip, n);
+    // P8.49：越过登录失败阈值 → 交安全服务自动封禁（已封禁则幂等跳过）
+    const ab = (ctx.config && ctx.config.security && ctx.config.security.auto_ban) || {};
+    const th = Number(ab.login_fails) > 0 ? Number(ab.login_fails) : 10;
+    if (n.count >= th) opts.onLoginBrute && opts.onLoginBrute(ip);
   }
   function validAdminToken(t) {
     const e = adminTokens.get(t);
@@ -194,7 +199,8 @@ function createAuthService(ctx) {
   // ---- POST /api/admin/login：管理密码登录/首次初始化（遗留端点；成功同时签发 cookie） ----
   async function handleAdminLogin(req, res) {
     const ip = ipOf(req);
-    if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+    const sip = secIpOf(req); // P8.49：限流/封禁用安全维度 IP
+    if (throttleExceeded(sip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
     let body;
     try { body = await parseJSONBody(req); }
     catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
@@ -222,7 +228,8 @@ function createAuthService(ctx) {
       issueSidCookie(res, req, { principalType: "admin", userId: u.id });
       return sendJSON(res, 200, { ok: true, initialized: false, ...t });
     }
-    recordFail(ip);
+    recordFail(sip);
+    store.insertAudit({ actorType: "system", action: "admin.login_failed", detail: { username: "admin" }, ip, userAgent: uaOf(req) }); // P8.49
     return sendJSON(res, 401, { ok: false, detail: "管理密码错误" });
   }
 
@@ -230,7 +237,8 @@ function createAuthService(ctx) {
   //      P8.44：匿名捷径已移除（匿名恒放行，无需「匿名登录」），统一校验码签发 token ----
   async function handleAccessLogin(req, res) {
     const ip = ipOf(req);
-    if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+    const sip = secIpOf(req); // P8.49：限流/封禁用安全维度 IP
+    if (throttleExceeded(sip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
     let body;
     try { body = await parseJSONBody(req); }
     catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
@@ -238,7 +246,8 @@ function createAuthService(ctx) {
     if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "访问码为 6 位数字" });
     const valid = findValidCode(code);
     if (!valid) {
-      recordFail(ip);
+      recordFail(sip);
+      store.insertAudit({ actorType: "system", action: "access.login_failed", detail: { code: "••••" + code.slice(-2) }, ip, userAgent: uaOf(req) }); // P8.49
       return sendJSON(res, 401, { ok: false, detail: "访问码无效或已过期" });
     }
     const t = issueAccessToken(valid.code);
@@ -251,7 +260,8 @@ function createAuthService(ctx) {
   // ---- P3 /api/auth/login：用户名密码 → cookie（users 表；管理员/普通用户同一入口） ----
   async function handleAuthLogin(req, res) {
     const ip = ipOf(req);
-    if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+    const sip = secIpOf(req); // P8.49：限流/封禁用安全维度 IP
+    if (throttleExceeded(sip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
     let body;
     try { body = await parseJSONBody(req); }
     catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
@@ -272,7 +282,8 @@ function createAuthService(ctx) {
         user: { id: u.id, username: u.username, display_name: u.display_name, role: u.role }
       });
     }
-    recordFail(ip);
+    recordFail(sip);
+    store.insertAudit({ actorType: "system", action: "auth.login_failed", detail: { username }, ip, userAgent: uaOf(req) }); // P8.49
     return sendJSON(res, 401, { ok: false, detail: "用户名或密码错误" });
   }
 
@@ -321,7 +332,8 @@ function createAuthService(ctx) {
   // ---- P3 /api/auth/access-code：访问码 → cookie（显式码登录；无匿名捷径） ----
   async function handleAuthCodeLogin(req, res) {
     const ip = ipOf(req);
-    if (throttleExceeded(ip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
+    const sip = secIpOf(req); // P8.49：限流/封禁用安全维度 IP
+    if (throttleExceeded(sip)) return sendJSON(res, 429, { ok: false, detail: "尝试过于频繁，请稍后再试" });
     let body;
     try { body = await parseJSONBody(req); }
     catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
@@ -329,7 +341,8 @@ function createAuthService(ctx) {
     if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "访问码为 6 位数字" });
     const valid = findValidCode(code);
     if (!valid) {
-      recordFail(ip);
+      recordFail(sip);
+      store.insertAudit({ actorType: "system", action: "access.login_failed", detail: { code: "••••" + code.slice(-2) }, ip, userAgent: uaOf(req) }); // P8.49
       return sendJSON(res, 401, { ok: false, detail: "访问码无效或已过期" });
     }
     const expires_at = issueSidCookie(res, req, { principalType: "code", accessCodeId: valid.id });

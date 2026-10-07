@@ -33,8 +33,8 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 158 项断言全绿，
-   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 42 项）；
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 164 项断言全绿，
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v7 数据层 45 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
    （Element Plus 图标）或官网首页内联 SVG；智能体图标字段 `agents.icon` 存
@@ -82,13 +82,13 @@ server.js        根入口（薄）：require server/app.js 启动（唯一入�
 server/          服务端模块化（P2）：app.js 启动装配 / context.js 启动上下文 /
                  router.js 首中路由 / middleware.js 公共件 / services/（会话增量
                  持久化 · SSE 总线（P3 按主体作用域投递）· 鉴权（P3 主体解析 +
-                 ea_sid cookie）· principal 桶可见性 · 访问码 · 音频监听 · 配置同步）
-                 / routes/（按端点分组的路由模块；P3 会话级端点 IDOR 校验）
+                 ea_sid cookie）· principal 桶可见性 · 访问码 · 音频监听 · 配置同步 · 安全监控（P8.49 封禁守卫 / 自动封禁 / 总览聚合））
+                 / routes/（按端点分组的路由模块；P3 会话级端点 IDOR 校验；P8.49 routes/security.js 安全监控 5 端点）
 lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 EchoScribe 同源）
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
 lib/config.js    配置加载/深合并/校验 + protocolEnabled（P8.43 全局协议启用状态）+ 旧 JSON 会话兼容（存储已迁 store.js）
-lib/migrations.js v1→v2→v3→v4→v5→v6 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围）
+lib/migrations.js v1→v2→v3→v4→v5→v6→v7 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围；v7 = P8.49 ip_bans IP 封禁表）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
@@ -105,12 +105,13 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  + P8.37 顶栏一键分享（Share 图标按钮，复制智能体链接，非安全上下文 execCommand 回退）
                  + 匿名直访被门控智能体 → 自动跳登录页（?next 登录成功回跳；已登录无权 → 友好提示卡））)/
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
-                 users/agents/codes/online/audit/sys 七模块 + P7 首启引导 +
+                 users/agents/codes/online/security/audit/sys 八模块（P8.49 增「安全监控」） + P7 首启引导 +
                  P8.48 仪表盘（默认页签，tab=dash 缺省；views/admin/DashboardTab.vue +
                  composables/useEcharts.ts：ECharts 模块化注册 + EP CSS 变量主题自适应；
                  GET /api/admin/stats?days=7|14|30[&fresh=1] 多维聚合，纯查询无 DDL，30s 缓存；
                  提问趋势/访问趋势/活跃时段/智能体/协议/错误分布 + 运行情况 + 六指标卡；
                  60s 自动刷新可关）；
+                 P8.49 安全监控（views/admin/SecurityTab.vue：访问/提问监测 + 风险告警（爆破 / 高频 / 无效码 / 错误激增）+ IP 封禁（手动 1h/24h/7d/永久 + 自动封禁 security.auto_ban）与解除 + 安全事件留痕；GET /api/admin/security?days=7|14|30[&fresh=1] + /events 加载更多 + /bans 手动 CRUD（ip_bans 表，v7）；60s 自动刷新可关）；
                  P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
                  P8.26 控制台四表格列宽均衡（全 min-width 比例伸展）；
                  P8.27 品牌波形 logo 四处统一（utils/brandLogo.ts 单一来源，「回」字砖移除）；
@@ -147,8 +148,8 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 158 项断言全绿
-node tests/store_tests.js                       # 42 项数据层单测全绿
+npm test                                        # 164 项断言全绿
+node tests/store_tests.js                       # 45 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health

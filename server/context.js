@@ -12,6 +12,7 @@ const { initDataDir } = require("../lib/migrations");
 const { EventBus } = require("./services/event_bus");
 const { V2SessionManager, loadSessions } = require("./services/session_service");
 const { createAuthService } = require("./services/auth_legacy");
+const { createSecurityService } = require("./services/security");
 const { createAccessCodeService } = require("./services/access_codes");
 const { createAudioListenService } = require("./services/audio_listen");
 const { AudioStreamManager } = require("../lib/audio_stream");
@@ -78,7 +79,8 @@ function buildContext() {
     broadcast: (event, payload) => ctx.bus.emit(event, payload)
   });
   ctx.listen = createAudioListenService(ctx);
-  ctx.auth = createAuthService(ctx);
+  ctx.security = createSecurityService(ctx); // P8.49：须在 auth 之前（auth 注入自动封禁回调；guard 运行期才引用 ctx.auth）
+  ctx.auth = createAuthService(ctx, { onLoginBrute: (ip) => ctx.security.onLoginBrute(ip) });
   ctx.codes = createAccessCodeService(ctx, ctx.auth);
   ctx.codes.refreshMirror();
   return ctx;

@@ -118,6 +118,18 @@ function withTimeout(promise, ms, onExpire) {
 
 function ipOf(req) { return req.socket ? (req.socket.remoteAddress || "?") : "?"; }
 
+// P8.49：安全维度 IP（X-Forwarded-For 首跳，无则 remoteAddress）——登录限流计数 / 自动封禁 /
+// 封禁匹配用。审计与凭证 IP 恒用 ipOf（remoteAddress，不可伪造）；封禁匹配同时查两者，
+// 伪造 XFF 无法解除真实 IP 的封禁（单主机部署语义，见 doc01 §7 安全监控）
+function secIpOf(req) {
+  const xff = req && req.headers ? req.headers["x-forwarded-for"] : null;
+  if (typeof xff === "string") {
+    const first = xff.split(",")[0].trim();
+    if (first && first.length <= 64) return first;
+  }
+  return req.socket ? (req.socket.remoteAddress || "?") : "?";
+}
+
 // P8.29：访问设备浏览器特征（User-Agent，截断 256 字符；审计设备识别码来源）
 function uaOf(req) { return String((req && req.headers && req.headers["user-agent"]) || "").slice(0, 256); }
 
@@ -154,6 +166,6 @@ function maskConfigForBroadcast(c) {
 
 module.exports = {
   sendJSON, readBody, readRawBody, parseJSONBody,
-  MIME, serveStatic, withTimeout, ipOf, uaOf, cookieValue, safeEqual,
+  MIME, serveStatic, withTimeout, ipOf, secIpOf, uaOf, cookieValue, safeEqual,
   maskConfigForBroadcast
 };

@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 6, "user_version（P8.40 起 v6）");
+      eq(v, 7, "user_version（P8.49 起 v7）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -272,7 +272,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "v6");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "v7");
       eq(store.listSessions({}).length, 1, "会话保留");
     });
     store.close();
@@ -295,7 +295,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v2 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "版本 6");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "版本 7");
       const brain = store.getAgentByCode("industry-brain");
       eq(brain.allow_user, true, "补列默认 = 允许");
       eq(brain.allow_anon, true, "allow_anon 不变");
@@ -330,7 +330,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v3 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "版本 6");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "版本 7");
       eq(store.getSession("0fd50fcc").access_mode, "user", "切换点后管理员新建 → 私有桶");
       eq(store.getSession("8b14dd80").access_mode, "shared", "重构前会话保持共享");
       eq(store.getSession("6402e6ea").access_mode, "shared", "user_id=NULL 新建保持共享（无可归属）");
@@ -634,6 +634,71 @@ function oldConfig(over) {
     });
   }
 
+
+  // [T-ban] P8.49：ip_bans 表（v7）+ 封禁 CRUD / 过期判定
+  {
+    const dir = mk();
+    const cfgFile = writeConfig(dir, oldConfig({ security: { admin_password: "banpw123", allow_anonymous: true, access_codes: [] } }));
+    let store;
+    await t("v6 → v7 迁移（ip_bans 幂等 + user_version 7）", async () => {
+      const r1 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(r1.fresh, "全新安装");
+      // 模拟 v6 旧库：回拨版本号（表已在）→ 再迁移应幂等补齐
+      let d = new DatabaseSync(r1.dbFile);
+      d.exec("PRAGMA user_version = 6;");
+      d.close();
+      const r2 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(r2.migrated, "触发迁移");
+      store = Store.open(r1.dbFile);
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "user_version 7");
+      assert(!!store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ip_bans'").get(), "ip_bans 表存在");
+      const r3 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(r3.migrated === false, "已是 v7 跳过（幂等）");
+    });
+    await t("ip_bans CRUD + hasActiveBan", async () => {
+      assert(store.listBans({ includeExpiredDays: 0 }).length === 0, "初始为空");
+      assert(store.hasActiveBan("203.0.113.50") === false, "未封禁");
+      const b = store.addBan({ ip: "203.0.113.50", reason: "数据层测试", createdBy: "u-1", minutes: 5 });
+      eq(b.permanent, false, "5 分钟非永久");
+      assert(b.active, "生效中");
+      assert(b.expires_at && b.expires_at.length > 0, "到期时间");
+      assert(store.hasActiveBan("203.0.113.50"), "hasActiveBan");
+      const got = store.getBan("203.0.113.50");
+      eq(got.ip, "203.0.113.50", "getBan ip");
+      eq(got.reason, "数据层测试", "getBan reason");
+      eq(store.listBans({ includeExpiredDays: 0 }).length, 1, "列表 1 条");
+      // 重复封禁 = 覆盖（ON CONFLICT）
+      store.addBan({ ip: "203.0.113.50", reason: "覆盖", createdBy: "u-1", minutes: 0 });
+      const b2 = store.getBan("203.0.113.50");
+      eq(b2.permanent, true, "覆盖为永久");
+      eq(b2.reason, "覆盖", "覆盖原因");
+      eq(store.listBans({ includeExpiredDays: 0 }).length, 1, "仍 1 条");
+      eq(store.removeBan("203.0.113.50"), 1, "删除 1 条");
+      assert(store.getBan("203.0.113.50") === null, "已删除");
+      assert(store.hasActiveBan("203.0.113.50") === false, "删除后不生效");
+      eq(store.removeBan("203.0.113.50"), 0, "再删 0 条");
+    });
+    await t("ip_bans 过期判定（到期 inactive / 永久 active / 7 天窗口列表）", async () => {
+      const now = Date.now();
+      store.addBan({ ip: "10.0.0.1", reason: "近期过期", createdBy: null, minutes: 1 });
+      store.addBan({ ip: "10.0.0.2", reason: "远期过期", createdBy: null, minutes: 60 });
+      store.addBan({ ip: "10.0.0.3", reason: "永久", createdBy: null, minutes: 0 });
+      // 手工把 10.0.0.1 拨回 8 天前过期（窗口外）、10.0.0.2 拨回 1 小时前过期（窗口内）
+      store.db.prepare("UPDATE ip_bans SET expires_at = ? WHERE ip = ?").run(new Date(now - 8 * 86400000).toISOString(), "10.0.0.1");
+      store.db.prepare("UPDATE ip_bans SET expires_at = ? WHERE ip = ?").run(new Date(now - 3600000).toISOString(), "10.0.0.2");
+      assert(store.hasActiveBan("10.0.0.1") === false, "过期不生效");
+      assert(store.hasActiveBan("10.0.0.2") === false, "过期不生效 2");
+      assert(store.hasActiveBan("10.0.0.3"), "永久生效");
+      const list7 = store.listBans({ includeExpiredDays: 7 });
+      const ips = list7.map((x) => x.ip).sort();
+      eq(ips, ["10.0.0.2", "10.0.0.3"], "7 天窗口：近期过期 + 永久");
+      const list0 = store.listBans({ includeExpiredDays: 0 });
+      eq(list0.map((x) => x.ip), ["10.0.0.3"], "仅生效");
+      const row = list7.find((x) => x.ip === "10.0.0.2");
+      assert(row.active === false, "active 标记 false");
+      for (const ip of ["10.0.0.1", "10.0.0.2", "10.0.0.3"]) store.removeBan(ip);
+    });
+  }
   // 清理
   for (const d of tmps) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* 忽略 */ } }
 

@@ -12,6 +12,7 @@ const routeModules = [
   require("./routes/health"),
   require("./routes/auth"),
   require("./routes/admin"),
+  require("./routes/security"),
   require("./routes/events"),
   require("./routes/sessions"),
   require("./routes/chat"),
@@ -35,6 +36,10 @@ function start() {
       return sendJSON(res, 400, { ok: false, detail: "非法 URL" });
     }
     try {
+      // P8.49：IP 封禁守卫（/api/* 含 SSE；/api/health 放行；admin 主体豁免防自锁）
+      if (urlObj.pathname.startsWith("/api/") && urlObj.pathname !== "/api/health") {
+        if (ctx.security.guard(req, urlObj, res)) return;
+      }
       const handled = await router.dispatch(req, res, ctx, urlObj);
       if (!handled) sendJSON(res, 404, { ok: false, detail: "not found" });
     } catch (e) {

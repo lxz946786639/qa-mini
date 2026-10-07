@@ -6,7 +6,7 @@ import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import { useRouter, useRoute } from "vue-router";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor, Odometer } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor, Odometer, Lock } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import DashboardTab from "./admin/DashboardTab.vue";
@@ -14,6 +14,7 @@ import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
 import AuditTab from "./admin/AuditTab.vue";
 import OnlineTab from "./admin/OnlineTab.vue";
+import SecurityTab from "./admin/SecurityTab.vue";
 import SystemTab from "./admin/SystemTab.vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
 
@@ -32,6 +33,7 @@ const MENU = [
   { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
   { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期 / 权限范围（允许全部或指定智能体）；访问码主体共享会话桶" },
   { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（登录用户 / 访问码用户按会话、匿名按长连接；设备指纹 + IP 判定唯一），支持一键下线（会话吊销 / 5 分钟禁入冷却）" },
+  { key: "security", icon: Lock, label: "安全监控", sub: "访问 / 提问监测 + 异常检测（爆破 / 高频 / 无效码 / 错误激增）+ IP 封禁（手动 / 自动）与解除" },
   { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码 / 权限范围；管理员恒全量）" },
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
   { key: "sys", icon: Setting, label: "系统设置", sub: "两类配置分 tab：协议全局默认 / 语音识别 ASR（P8.44 移除匿名访问开关：首屏与匿名问答恒公开）" }
@@ -172,6 +174,7 @@ async function onLogout() {
           <AgentsTab v-else-if="tab === 'agents'" />
           <CodesTab v-else-if="tab === 'codes'" />
           <OnlineTab v-else-if="tab === 'online'" />
+          <SecurityTab v-else-if="tab === 'security'" />
           <AuditTab v-else-if="tab === 'audit'" />
           <SystemTab v-else-if="tab === 'sys'" />
         </div>
