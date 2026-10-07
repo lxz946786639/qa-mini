@@ -2237,6 +2237,45 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(kickRec.detail && kickRec.detail.ip, "kick 详情带 ip");
     sA.close(); sB.close(); sC.close();
   });
+  await test("p8.35: 访问控制 在线口径（登录用户/访问码按会话，匿名按长连接）", async () => {
+    // 访问码用户：仅登录、无长连接 → 按会话出现在在线列表
+    const j1 = makeJar();
+    const l1 = await jarFetch(j1, "POST", "/api/auth/access-code", { code: "666677" });
+    assert.strictEqual(l1.status, 200, l1.data && l1.data.detail);
+    let ol = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    assert.strictEqual(ol.status, 200);
+    const cRow = ol.data.online.find((x) => x.kind === "code" && x.session_id);
+    assert.ok(cRow, "访问码用户按会话显示（无长连接）");
+    assert.strictEqual(cRow.connections, 0, "无长连接 = 连接数 0");
+    assert.ok(String(cRow.label).includes("••••77"), "访问码脱敏");
+    assert.ok(cRow.last_seen, "last_seen 存在");
+    // 登录用户：复用既有 carol（P8.8 访问控制矩阵已建）登录（无长连接）→ 按会话显示
+    const j2 = makeJar();
+    const l2 = await jarFetch(j2, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(l2.status, 200, l2.data && l2.data.detail);
+    ol = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    const uRow = ol.data.online.find((x) => x.kind === "user" && x.label === "carol");
+    assert.ok(uRow && uRow.session_id, "登录用户按会话显示");
+    // 会话踢出：吊销 cookie + 无禁入冷却（与匿名 5 分钟冷却区分）
+    const k1 = await adminFetch("POST", "/api/admin/online/kick", { session_id: cRow.session_id }, adminTok);
+    assert.strictEqual(k1.status, 200, "会话踢出 200");
+    const me1 = await jarFetch(j1, "GET", "/api/auth/me");
+    assert.strictEqual(me1.data.principal, null, "会话已吊销（principal 空）");
+    const reopen1 = await fetch(BASE + "/api/events?dev=devD111");
+    assert.strictEqual(reopen1.status, 200, "会话踢出后无禁入冷却（SSE 重建 200）");
+    if (reopen1.body && reopen1.body.cancel) reopen1.body.cancel();
+    ol = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    assert.ok(!ol.data.online.some((x) => x.session_id === cRow.session_id), "踢出后会话行消失");
+    // 管理员会话行：存在且不可被下线；已吊销会话踢出 404
+    const aj = makeJar();
+    const al = await jarFetch(aj, "POST", "/api/admin/login", { password: "newpw456" });
+    assert.strictEqual(al.status, 200, "管理员 cookie 登录: " + (al.data && al.data.detail));
+    ol = await adminFetch("GET", "/api/admin/online", undefined, adminTok);
+    const aRow = ol.data.online.find((x) => x.kind === "admin" && x.session_id);
+    assert.ok(aRow, "管理员会话行");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/online/kick", { session_id: aRow.session_id }, adminTok)).status, 400, "管理员会话不可被下线");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/online/kick", { session_id: cRow.session_id }, adminTok)).status, 404, "已吊销会话 404");
+  });
   await test("p3: 最后一个 active 管理员守护", async () => {
     const b = await adminFetch("POST", "/api/admin/users", { username: "bob", password: "bobpw123", role: "admin" }, adminTok);
     assert.strictEqual(b.status, 201);

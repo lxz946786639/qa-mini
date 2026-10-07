@@ -189,8 +189,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
 | PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
-| GET | `/api/admin/online` | **P8.33 在线访问者**（设备指纹 + IP 判定唯一：身份/设备/IP/连接数/在线开始；仅管理） |
-| POST | `/api/admin/online/kick` | **P8.33 一键踢出** `{dev, ip}`（evicted 控制事件 + 断流 + cookie 吊销 + 5 分钟禁入冷却；已不在线 404 / 全 admin 400；仅管理） |
+| GET | `/api/admin/online` | **P8.33/P8.35 在线访问者**（登录用户/访问码按会话、匿名按长连接「设备指纹 + IP」：身份/设备/IP/连接数/在线开始/最近活跃；仅管理） |
+| POST | `/api/admin/online/kick` | **P8.33/P8.35 一键踢出**：`{session_id}` 会话目标（evicted + 会话吊销，无冷却）或 `{dev, ip}` 设备目标（evicted + cookie 吊销 + 5 分钟禁入冷却）；已不在线 404 / admin 400；仅管理） |
 
 > **v59（P3）多用户隔离**：会话按桶归属（`user` 私有 (user_id,agent_id) / `code` (access_code_id,agent_id) /
 > `shared` 共享——存量会话全在 shared，保留「访问码=共享会话」语义）；会话级端点 IDOR 校验
@@ -255,7 +255,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   官方暗色机制修复浅色残留深色）+ 顶栏右侧统一（P8.4：无描边主题按钮 +「控制台」
   + 用户名下拉「退出」，与官网首页同排版/交互）+ 图标（P7.5：全站 emoji 换 Element Plus
   图标库 @element-plus/icons-vue）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：用户 / 智能体 / 访问码 / 审计日志 /
-  系统设置六页签（**P8.33 新增「访问控制」**：在线访问者列表（匿名 / 访问码 / 用户，设备指纹 + IP 判定唯一，5 秒自动刷新）+ 一键踢出（目标页提示并自动回首页、cookie 会话吊销、5 分钟禁入冷却），踢出动作审计留痕 `access.kick`），仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
+  系统设置六页签（**P8.33/P8.35 新增「访问控制」**：在线访问者列表（登录用户 / 访问码用户按会话统计、匿名按长连接；设备指纹 + IP 判定唯一，5 秒自动刷新）+ 一键踢出（会话目标 = 会话吊销、设备目标 = 5 分钟禁入冷却；目标页提示并自动回首页），踢出动作审计留痕 `access.kick`），仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
   对齐旧版 /admin 首屏；P8.8 智能体新增/编辑对话框分类为 tab（基本/协议/安全），
   安全页 = 访问控制三开关（允许匿名访问 / 允许访问码访问 / 允许普通用户登录访问，
   不同访问方式会话落独立桶互不可见，全关 = 仅管理员）；P8.9 首页智能体卡片随控制台
@@ -291,7 +291,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**152 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**153 项**断言 —— 协议客户端单测（含超时/取消/错误）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -299,7 +299,7 @@ npm test           # node tests/run_tests.js
   不可见（列表/读/chat 404）、SSE principal 作用域（私有事件不外泄 + agent_id
   补齐）、访问码私有桶、IDOR 写保护（他人桶 401）、智能体 API（列表/详情/管理
   CRUD）、审计日志留痕（含访问码登录/登出 + 设备指纹，P8.29）、最后 active 管理员守护、访问码失效吊销 cookie、
-  **P8.33 访问控制**（在线列表设备 + IP 分组 / 踢出 evicted + 断流 / 冷却期探针 + 重建长连接 403 / 码会话吊销 / 管理员不可踢 / 离线 404 / 审计 access.kick）、
+  **P8.33/P8.35 访问控制**（在线列表设备 + IP 分组 / 踢出 evicted + 断流 / 冷却期探针 + 重建长连接 403 / 码会话吊销 / 管理员不可踢 / 离线 404 / 审计 access.kick / **P8.35** 访问码·用户会话无长连接在线 / 会话踢出吊销 cookie 无冷却 / 管理员会话 400 / 已吊销 404）、
   **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
   测试连接含鉴权/SSE 广播脱敏/客户端断开中止上游（lib 级 + E2E）、
   **电脑输出音频流**：node 模拟推流端（chunked POST + Deflate 帧）覆盖

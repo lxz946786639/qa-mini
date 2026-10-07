@@ -25,6 +25,25 @@ function createAuthService(ctx) {
 
   function adminEnabled() { return store.countAdmins() > 0; }
 
+  // P8.35：会话活动快照（内存态，重启清空）：sessionId → { ip, ua, dev, lastSeenAt }
+  // 用途：访问控制在线列表——登录用户/访问码用户按 ea_sid 会话统计（无长连接也显示），
+  // 每次请求解析到有效会话时刷新 ip/ua，dev（设备指纹）由 /api/events 连接登记时补写
+  const sessionActivity = new Map();
+  function touchSessionActivity(sid, fields) {
+    if (!sid) return;
+    const cur = sessionActivity.get(sid) || { ip: "", ua: "", dev: "", lastSeenAt: new Date().toISOString() };
+    if (fields.ip) cur.ip = String(fields.ip);
+    if (fields.ua) cur.ua = String(fields.ua).slice(0, 256);
+    if (fields.dev) cur.dev = String(fields.dev).slice(0, 32);
+    cur.lastSeenAt = new Date().toISOString();
+    sessionActivity.set(sid, cur);
+  }
+  function sessionActivityOf(sid) { return sid ? sessionActivity.get(sid) || null : null; }
+  function dropSessionActivity(sid) { if (sid) sessionActivity.delete(sid); }
+  function pruneSessionActivity(validSids) {
+    for (const k of [...sessionActivity.keys()]) if (!validSids.has(k)) sessionActivity.delete(k);
+  }
+
   function throttleExceeded(ip) {
     const n = loginFails.get(ip) || { count: 0, reset_at: 0 };
     if (Date.now() > n.reset_at) { n.count = 0; n.reset_at = Date.now() + 10 * 60e3; }
@@ -68,18 +87,20 @@ function createAuthService(ctx) {
     if (sid) {
       const row = store.getValidAuthSessionByToken(sid);
       if (row) {
+        // P8.35：会话活动快照（键 = 会话行 id；每次有效请求刷新 ip/ua；dev 由 /api/events 登记）
+        touchSessionActivity(row.id, { ip: ipOf(req), ua: req.headers["user-agent"] });
         if (row.principal_type === "code") {
           const c = row.access_code_id ? store.getAccessCode(row.access_code_id) : null;
           if (c && c.status === "active" && Date.parse(c.expires_at) > Date.now()) {
-            return { kind: "code", codeId: c.id, code: c.code };
+            return { kind: "code", codeId: c.id, code: c.code, sessionId: row.id };
           }
           return null; // 码已失效/过期 → 视为未认证
         }
         const u = row.user_id ? store.getUser(row.user_id) : null;
         if (u && u.status === "active") {
           return u.role === "admin"
-            ? { kind: "admin", userId: u.id, role: "admin" }
-            : { kind: "user", userId: u.id, role: "user" };
+            ? { kind: "admin", userId: u.id, role: "admin", sessionId: row.id }
+            : { kind: "user", userId: u.id, role: "user", sessionId: row.id };
         }
         return null; // 用户已禁用
       }
@@ -315,6 +336,7 @@ function createAuthService(ctx) {
     validAdminToken, isAdmin, findValidCode, validAccessToken, viewerOk,
     issueAdminToken, issueAccessToken,
     principal, issueSidCookie, clearSidCookie,
+    touchSessionActivity, sessionActivityOf, dropSessionActivity, pruneSessionActivity,
     handleAdminLogin, handleAccessLogin,
     handleAuthLogin, handleAuthLogout, handleAuthMe, handleAuthCodeLogin
   };

@@ -36,7 +36,11 @@ function register(router, ctx) {
     return Promise.resolve();
   });
 
-  // ---- P8.33 访问控制：在线访问者 + 一键踢出（设备指纹 + IP 判定唯一） ----
+  // ---- P8.33/P8.35 访问控制：在线访问者 + 一键踢出 ----
+  // 统计口径（P8.35）：登录用户/访问码用户/管理员 = ea_sid cookie 会话（DB auth_sessions，
+  // 重启存活，每请求刷新活动快照）；匿名（无凭证）= SSE 长连接「设备指纹 + IP」分组。
+  // 踢出：会话目标 = 吊销会话 + evicted（凭证即失效，无禁入冷却）；dev+ip 目标 =
+  // evicted + 5 分钟禁入冷却（匿名无法吊销凭证，靠冷却防 F5 回场）。
   const identityLabel = (pr) => {
     if (!pr) return { kind: "unknown", label: "匿名" };
     if (pr.kind === "admin") {
@@ -50,29 +54,68 @@ function register(router, ctx) {
     if (pr.kind === "code") return { kind: "code", label: "访问码" + (pr.code ? "••••" + pr.code.slice(-2) : "") };
     return { kind: "anon", label: "匿名" };
   };
+  // P8.35：auth_sessions 行 → 身份
+  const sessionIdentity = (row) => {
+    if (row.principal_type === "code") {
+      const c = row.access_code_id ? ctx.store.getAccessCode(row.access_code_id) : null;
+      return { kind: "code", label: "访问码" + (c && c.code ? "••••" + c.code.slice(-2) : "") };
+    }
+    const u = row.user_id ? ctx.store.getUser(row.user_id) : null;
+    if (u && u.role === "admin") return { kind: "admin", label: "管理员（" + u.username + "）" };
+    return { kind: "user", label: (u && u.username) || "用户" };
+  };
   router.exact("GET", "/api/admin/online", (req, res, ctx_, urlObj) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
+    // 1) 会话口径：全部有效 ea_sid 会话（登录用户 / 访问码用户 / 管理员）
+    const sessions = ctx.store.listAuthSessions();
+    const validSids = new Set(sessions.map((s) => s.id));
+    ctx.auth.pruneSessionActivity(validSids);
+    const sessRows = new Map(); // sessionId → 在线行
+    for (const s of sessions) {
+      const act = ctx.auth.sessionActivityOf(s.id) || {};
+      sessRows.set(s.id, {
+        session_id: s.id, dev: act.dev || "", ip: act.ip || s.ip || "", ua: act.ua || s.user_agent || "",
+        kind: "", label: "", connections: 0,
+        connected_at: s.created_at, last_seen: act.lastSeenAt || s.created_at
+      });
+    }
+    // 2) 长连接口径：SSE 连接——归属有效会话的并入该会话行；其余（匿名/遗留）按「设备 + IP」分组
     const groups = new Map();
     for (const c of ctx.bus.listOnline()) {
       const dev = (c.meta && c.meta.dev) || "";
       const ip = (c.meta && c.meta.ip) || "";
+      const ua = (c.meta && c.meta.ua) || "";
+      const ca = (c.meta && c.meta.connectedAt) || "";
+      const sid = (c.meta && c.meta.sessionId && validSids.has(c.meta.sessionId)) ? c.meta.sessionId : null;
+      if (sid) {
+        const r = sessRows.get(sid);
+        r.connections += 1;
+        if (dev && !r.dev) r.dev = dev;
+        if (ua && !r.ua) r.ua = ua;
+        if (ip && !r.ip) r.ip = ip;
+        continue;
+      }
       const key = EventBus.keyOf(dev, ip);
       let g = groups.get(key);
       if (!g) {
-        g = { dev, ip, ua: (c.meta && c.meta.ua) || "", connections: 0, connected_at: (c.meta && c.meta.connectedAt) || "", principal: null };
+        g = { dev, ip, ua, connections: 0, connected_at: ca, principal: null };
         groups.set(key, g);
       }
       g.connections += 1;
-      const ca = (c.meta && c.meta.connectedAt) || "";
       if (ca && (!g.connected_at || ca < g.connected_at)) g.connected_at = ca;
       if (c.principal) g.principal = c.principal; // 同设备主体一致；取最后一条非空
     }
-    const online = [...groups.values()]
-      .map((g) => {
+    const online = [
+      ...[...sessRows.values()].map((r) => {
+        const id = sessionIdentity(ctx.store.getAuthSession(r.session_id));
+        return Object.assign({}, r, { kind: id.kind, label: id.label });
+      }),
+      ...[...groups.values()].map((g) => {
         const id = identityLabel(g.principal);
-        return { dev: g.dev, ip: g.ip, ua: g.ua, kind: id.kind, label: id.label, connections: g.connections, connected_at: g.connected_at };
+        return { session_id: null, dev: g.dev, ip: g.ip, ua: g.ua, kind: id.kind, label: id.label,
+          connections: g.connections, connected_at: g.connected_at, last_seen: g.connected_at };
       })
-      .sort((a, b) => (a.connected_at < b.connected_at ? 1 : -1));
+    ].sort((a2, b2) => (a2.last_seen < b2.last_seen ? 1 : -1));
     sendJSON(res, 200, { ok: true, count: online.length, online });
     return Promise.resolve();
   });
@@ -81,6 +124,25 @@ function register(router, ctx) {
     let body;
     try { body = await parseJSONBody(req); }
     catch (e) { return sendJSON(res, 400, { ok: false, detail: e.__badBody ? e.message : "请求体必须是 JSON" }); }
+    // P8.35 路径一：cookie 会话（session_id）——吊销会话 + 踢出长连接，无禁入冷却
+    const sessionId = String((body && body.session_id) || "").slice(0, 64);
+    if (sessionId) {
+      const srow = ctx.store.getAuthSession(sessionId);
+      if (!srow || srow.revoked_at || srow.expires_at <= new Date().toISOString()) {
+        return sendJSON(res, 404, { ok: false, detail: "目标已不在线" });
+      }
+      if (srow.principal_type === "admin") return sendJSON(res, 400, { ok: false, detail: "管理员不可被下线" });
+      const { targets } = ctx.bus.kickSession(sessionId);
+      ctx.store.revokeAuthSessionById(sessionId);
+      ctx.auth.dropSessionActivity(sessionId);
+      const id = sessionIdentity(srow);
+      const act = ctx.auth.sessionActivityOf(sessionId) || {};
+      ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "access.kick", targetType: "online",
+        targetId: "session:" + sessionId, detail: { kind: id.kind, label: id.label, session_id: sessionId,
+          ip: act.ip || srow.ip || "", dev: act.dev || "", connections: targets.length }, ip: ipOf(req), userAgent: uaOf(req) });
+      return sendJSON(res, 200, { ok: true, kicked: targets.length });
+    }
+    // 路径二：设备 + IP（匿名/遗留主体）——evicted + 吊销 sid（若有）+ 5 分钟禁入冷却
     const dev = String((body && body.dev) || "").slice(0, 32);
     const ip = String((body && body.ip) || "");
     const { targets, none } = ctx.bus.kick(dev, ip);

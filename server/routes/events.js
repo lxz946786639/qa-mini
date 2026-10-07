@@ -32,7 +32,9 @@ function register(router, ctx) {
     res.write(": connected\n\n");
     // P3：初始会话列表按主体作用域（旧前端匿名场景 = 全共享桶，行为不变）
     res.write("event: sessions\ndata: " + JSON.stringify({ sessions: ctx.manager.list(false, p) }) + "\n\n");
-    ctx.bus.add(res, p, isAdmin, { dev, ip, ua: uaOf(req), sid: cookieValue(req, "ea_sid"), connectedAt: new Date().toISOString() });
+    ctx.bus.add(res, p, isAdmin, { dev, ip, ua: uaOf(req), sid: cookieValue(req, "ea_sid"), sessionId: p && p.sessionId ? p.sessionId : null, connectedAt: new Date().toISOString() });
+    // P8.35：会话活动补写 dev（设备指纹）——该会话的在线行据此显示设备识别码
+    if (p && p.sessionId) ctx.auth.touchSessionActivity(p.sessionId, { dev });
     const ping = setInterval(() => {
       try {
         res.write(": ping\n\n");

@@ -7,6 +7,8 @@
 // P8.33：在线注册表 + 一键踢出——连接携带 meta（dev 设备指纹 / ip / ua / sid /
 //   连接时间），按「设备 + IP」判定唯一身份；evicted 为连接级控制事件（与初始
 //   sessions 推送同类，定向投递、非广播）；踢出冷却为内存 Map（5 分钟，重启清空）。
+// P8.35：meta 增 sessionId（cookie 会话行 id，连接可归属到会话身份）；
+//   kickSession 按会话踢出其长连接集合（会话吊销由调用方做，不做禁入冷却）。
 
 const { canView } = require("./principal");
 
@@ -26,7 +28,7 @@ class EventBus {
   size() { return this.clients.size; }
   add(res, principal, isAdmin, meta) {
     this.clients.add({ res, principal: principal || null, isAdmin: !!isAdmin,
-      meta: meta || { dev: "", ip: "", ua: "", sid: null, connectedAt: new Date().toISOString() } });
+      meta: meta || { dev: "", ip: "", ua: "", sid: null, sessionId: null, connectedAt: new Date().toISOString() } });
   }
   delete(res) { for (const c of this.clients) if (c.res === res) this.clients.delete(c); }
   // ---- P8.33 在线注册表 / 一键踢出 ----
@@ -40,6 +42,18 @@ class EventBus {
   }
   markKicked(dev, ip, ttlMs = KICK_TTL_MS) {
     this.kicked.set(EventBus.keyOf(dev, ip), Date.now() + ttlMs);
+  }
+  // P8.35：踢出某 cookie 会话的全部长连接（非 admin 连接推送 evicted 并关闭）；
+  // 会话吊销由调用方做（凭证即失效，无禁入冷却——重进需重新走登录门禁）。
+  kickSession(sessionId) {
+    const hit = [...this.clients].filter((c) => c.meta && c.meta.sessionId === sessionId);
+    const targets = hit.filter((c) => !(c.principal && c.principal.kind === "admin"));
+    for (const c of targets) {
+      try { c.res.write(EVICTED_LINE); } catch { /* 连接已断 */ }
+      try { c.res.end(); } catch { /* 忽略 */ }
+      this.clients.delete(c);
+    }
+    return { targets, none: hit.length === 0 };
   }
   // 踢出「dev+ip」身份：非 admin 连接推送 evicted 控制事件并关闭（sid 吊销由调用方做）；
   // 返回 { targets: 被踢连接, admins: 同身份 admin 连接（不受影响）, none: 未命中 }。
