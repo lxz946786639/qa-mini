@@ -27,32 +27,32 @@ const { lightTheme, toggleTheme } = useTheme();
 
 // 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
 const MENU = [
-  { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码 / 权限范围；管理员恒全量）" },
   { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
   { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期 / 权限范围（允许全部或指定智能体）；访问码主体共享会话桶" },
   { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（登录用户 / 访问码用户按会话、匿名按长连接；设备指纹 + IP 判定唯一），支持一键下线（会话吊销 / 5 分钟禁入冷却）" },
+  { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码 / 权限范围；管理员恒全量）" },
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
   { key: "sys", icon: Setting, label: "系统设置", sub: "四协议全局默认 + 语音识别 ASR + 安全（匿名访问开关）" }
 ];
 // P8.39：当前页签写入 URL（/admin?tab=<key>）——刷新/分享链接保持在对应菜单页；
-// 默认页签 users 不带参数（URL 干净）
+// 默认页签（第一项「智能体管理」agents）不带参数（URL 干净）
 const tab = ref(
   typeof route.query.tab === "string" && MENU.some((m) => m.key === route.query.tab)
     ? (route.query.tab as string)
-    : "users"
+    : "agents"
 );
 const activeMeta = computed(() => MENU.find((m) => m.key === tab.value) || MENU[0]);
 function syncTabQuery() {
   const q: Record<string, string> = {};
   for (const [k, v] of Object.entries(route.query)) if (k !== "tab" && typeof v === "string") q[k] = v;
-  if (tab.value !== "users") q.tab = tab.value;
+  if (tab.value !== "agents") q.tab = tab.value;
   if (JSON.stringify(q) !== JSON.stringify(route.query)) router.replace({ path: route.path, query: q });
 }
 watch(tab, syncTabQuery);
 watch(
   () => route.query.tab,
   (v) => {
-    if (v === undefined) { if (tab.value !== "users") tab.value = "users"; return; }
+    if (v === undefined) { if (tab.value !== "agents") tab.value = "agents"; return; }
     if (typeof v === "string" && v !== tab.value && MENU.some((m) => m.key === v)) tab.value = v;
   }
 );
