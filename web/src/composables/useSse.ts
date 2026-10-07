@@ -1,11 +1,14 @@
 // SSE 订阅（/api/events）：服务器按主体作用域投递（P3），本端只收得到自己可见会话的事件。
 // EventSource 原生自动重连；连接状态暴露给 UI（顶栏徽标）。
 // P8.33：URL 带 ?dev= 设备指纹（UA 的 FNV-1a 码，供在线统计 / 踢出判定）；收到 evicted
-// 控制事件或断开后探针确认处于踢出冷却 → 提示并自动返回首页。
+// 控制事件或断开后探针确认处于踢出冷却 → 提示并跳登录页。
+// P8.38：被踢出 → 登录页（?next=当前页，复用 P8.34 回跳机制，重新登录后回原页），
+// 不再直接回首页；跳转前清空本地主体（会话已吊销，防登录页「已登录」回跳循环）。
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { uaCode } from "../utils/uaDevice";
+import { useAuthStore } from "../stores/auth";
 
 export type SseHandler = (data: any) => void;
 
@@ -20,6 +23,8 @@ export function useSse(handlers: Record<string, SseHandler>) {
   let probing = false;
   let evictedHandled = false;
   const router = useRouter();
+  const route = useRoute();
+  const auth = useAuthStore();
 
   function handleEvicted() {
     if (evictedHandled) return;
@@ -27,7 +32,9 @@ export function useSse(handlers: Record<string, SseHandler>) {
     if (es) { es.close(); es = null; }
     try { ElMessageBox.close(); } catch { /* 无打开的对话框 */ } // 踢出时工作区可能开着确认/输入框（如「新建会话」），随跳转一并清掉
     ElMessage.warning("您已被管理员下线");
-    router.replace("/");
+    // P8.38：跳登录页而非首页——?next=当前页（登录成功回原页）；先清本地主体（会话已吊销）
+    auth.clearAuthed();
+    router.replace("/login?next=" + encodeURIComponent(route.fullPath));
   }
   // P8.33：连接断开后探针（EventSource 拿不到 HTTP 状态码；探针回答「是否处于踢出冷却」）
   function probeEvicted() {

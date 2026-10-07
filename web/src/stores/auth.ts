@@ -57,6 +57,12 @@ export const useAuthStore = defineStore("auth", {
       this.principal = null;
       this.anonymous = true;
       return r;
+    },
+    // P8.38：被踢出后清空本地主体（会话已服务端吊销，不再调登出接口；
+    // 防止登录页「已登录」误判回跳原页造成踢出循环）
+    clearAuthed() {
+      this.principal = null;
+      this.anonymous = true;
     }
   }
 });
