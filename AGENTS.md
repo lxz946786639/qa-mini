@@ -124,7 +124,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  匿名恒放行（无凭证 = 匿名主体，首屏与问答恒公开）；显式携带的凭证无效仍 403（principal 不匿名
                  回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
                  security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
-                 /login 首启表单同源组件)/Login(P7.1 首启引导)；
+                 /login 首启表单同源组件)/Login(P7.1 首启引导；P8.46 登录页双页签「访问码/账号登录」：访问码在前（默认显示）、账号登录第二)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
                  utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）

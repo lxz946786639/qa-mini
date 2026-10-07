@@ -14,7 +14,7 @@ const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 
-const tab = ref("user");
+const tab = ref("code");
 const username = ref("");
 const password = ref("");
 const code = ref("");
@@ -106,6 +106,18 @@ onMounted(async () => {
       <template v-else-if="adminSet === true">
         <h2>登录</h2>
         <el-tabs v-model="tab">
+        <el-tab-pane label="访问码" name="code">
+          <el-form label-position="top" @submit.prevent="submitCode">
+            <el-form-item label="6 位访问码">
+              <el-input
+                v-model="code"
+                placeholder="如 123456"
+                maxlength="6"
+                @keyup.enter="submitCode"
+              />
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
         <el-tab-pane label="账号登录" name="user">
           <el-form label-position="top" @submit.prevent="submitUser">
             <el-form-item label="用户名">
@@ -119,18 +131,6 @@ onMounted(async () => {
                 autocomplete="current-password"
                 show-password
                 @keyup.enter="submitUser"
-              />
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-        <el-tab-pane label="访问码" name="code">
-          <el-form label-position="top" @submit.prevent="submitCode">
-            <el-form-item label="6 位访问码">
-              <el-input
-                v-model="code"
-                placeholder="如 123456"
-                maxlength="6"
-                @keyup.enter="submitCode"
               />
             </el-form-item>
           </el-form>
