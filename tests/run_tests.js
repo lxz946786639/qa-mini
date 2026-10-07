@@ -2124,6 +2124,60 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
   });
 
+  await test("p8.40: 主体权限范围（访问码/用户限定智能体；管理员恒全量；空范围 = 全部）", async () => {
+    // 两个智能体：种子 industry-brain + 新建 p840-b
+    const listA = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents;
+    const brain = listA.find((a) => a.code === "industry-brain");
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p840-b", name: "P8.40 权限范围体", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
+    const b2 = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((a) => a.code === "p840-b");
+    assert.ok(brain && b2, "两个智能体齐备");
+    // 访问码：默认（未设范围）= 允许全部
+    const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "777123", hours: 1 }, adminTok);
+    assert.strictEqual(gen.status, 201, gen.data && gen.data.detail);
+    const codeJar = makeJar();
+    const cl = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "777123" });
+    assert.strictEqual(cl.status, 200, cl.data && cl.data.detail);
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + brain.code)).status, 200, "码默认范围 = 全部（brain）");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 200, "码默认范围 = 全部（b）");
+    // 非法范围 → 400
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: "all" }, adminTok)).status, 400, "非数组 → 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: ["nope"] }, adminTok)).status, 400, "未知 agent id → 400");
+    // 限定为仅 brain
+    const sc = await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: [brain.id] }, adminTok);
+    assert.strictEqual(sc.status, 200, sc.data && sc.data.detail);
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + brain.code)).status, 200, "码范围内 → 200");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 404, "码范围外 → 404");
+    assert.strictEqual((await jarFetch(codeJar, "POST", "/api/sessions", { name: "x", agent_code: "p840-b" })).status, 403, "码范围外建会话 403");
+    // 镜像（GET /api/config）暴露 agent_scope
+    const cfg = await adminFetch("GET", "/api/config", undefined, adminTok);
+    const mirror = (cfg.data.security.access_codes || []).find((c) => c.code === "777123");
+    assert.ok(mirror && Array.isArray(mirror.agent_scope) && mirror.agent_scope.includes(brain.id), "镜像暴露 agent_scope");
+    // 清空范围 → 恢复全部
+    const sc2 = await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: [] }, adminTok);
+    assert.strictEqual(sc2.status, 200, sc2.data && sc2.data.detail);
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 200, "清空范围 → 恢复全部");
+    // 普通用户：默认全部 → 限定为仅 b → 范围外 404 / 403
+    const carol = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users.find((u) => u.username === "carol");
+    assert.ok(carol, "carol 存在（p8.8 建）");
+    const carolJar = makeJar();
+    const clg = await jarFetch(carolJar, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(clg.status, 200, clg.data && clg.data.detail);
+    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + b2.code)).status, 200, "用户默认范围 = 全部");
+    const us = await adminFetch("PATCH", "/api/admin/users/" + carol.id, { agent_scope: [b2.id] }, adminTok);
+    assert.strictEqual(us.status, 200, us.data && us.data.detail);
+    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + brain.code)).status, 404, "用户范围外 → 404");
+    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + b2.code)).status, 200, "用户范围内 → 200");
+    assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { name: "x", agent_code: "industry-brain" })).status, 403, "用户范围外建会话 403");
+    // 管理员恒全量（不受任何范围影响）
+    assert.strictEqual((await adminFetch("GET", "/api/agents/" + brain.code, undefined, adminTok)).status, 200, "admin 恒 200（brain）");
+    assert.strictEqual((await adminFetch("GET", "/api/agents/" + b2.code, undefined, adminTok)).status, 200, "admin 恒 200（b）");
+    // 恢复现场：carol 全量、删除测试码、停用测试智能体
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + carol.id, { agent_scope: [] }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/777123", undefined, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p840-b", { enabled: false }, adminTok)).status, 200);
+  });
+
   await test("p8.10: 权限与数据边界（admin 新建 → 管理员私有桶；重构前共享保持共享）", async () => {
     const users = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users;
     const adminU = users.find((u) => u.role === "admin");

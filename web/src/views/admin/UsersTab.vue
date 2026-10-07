@@ -5,11 +5,13 @@ import { onMounted, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { fmtDateTime } from "../../utils/formatTime";
 import { api } from "../../api";
+import AgentScopeDialog from "../../components/AgentScopeDialog.vue";
 
 interface U {
   id: string; username: string; display_name: string;
   role: "admin" | "user"; status: "active" | "disabled";
   created_at: string; last_login_at: string | null;
+  agent_scope?: string[] | null;
 }
 const users = ref<U[]>([]);
 const loading = ref(true);
@@ -54,6 +56,17 @@ async function resetPw(u: U) {
     await patch(u, { password: value }, "密码重置");
   } catch { /* 取消 */ }
 }
+// P8.40 权限范围（普通用户可限制可访问的智能体；管理员恒全量）
+const scopeDlg = ref(false);
+const scopeTarget = ref<U | null>(null);
+function openScope(u: U) { scopeTarget.value = u; scopeDlg.value = true; }
+async function saveScope(scope: string[]) {
+  const u = scopeTarget.value;
+  if (!u) return;
+  const r = await api("/api/admin/users/" + encodeURIComponent(u.id), { method: "PATCH", body: { agent_scope: scope } });
+  if (r.ok) { ElMessage.success("权限范围已保存"); scopeDlg.value = false; load(); }
+  else ElMessage.error(r.data.detail || "保存失败");
+}
 onMounted(load);
 </script>
 
@@ -76,17 +89,26 @@ onMounted(load);
           <el-tag :type="row.status === 'active' ? 'success' : 'danger'" size="small">{{ row.status === "active" ? "启用" : "停用" }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="权限" min-width="130">
+        <template #default="{ row }">
+          <el-tag v-if="row.role === 'admin'" type="warning" size="small">全部（管理员）</el-tag>
+          <el-tag v-else size="small" :type="row.agent_scope && row.agent_scope.length ? 'warning' : 'success'">
+            {{ row.agent_scope && row.agent_scope.length ? row.agent_scope.length + " 个智能体" : "全部" }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="创建时间" min-width="170">
         <template #default="{ row }">{{ fmtDateTime(row.created_at) || "—" }}</template>
       </el-table-column>
       <el-table-column prop="last_login_at" label="最近登录" min-width="170">
         <template #default="{ row }">{{ row.last_login_at ? fmtDateTime(row.last_login_at) : "—" }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="250" fixed="right">
+      <el-table-column label="操作" width="295" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="toggleRole(row)">{{ row.role === "admin" ? "降级" : "提权" }}</el-button>
           <el-button size="small" :type="row.status === 'active' ? 'danger' : 'success'" plain @click="toggleStatus(row)">{{ row.status === "active" ? "停用" : "启用" }}</el-button>
           <el-button size="small" @click="resetPw(row)">重置密码</el-button>
+          <el-button size="small" :disabled="row.role === 'admin'" :title="row.role === 'admin' ? '管理员可访问全部智能体' : ''" @click="openScope(row)">权限</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -114,5 +136,12 @@ onMounted(load);
         <el-button type="primary" @click="create">创建</el-button>
       </template>
     </el-dialog>
+
+    <AgentScopeDialog
+      v-model:visible="scopeDlg"
+      :title="'用户 ' + (scopeTarget ? scopeTarget.username : '') + ' · 权限范围'"
+      :scope="scopeTarget ? scopeTarget.agent_scope : null"
+      @save="saveScope"
+    />
   </div>
 </template>

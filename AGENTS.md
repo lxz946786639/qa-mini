@@ -88,7 +88,7 @@ lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI �
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
 lib/config.js    配置加载/深合并/校验 + 旧 JSON 会话兼容（存储已迁 store.js）
-lib/migrations.js v1→v2→v3→v4 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL）
+lib/migrations.js v1→v2→v3→v4→v5→v6 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
@@ -110,7 +110,10 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.28 时间展示统一 yyyy-MM-dd HH:mm:ss（utils/formatTime.ts）；
                  P8.31 侧栏收起对齐会话列表（Fold/Expand 移入品牌行，收起 = 44px 图标窄轨）；
                  P8.32 UI 文案「落地页」统一更名「首屏」，返回符号统一 EP Back 图标；
-                 P8.36 智能体管理「操作」栏：启用智能体提供「进入」快捷入口（直达该智能体工作区 /agents/<code>））；
+                 P8.36 智能体管理「操作」栏：启用智能体提供「进入」快捷入口（直达该智能体工作区 /agents/<code>）；
+                 P8.40 用户管理/访问码「权限范围」（共享组件 components/AgentScopeDialog.vue：允许全部 /
+                 仅以下智能体多选 agent id；列表「权限」列徽标；管理员恒全量且按钮禁用；PATCH /api/admin/users/:id
+                 与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；

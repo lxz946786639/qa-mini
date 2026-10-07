@@ -177,6 +177,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?, count?}`（6 位；可多个，每个码独立时长，默认 8h；批量随机 1-10 个） |
 | POST | `/api/admin/access-codes/:code/renew` | 该访问码延期 `{hours?}`（默认 +8h） |
 | DELETE | `/api/admin/access-codes/:code` | 访问码一键失效（已发 token 同步吊销） |
+| PATCH | `/api/admin/access-codes/:code` | **P8.40 权限范围** `{agent_scope: string[]}`（空数组 = 允许全部智能体；非空 = 仅列出的 agent id；范围外访问 = 404/403 门控；镜像经 `GET /api/config` 的 `security.access_codes[].agent_scope` 暴露） |
 | DELETE | `/api/admin/access-codes/expired` | 清理全部已过期码 |
 | POST | `/api/auth/login` | **P3 用户登录** `{username, password}` → 200 + `ea_sid` cookie（HttpOnly/SameSite=Lax，12h，落 DB 可吊销） |
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
@@ -185,7 +186,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET | `/api/agents` | 启用中智能体列表（首屏选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
-| PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie） |
+| PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?, agent_scope?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie；**P8.40** `agent_scope` = 权限范围 agent id 数组，空 = 全部智能体，非空 = 仅列出的智能体；管理员恒全量不受限） |
 | GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
 | PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |

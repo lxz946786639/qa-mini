@@ -5,8 +5,9 @@ import { onMounted, reactive, ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { fmtDateTime } from "../../utils/formatTime";
 import { api } from "../../api";
+import AgentScopeDialog from "../../components/AgentScopeDialog.vue";
 
-interface Code { code: string; created_at: string; expires_at: string; }
+interface Code { code: string; created_at: string; expires_at: string; agent_scope?: string[] | null; }
 const list = ref<Code[]>([]);
 const loading = ref(true);
 const form = reactive({ mode: "random" as "random" | "custom", custom: "", hours: 8, count: 1 });
@@ -56,6 +57,17 @@ async function cleanExpired() {
   if (r.ok) ElMessage.success("已清理 " + (r.data.removed || 0) + " 个过期码");
   load();
 }
+// P8.40 权限范围（允许全部 / 仅指定智能体）
+const scopeDlg = ref(false);
+const scopeTarget = ref<Code | null>(null);
+function openScope(c: Code) { scopeTarget.value = c; scopeDlg.value = true; }
+async function saveScope(scope: string[]) {
+  const c = scopeTarget.value;
+  if (!c) return;
+  const r = await api("/api/admin/access-codes/" + encodeURIComponent(c.code), { method: "PATCH", body: { agent_scope: scope } });
+  if (r.ok) { ElMessage.success(r.data.detail || "权限范围已保存"); scopeDlg.value = false; load(); }
+  else ElMessage.error(r.data.detail || "保存失败");
+}
 onMounted(load);
 </script>
 
@@ -96,12 +108,26 @@ onMounted(load);
           <el-tag v-if="expired(row)" type="danger" size="small" style="margin-left: 6px">已过期</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="权限" min-width="130">
         <template #default="{ row }">
+          <el-tag size="small" :type="row.agent_scope && row.agent_scope.length ? 'warning' : 'success'">
+            {{ row.agent_scope && row.agent_scope.length ? row.agent_scope.length + " 个智能体" : "全部" }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="210" fixed="right">
+        <template #default="{ row }">
+          <el-button size="small" @click="openScope(row)">权限</el-button>
           <el-button size="small" @click="renew(row)">延期</el-button>
           <el-button size="small" type="danger" plain @click="invalidate(row)">失效</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <AgentScopeDialog
+      v-model:visible="scopeDlg"
+      :title="'访问码 ' + (scopeTarget ? scopeTarget.code : '') + ' · 权限范围'"
+      :scope="scopeTarget ? scopeTarget.agent_scope : null"
+      @save="saveScope"
+    />
   </div>
 </template>

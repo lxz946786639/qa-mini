@@ -92,7 +92,7 @@ function createAuthService(ctx) {
         if (row.principal_type === "code") {
           const c = row.access_code_id ? store.getAccessCode(row.access_code_id) : null;
           if (c && c.status === "active" && Date.parse(c.expires_at) > Date.now()) {
-            return { kind: "code", codeId: c.id, code: c.code, sessionId: row.id };
+            return { kind: "code", codeId: c.id, code: c.code, sessionId: row.id, agentScope: c.agent_scope || null }; // P8.40 权限范围
           }
           return null; // 码已失效/过期 → 视为未认证
         }
@@ -100,7 +100,7 @@ function createAuthService(ctx) {
         if (u && u.status === "active") {
           return u.role === "admin"
             ? { kind: "admin", userId: u.id, role: "admin", sessionId: row.id }
-            : { kind: "user", userId: u.id, role: "user", sessionId: row.id };
+            : { kind: "user", userId: u.id, role: "user", sessionId: row.id, agentScope: u.agent_scope || null }; // P8.40 权限范围
         }
         return null; // 用户已禁用
       }
@@ -117,7 +117,7 @@ function createAuthService(ctx) {
       const e = accessTokens.get(t);
       if (e && Date.now() <= e.expires_at) {
         const c = findValidCode(e.code);
-        if (c) return { kind: "code", codeId: c.id, code: c.code };
+        if (c) return { kind: "code", codeId: c.id, code: c.code, agentScope: c.agent_scope || null }; // P8.40 权限范围
       }
       if (validAdminToken(t)) {
         const a = firstAdminUser();

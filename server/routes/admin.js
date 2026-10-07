@@ -7,6 +7,16 @@ const { EventBus } = require("../services/event_bus");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
 
+// P8.40 权限范围校验：agent id 数组（空 = 允许全部；null = 非法）
+function normalizeAgentScope(v, agents) {
+  if (v === null || (typeof v === "string" && v.trim() === "")) return [];
+  if (!Array.isArray(v)) return null;
+  const ids = v.filter((x) => typeof x === "string" && x !== "");
+  const known = new Set(agents.map((a) => a.id));
+  for (const id of ids) if (!known.has(id)) return null;
+  return [...new Set(ids)];
+}
+
 function register(router, ctx) {
   const admin401 = (req, urlObj, res) => {
     if (!ctx.auth.isAdmin(req, urlObj)) {
@@ -29,6 +39,10 @@ function register(router, ctx) {
   router.regex("POST", /^\/api\/admin\/access-codes\/([A-Za-z0-9]+)\/renew$/, (req, res, ctx_, urlObj, params) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
     return ctx.codes.handleRenew(req, res, params[0]);
+  });
+  router.regex("PATCH", /^\/api\/admin\/access-codes\/([A-Za-z0-9]+)$/, (req, res, ctx_, urlObj, params) => {
+    if (admin401(req, urlObj, res)) return Promise.resolve();
+    return ctx.codes.handleScope(req, res, params[0], urlObj);
   });
   router.regex("DELETE", /^\/api\/admin\/access-codes\/([A-Za-z0-9]+)$/, (req, res, ctx_, urlObj, params) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
@@ -161,7 +175,7 @@ function register(router, ctx) {
   });
 
   // ---- 用户（管理 · P3 多用户；管理员创建制）----
-  const userView = (u) => ({ id: u.id, username: u.username, display_name: u.display_name, role: u.role, status: u.status, created_at: u.created_at, last_login_at: u.last_login_at || null });
+  const userView = (u) => ({ id: u.id, username: u.username, display_name: u.display_name, role: u.role, status: u.status, created_at: u.created_at, last_login_at: u.last_login_at || null, agent_scope: u.agent_scope || null });
   const actorId = (req, urlObj) => { const p = ctx.auth.principal(req, urlObj); return p && p.userId ? p.userId : null; };
 
   router.exact("GET", "/api/admin/users", (req, res, ctx_, urlObj) => {
@@ -213,7 +227,12 @@ function register(router, ctx) {
       if (pw.length < 4 || pw.length > 64) return sendJSON(res, 400, { ok: false, detail: "密码需 4-64 位字符" });
       patch.password_hash = hashPassword(pw); changed.password = "••••";
     }
-    if (!Object.keys(patch).length) return sendJSON(res, 400, { ok: false, detail: "无有效字段（display_name/role/status/password）" });
+    if (body.agent_scope !== undefined) { // P8.40 用户权限范围（管理员恒全量可用，范围仅记录）
+      const ids = normalizeAgentScope(body.agent_scope, ctx.store.listAgents({}));
+      if (ids === null) return sendJSON(res, 400, { ok: false, detail: "agent_scope 需为 agent id 数组（空数组 = 允许全部）" });
+      patch.agent_scope = ids; changed.agent_scope = ids.length ? ids.length + " 个智能体" : "全部";
+    }
+    if (!Object.keys(patch).length) return sendJSON(res, 400, { ok: false, detail: "无有效字段（display_name/role/status/password/agent_scope）" });
     // 守护：不得移除最后一个 active 管理员
     if (u.role === "admin" && u.status === "active" && ((patch.role && patch.role !== "admin") || (patch.status && patch.status !== "active"))) {
       const activeAdmins = ctx.store.listUsers().filter((x) => x.role === "admin" && x.status === "active").length;

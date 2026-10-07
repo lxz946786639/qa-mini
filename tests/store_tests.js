@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 5, "user_version（P8.29 起 v5）");
+      eq(v, 6, "user_version（P8.40 起 v6）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -272,7 +272,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "v5");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "v6");
       eq(store.listSessions({}).length, 1, "会话保留");
     });
     store.close();
@@ -295,7 +295,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v2 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "版本 5");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "版本 6");
       const brain = store.getAgentByCode("industry-brain");
       eq(brain.allow_user, true, "补列默认 = 允许");
       eq(brain.allow_anon, true, "allow_anon 不变");
@@ -330,7 +330,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v3 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 5, "版本 5");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 6, "版本 6");
       eq(store.getSession("0fd50fcc").access_mode, "user", "切换点后管理员新建 → 私有桶");
       eq(store.getSession("8b14dd80").access_mode, "shared", "重构前会话保持共享");
       eq(store.getSession("6402e6ea").access_mode, "shared", "user_id=NULL 新建保持共享（无可归属）");

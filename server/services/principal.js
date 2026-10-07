@@ -40,17 +40,24 @@ function canCreate(principal, mode) {
 }
 
 // P8.8 智能体级访问控制：主体能否使用该智能体（agent = store.getAgent()，含 allow_* 三列）。
-//   admin —— 恒允许（管理台始终可管可用）
+//   admin —— 恒允许（管理台始终可管可用；P8.40 起也不受权限范围约束）
 //   anon  —— allow_anon（allow_anonymous=false 时主体为 null，同样按此列）
-//   user  —— allow_anon || allow_user（匿名放行时一切访问方式天然可用，超集语义）
-//   code  —— allow_anon || allow_code（同上）
+//   user  —— (allow_anon || allow_user) && 权限范围命中（超集语义）
+//   code  —— (allow_anon || allow_code) && 权限范围命中（同上）
+// P8.40 权限范围（principal.agentScope = 主体行的 agent_scope 解析值）：
+//   null/空数组 = 允许全部（未设置范围的行为与 P8.8 完全一致）；
+//   非空 = 仅列出的 agent id 可用（与 allow_* 开关取交集）。
+function scopeAllows(scope, agentId) {
+  if (!scope || !scope.length) return true;
+  return scope.indexOf(agentId) !== -1;
+}
 function agentAllows(principal, agent) {
   if (!agent) return false;
   if (!principal) return agent.allow_anon === true;
   if (principal.kind === "admin") return true;
   if (principal.kind === "anon") return agent.allow_anon === true;
-  if (principal.kind === "user") return agent.allow_anon === true || agent.allow_user === true;
-  if (principal.kind === "code") return agent.allow_anon === true || agent.allow_code === true;
+  if (principal.kind === "user") return (agent.allow_anon === true || agent.allow_user === true) && scopeAllows(principal.agentScope, agent.id);
+  if (principal.kind === "code") return (agent.allow_anon === true || agent.allow_code === true) && scopeAllows(principal.agentScope, agent.id);
   return false;
 }
 
@@ -71,4 +78,4 @@ function bucketFor(principal, legacy) {
   return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: legacy ? legacy.agentId : null, access_code_id: null };
 }
 
-module.exports = { canView, canCreate, bucketFor, agentAllows };
+module.exports = { canView, canCreate, bucketFor, agentAllows, scopeAllows };
