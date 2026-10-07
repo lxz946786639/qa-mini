@@ -227,10 +227,14 @@ function register(router, ctx) {
       if (pw.length < 4 || pw.length > 64) return sendJSON(res, 400, { ok: false, detail: "密码需 4-64 位字符" });
       patch.password_hash = hashPassword(pw); changed.password = "••••";
     }
-    if (body.agent_scope !== undefined) { // P8.40 用户权限范围（管理员恒全量可用，范围仅记录）
-      const ids = normalizeAgentScope(body.agent_scope, ctx.store.listAgents({}));
-      if (ids === null) return sendJSON(res, 400, { ok: false, detail: "agent_scope 需为 agent id 数组（空数组 = 允许全部）" });
-      patch.agent_scope = ids; changed.agent_scope = ids.length ? ids.length + " 个智能体" : "全部";
+    if (body.agent_scope !== undefined) { // P8.40/P8.51 用户权限范围三态（管理员恒全量可用，范围仅记录）
+      if (body.agent_scope === null) { // null = 不允许任何智能体（最小权限）
+        patch.agent_scope = null; changed.agent_scope = "无（最小权限）";
+      } else {
+        const ids = normalizeAgentScope(body.agent_scope, ctx.store.listAgents({}));
+        if (ids === null) return sendJSON(res, 400, { ok: false, detail: "agent_scope 需为 agent id 数组（空数组 = 允许全部；null = 不允许任何）" });
+        patch.agent_scope = ids; changed.agent_scope = ids.length ? ids.length + " 个智能体" : "全部";
+      }
     }
     if (!Object.keys(patch).length) return sendJSON(res, 400, { ok: false, detail: "无有效字段（display_name/role/status/password/agent_scope）" });
     // 守护：不得移除最后一个 active 管理员

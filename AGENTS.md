@@ -133,7 +133,10 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.36 智能体管理「操作」栏：启用智能体提供「进入」快捷入口（直达该智能体工作区 /agents/<code>）；
                  P8.40 用户管理/访问码「权限范围」（共享组件 components/AgentScopeDialog.vue：允许全部 /
                  仅以下智能体多选 agent id；列表「权限」列徽标；管理员恒全量且按钮禁用；PATCH /api/admin/users/:id
-                 与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）；
+                 与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）+ P8.51 权限范围三态 + 最小权限
+                 默认（agent_scope：'' = 全部 / '[]' = 无（最小权限）/ '[ids]' = 仅列出；新建用户/访问码默认
+                 「无」，创建后前端自动弹出 AgentScopeDialog（三态单选 + 多选）引导分配；PATCH agent_scope 增
+                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）；
                  P8.41 系统设置布局重构：三类配置（协议全局默认 / 语音输入 ASR / 访问控制）改 el-tabs
                  分类页签切换（各 tab 独立保存）；
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，

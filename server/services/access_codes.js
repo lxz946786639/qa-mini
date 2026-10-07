@@ -50,7 +50,7 @@ function createAccessCodeService(ctx, authService) {
       if (!/^\d{6}$/.test(code)) return sendJSON(res, 400, { ok: false, detail: "自定义访问码必须为 6 位数字" });
       if (store.hasAccessCodeCode(code)) return sendJSON(res, 409, { ok: false, detail: "该访问码已存在（未过期）" });
       const c = store.createAccessCode({ code, expiresAt: new Date(Date.now() + hours * 3600e3).toISOString(), createdBy: admin ? admin.id : null });
-      entries.push({ code: c.code, created_at: c.created_at, expires_at: c.expires_at });
+      entries.push({ code: c.code, created_at: c.created_at, expires_at: c.expires_at, agent_scope: c.agent_scope === null ? null : c.agent_scope });
     } else {
       let count = typeof body.count === "number" ? Math.floor(body.count) : 1;
       count = Math.max(1, Math.min(count, 10));
@@ -60,7 +60,7 @@ function createAccessCodeService(ctx, authService) {
         if (taken.has(code)) continue;
         taken.add(code);
         const c = store.createAccessCode({ code, expiresAt: new Date(Date.now() + hours * 3600e3).toISOString(), createdBy: admin ? admin.id : null });
-        entries.push({ code: c.code, created_at: c.created_at, expires_at: c.expires_at });
+        entries.push({ code: c.code, created_at: c.created_at, expires_at: c.expires_at, agent_scope: c.agent_scope === null ? null : c.agent_scope });
       }
     }
     refreshMirror();
@@ -88,15 +88,22 @@ function createAccessCodeService(ctx, authService) {
     catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
     if (typeof body !== "object" || body === null || Array.isArray(body)) return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
     if (body.agent_scope === undefined) return sendJSON(res, 400, { ok: false, detail: "无有效字段（agent_scope）" });
-    const ids = normalizeAgentScope(body.agent_scope, store.listAgents({}));
-    if (ids === null) return sendJSON(res, 400, { ok: false, detail: "agent_scope 需为 agent id 数组（空数组 = 允许全部）" });
+    // P8.40/P8.51 三态：空数组 = 允许全部；null = 不允许任何（最小权限）；[ids] = 仅列出
+    let scopeVal;
+    if (body.agent_scope === null) scopeVal = null;
+    else {
+      const ids = normalizeAgentScope(body.agent_scope, store.listAgents({}));
+      if (ids === null) return sendJSON(res, 400, { ok: false, detail: "agent_scope 需为 agent id 数组（空数组 = 允许全部；null = 不允许任何）" });
+      scopeVal = ids;
+    }
     const cur = store.getAccessCodeByCode(code);
     if (!cur) return sendJSON(res, 404, { ok: false, detail: "访问码不存在" });
-    const c = store.updateAccessCode(cur.id, { agent_scope: ids });
+    const c = store.updateAccessCode(cur.id, { agent_scope: scopeVal });
     refreshMirror();
     const p = ctx.auth ? ctx.auth.principal(req, urlObj) : null;
-    store.insertAudit({ actorType: "admin", actorId: p && p.userId ? p.userId : null, action: "access_code.scope", targetType: "access_code", targetId: cur.id, detail: { code, agent_scope: ids }, ip: ipOf(req), userAgent: uaOf(req) });
-    return sendJSON(res, 200, { ok: true, entry: { code: c.code, agent_scope: c.agent_scope || null }, detail: ids.length ? "权限范围已更新（" + ids.length + " 个智能体）" : "已允许全部智能体" });
+    store.insertAudit({ actorType: "admin", actorId: p && p.userId ? p.userId : null, action: "access_code.scope", targetType: "access_code", targetId: cur.id, detail: { code, agent_scope: scopeVal }, ip: ipOf(req), userAgent: uaOf(req) });
+    const detail = scopeVal === null ? "已设为不允许任何智能体（最小权限）" : Array.isArray(scopeVal) && !scopeVal.length ? "已允许全部智能体" : "权限范围已更新（" + scopeVal.length + " 个智能体）";
+    return sendJSON(res, 200, { ok: true, entry: { code: c.code, agent_scope: c.agent_scope === null ? null : c.agent_scope }, detail });
   }
 
   // ---- DELETE /api/admin/access-codes/expired：清理全部过期码（管理）----

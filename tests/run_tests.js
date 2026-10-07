@@ -1596,6 +1596,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "123456", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201);
     assert.strictEqual(gen.data.entry.code, "123456");
+    assert.deepStrictEqual(gen.data.entry.agent_scope, [], "P8.51 新码默认权限范围 = 无（最小权限）");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/123456", { agent_scope: [] }, adminTok)).status, 200, "P8.51 显式放行全部（本段后续断言用）");
     const lg = await api("POST", "/api/access/login", { code: "123456" });
     assert.strictEqual(lg.status, 200);
     accessTok = lg.data.token;
@@ -1928,6 +1930,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const u1 = await adminFetch("POST", "/api/admin/users", { username: "alice", password: "alicepw1", display_name: "爱丽丝", role: "user" }, adminTok);
     assert.strictEqual(u1.status, 201, u1.data && u1.data.detail);
     assert.strictEqual(u1.data.user.role, "user");
+    assert.deepStrictEqual(u1.data.user.agent_scope, [], "P8.51 新用户默认权限范围 = 无（最小权限）");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + u1.data.user.id, { agent_scope: [] }, adminTok)).status, 200, "P8.51 alice 显式放行全部（后续私有桶断言用）");
     assert.strictEqual((await adminFetch("POST", "/api/admin/users", { username: "alice", password: "alicepw1" }, adminTok)).status, 409, "重名 409");
     const users = await adminFetch("GET", "/api/admin/users", undefined, adminTok);
     assert.ok(users.data.users.some((x) => x.username === "alice"));
@@ -2010,6 +2014,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   await test("p3: 访问码私有桶（access_code_id, agent_id）", async () => {
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "666667", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/666667", { agent_scope: [] }, adminTok)).status, 200, "P8.51 新码默认最小权限 → 显式放行全部");
     // P8.44：遗留 /api/access/login 无匿名捷径——统一校验码、签发访问 token + cookie；
     // 码主体 cookie 亦可走新端点 /api/auth/access-code
     const legacy = await api("POST", "/api/access/login", { code: "666667" });
@@ -2103,6 +2108,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // user 主体被拒
     const u1 = await adminFetch("POST", "/api/admin/users", { username: "carol", password: "carolpw1" }, adminTok);
     assert.strictEqual(u1.status, 201, u1.data && u1.data.detail);
+    assert.deepStrictEqual(u1.data.user.agent_scope, [], "P8.51 新用户默认权限范围 = 无（最小权限）");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + u1.data.user.id, { agent_scope: [] }, adminTok)).status, 200, "P8.51 carol 显式放行全部");
     const carolJar = makeJar();
     const lg = await jarFetch(carolJar, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
     assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
@@ -2110,6 +2117,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // code 主体放行 → 码私有桶
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "888888", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201, gen.data && gen.data.detail);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/888888", { agent_scope: [] }, adminTok)).status, 200, "P8.51 新码默认最小权限 → 显式放行全部");
     const code2 = makeJar();
     const cl = await jarFetch(code2, "POST", "/api/auth/access-code", { code: "888888" });
     assert.strictEqual(cl.status, 200, cl.data && cl.data.detail);
@@ -2138,7 +2146,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
   });
 
-  await test("p8.40: 主体权限范围（访问码/用户限定智能体；管理员恒全量；空范围 = 全部）", async () => {
+  await test("p8.40/P8.51: 主体权限范围三态（新建默认最小权限「无」；全部 / 仅指定 / 无；管理员恒全量）", async () => {
     // 两个智能体：种子 industry-brain + 新建 p840-b
     const listA = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents;
     const brain = listA.find((a) => a.code === "industry-brain");
@@ -2146,14 +2154,16 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
     const b2 = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((a) => a.code === "p840-b");
     assert.ok(brain && b2, "两个智能体齐备");
-    // 访问码：默认（未设范围）= 允许全部
+    // 访问码：P8.51 新建默认 = 最小权限（不允许任何智能体）
     const gen = await adminFetch("POST", "/api/admin/access-codes", { code: "777123", hours: 1 }, adminTok);
     assert.strictEqual(gen.status, 201, gen.data && gen.data.detail);
+    assert.deepStrictEqual(gen.data.entry.agent_scope, [], "新码默认权限范围 = 无（最小权限）");
     const codeJar = makeJar();
     const cl = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "777123" });
     assert.strictEqual(cl.status, 200, cl.data && cl.data.detail);
-    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + brain.code)).status, 200, "码默认范围 = 全部（brain）");
-    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 200, "码默认范围 = 全部（b）");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + brain.code)).status, 404, "码默认「无」→ brain 404");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 404, "码默认「无」→ b 404");
+    assert.strictEqual((await jarFetch(codeJar, "POST", "/api/sessions", { name: "x", agent_code: "industry-brain" })).status, 403, "码默认「无」建会话 403");
     // 非法范围 → 400
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: "all" }, adminTok)).status, 400, "非数组 → 400");
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: ["nope"] }, adminTok)).status, 400, "未知 agent id → 400");
@@ -2167,22 +2177,38 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const cfg = await adminFetch("GET", "/api/config", undefined, adminTok);
     const mirror = (cfg.data.security.access_codes || []).find((c) => c.code === "777123");
     assert.ok(mirror && Array.isArray(mirror.agent_scope) && mirror.agent_scope.includes(brain.id), "镜像暴露 agent_scope");
-    // 清空范围 → 恢复全部
+    // 空数组 → 允许全部
     const sc2 = await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: [] }, adminTok);
     assert.strictEqual(sc2.status, 200, sc2.data && sc2.data.detail);
-    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 200, "清空范围 → 恢复全部");
-    // 普通用户：默认全部 → 限定为仅 b → 范围外 404 / 403
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + b2.code)).status, 200, "空数组 → 允许全部");
+    // null → 无（最小权限，P8.51）
+    const sc3 = await adminFetch("PATCH", "/api/admin/access-codes/777123", { agent_scope: null }, adminTok);
+    assert.strictEqual(sc3.status, 200, "null = 无 被接受");
+    assert.strictEqual((await jarFetch(codeJar, "GET", "/api/agents/" + brain.code)).status, 404, "null → 不允许任何智能体");
+    // 普通用户：carol（p8.8 已显式放行全部）做限定断言
     const carol = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users.find((u) => u.username === "carol");
     assert.ok(carol, "carol 存在（p8.8 建）");
     const carolJar = makeJar();
     const clg = await jarFetch(carolJar, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
     assert.strictEqual(clg.status, 200, clg.data && clg.data.detail);
-    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + b2.code)).status, 200, "用户默认范围 = 全部");
+    assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + b2.code)).status, 200, "carol 已放行全部（p8.8）");
     const us = await adminFetch("PATCH", "/api/admin/users/" + carol.id, { agent_scope: [b2.id] }, adminTok);
     assert.strictEqual(us.status, 200, us.data && us.data.detail);
     assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + brain.code)).status, 404, "用户范围外 → 404");
     assert.strictEqual((await jarFetch(carolJar, "GET", "/api/agents/" + b2.code)).status, 200, "用户范围内 → 200");
     assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { name: "x", agent_code: "industry-brain" })).status, 403, "用户范围外建会话 403");
+    // P8.51：新建用户默认 = 无（最小权限）→ 404/403；放行后生效
+    const dn = await adminFetch("POST", "/api/admin/users", { username: "dana", password: "danapw123" }, adminTok);
+    assert.strictEqual(dn.status, 201, dn.data && dn.data.detail);
+    assert.deepStrictEqual(dn.data.user.agent_scope, [], "新用户默认权限范围 = 无（最小权限）");
+    const danaJar = makeJar();
+    assert.strictEqual((await jarFetch(danaJar, "POST", "/api/auth/login", { username: "dana", password: "danapw123" })).status, 200, "dana 登录");
+    assert.strictEqual((await jarFetch(danaJar, "GET", "/api/agents/" + brain.code)).status, 404, "新用户默认「无」→ 404");
+    assert.strictEqual((await jarFetch(danaJar, "POST", "/api/sessions", { name: "x", agent_code: "industry-brain" })).status, 403, "新用户默认「无」建会话 403");
+    const du = await adminFetch("PATCH", "/api/admin/users/" + dn.data.user.id, { agent_scope: [b2.id] }, adminTok);
+    assert.strictEqual(du.status, 200, "dana 限定为仅 b");
+    assert.strictEqual((await jarFetch(danaJar, "GET", "/api/agents/" + b2.code)).status, 200, "新用户放行后 → 200");
+    assert.strictEqual((await jarFetch(danaJar, "GET", "/api/agents/" + brain.code)).status, 404, "新用户范围外 → 404");
     // 管理员恒全量（不受任何范围影响）
     assert.strictEqual((await adminFetch("GET", "/api/agents/" + brain.code, undefined, adminTok)).status, 200, "admin 恒 200（brain）");
     assert.strictEqual((await adminFetch("GET", "/api/agents/" + b2.code, undefined, adminTok)).status, 200, "admin 恒 200（b）");
@@ -2522,6 +2548,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     if (mk.status === 409) mk = await adminFetch("POST", "/api/admin/access-codes", { code: "888898" }, adminTok);
     assert.ok(mk.status === 201 || mk.status === 200, "建专用码: " + (mk.data && mk.data.detail));
     const newCode = mk.data.entry && mk.data.entry.code;
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/" + newCode, { agent_scope: [] }, adminTok)).status, 200, "P8.51 专用码默认最小权限 → 显式放行全部");
     const jk = makeJar();
     const lk = await jarFetch(jk, "POST", "/api/auth/access-code", { code: newCode });
     assert.strictEqual(lk.status, 200, "码登录");

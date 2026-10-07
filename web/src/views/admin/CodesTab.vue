@@ -27,8 +27,11 @@ async function add() {
   else body.count = Number(form.count) || 1;
   const r = await api("/api/admin/access-codes", { body });
   if (r.ok) {
-    ElMessage.success(r.data.entries.length > 1 ? "已生成 " + r.data.entries.length + " 个码" : "已生成：" + (r.data.entry && r.data.entry.code));
+    const codes: string[] = (r.data.entries || []).map((x: any) => x.code);
+    if (codes.length) ElMessage.success(codes.length > 1 ? "已生成 " + codes.length + " 个码" : "已生成：" + codes[0]);
     load();
+    // P8.51 最小权限：新建码默认不允许任何智能体 → 自动弹窗引导分配
+    openScopeForCreated(codes);
   } else ElMessage.error(r.data.detail || "生成失败");
 }
 async function renew(c: Code) {
@@ -57,16 +60,46 @@ async function cleanExpired() {
   if (r.ok) ElMessage.success("已清理 " + (r.data.removed || 0) + " 个过期码");
   load();
 }
-// P8.40 权限范围（允许全部 / 仅指定智能体）
+// P8.40/P8.51 权限范围三态（全部 / 仅指定 / 无（最小权限））；创建后自动弹窗引导分配
 const scopeDlg = ref(false);
-const scopeTarget = ref<Code | null>(null);
-function openScope(c: Code) { scopeTarget.value = c; scopeDlg.value = true; }
-async function saveScope(scope: string[]) {
-  const c = scopeTarget.value;
-  if (!c) return;
-  const r = await api("/api/admin/access-codes/" + encodeURIComponent(c.code), { method: "PATCH", body: { agent_scope: scope } });
-  if (r.ok) { ElMessage.success(r.data.detail || "权限范围已保存"); scopeDlg.value = false; load(); }
-  else ElMessage.error(r.data.detail || "保存失败");
+const scopeTargets = ref<string[]>([]);
+const scopeMode = ref<"all" | "some" | "none">("all");
+const scopePicked = ref<string[]>([]);
+function scopeOf(c: Code): { mode: "all" | "some" | "none"; ids: string[] } {
+  const s = c.agent_scope;
+  if (s === null || s === undefined) return { mode: "all", ids: [] };
+  if (!s.length) return { mode: "none", ids: [] };
+  return { mode: "some", ids: [...s] };
+}
+function openScope(c: Code) {
+  const s = scopeOf(c);
+  scopeTargets.value = [c.code];
+  scopeMode.value = s.mode;
+  scopePicked.value = s.ids;
+  scopeDlg.value = true;
+}
+// P8.51：生成后自动打开权限对话框（默认最小权限 = 不允许任何智能体）
+function openScopeForCreated(codes: string[]) {
+  if (!codes.length) return;
+  scopeTargets.value = codes;
+  scopeMode.value = "none";
+  scopePicked.value = [];
+  scopeDlg.value = true;
+}
+function scopeTitle(): string {
+  return scopeTargets.value.length > 1
+    ? "新访问码（" + scopeTargets.value.length + " 个）· 权限范围"
+    : "访问码 " + (scopeTargets.value[0] || "") + " · 权限范围";
+}
+async function saveScope(v: { mode: "all" | "some" | "none"; ids: string[] }) {
+  for (const code of scopeTargets.value) {
+    const body: any = v.mode === "all" ? { agent_scope: [] } : v.mode === "none" ? { agent_scope: null } : { agent_scope: v.ids };
+    const r = await api("/api/admin/access-codes/" + encodeURIComponent(code), { method: "PATCH", body: body });
+    if (!r.ok) { ElMessage.error(r.data.detail || "保存失败（" + code + "）"); return; }
+  }
+  ElMessage.success(v.mode === "all" ? "已允许全部智能体" : v.mode === "none" ? "已设为不允许任何智能体（最小权限）" : "权限范围已更新（" + v.ids.length + " 个智能体）");
+  scopeDlg.value = false;
+  load();
 }
 onMounted(load);
 </script>
@@ -110,9 +143,9 @@ onMounted(load);
       </el-table-column>
       <el-table-column label="权限" min-width="130">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.agent_scope && row.agent_scope.length ? 'warning' : 'success'">
-            {{ row.agent_scope && row.agent_scope.length ? row.agent_scope.length + " 个智能体" : "全部" }}
-          </el-tag>
+          <el-tag v-if="row.agent_scope && row.agent_scope.length" type="warning" size="small">{{ row.agent_scope.length + " 个智能体" }}</el-tag>
+          <el-tag v-else-if="row.agent_scope" type="danger" size="small">无（最小权限）</el-tag>
+          <el-tag v-else type="success" size="small">全部</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="210" fixed="right">
@@ -125,8 +158,9 @@ onMounted(load);
     </el-table>
     <AgentScopeDialog
       v-model:visible="scopeDlg"
-      :title="'访问码 ' + (scopeTarget ? scopeTarget.code : '') + ' · 权限范围'"
-      :scope="scopeTarget ? scopeTarget.agent_scope : null"
+      :title="scopeTitle()"
+      :mode="scopeMode"
+      :picked="scopePicked"
       @save="saveScope"
     />
   </div>

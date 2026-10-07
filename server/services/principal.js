@@ -44,11 +44,12 @@ function canCreate(principal, mode) {
 //   anon  —— allow_anon（allow_anonymous=false 时主体为 null，同样按此列）
 //   user  —— (allow_anon || allow_user) && 权限范围命中（超集语义）
 //   code  —— (allow_anon || allow_code) && 权限范围命中（同上）
-// P8.40 权限范围（principal.agentScope = 主体行的 agent_scope 解析值）：
-//   null/空数组 = 允许全部（未设置范围的行为与 P8.8 完全一致）；
+// P8.40/P8.51 权限范围（principal.agentScope = 主体行的 agent_scope 解析值）：
+//   null = 允许全部（存量 '' 行为与 P8.8 完全一致）；
+//   [] = 不允许任何智能体（最小权限，P8.51 起新建主体默认）；
 //   非空 = 仅列出的 agent id 可用（与 allow_* 开关取交集）。
 function scopeAllows(scope, agentId) {
-  if (!scope || !scope.length) return true;
+  if (scope === null || scope === undefined) return true;
   return scope.indexOf(agentId) !== -1;
 }
 function agentAllows(principal, agent) {

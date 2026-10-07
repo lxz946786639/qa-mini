@@ -174,10 +174,10 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET | `/api/status` | 公开状态：`{ok, allow_anonymous（P8.44 起恒 true）, admin_set}`（无敏感信息） |
 | POST | `/api/admin/login` | 管理登录 `{password}` → 管理 token（未设密码时输入即初始化；12h；P3 起同时下发 `ea_sid` cookie） |
 | POST | `/api/access/login` | 访问码登录 `{code}` → 访问 token（24h，≤码有效期） |
-| POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?, count?}`（6 位；可多个，每个码独立时长，默认 8h；批量随机 1-10 个） |
+| POST | `/api/admin/access-codes` | 生成访问码 `{code?, hours?, count?}`（6 位；可多个，每个码独立时长，默认 8h；批量随机 1-10。**P8.51 新码默认最小权限**：不允许任何智能体，需经权限接口放行 个） |
 | POST | `/api/admin/access-codes/:code/renew` | 该访问码延期 `{hours?}`（默认 +8h） |
 | DELETE | `/api/admin/access-codes/:code` | 访问码一键失效（已发 token 同步吊销） |
-| PATCH | `/api/admin/access-codes/:code` | **P8.40 权限范围** `{agent_scope: string[]}`（空数组 = 允许全部智能体；非空 = 仅列出的 agent id；范围外访问 = 404/403 门控；镜像经 `GET /api/config` 的 `security.access_codes[].agent_scope` 暴露） |
+| PATCH | `/api/admin/access-codes/:code` | **P8.40/P8.51 权限范围三态** `{agent_scope: string[] \| null}`（空数组 = 允许全部智能体；null = 不允许任何（最小权限）；非空 = 仅列出的 agent id；范围外访问 = 404/403 门控；镜像经 `GET /api/config` 的 `security.access_codes[].agent_scope` 暴露） |
 | DELETE | `/api/admin/access-codes/expired` | 清理全部已过期码 |
 | POST | `/api/auth/login` | **P3 用户登录** `{username, password}` → 200 + `ea_sid` cookie（HttpOnly/SameSite=Lax，12h，落 DB 可吊销） |
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
@@ -185,8 +185,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
 | GET | `/api/agents` | 启用中智能体列表（首屏选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
-| GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin） |
-| PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?, agent_scope?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie；**P8.40** `agent_scope` = 权限范围 agent id 数组，空 = 全部智能体，非空 = 仅列出的智能体；管理员恒全量不受限） |
+| GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin；**P8.51 新建用户默认最小权限**：不允许任何智能体，需经 PATCH 放行） |
+| PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?, agent_scope?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie；**P8.40/P8.51** `agent_scope` = 权限范围三态：空数组 = 全部智能体、null = 不允许任何（最小权限）、非空 = 仅列出的智能体；管理员恒全量不受限） |
 | GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
 | PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
