@@ -9,9 +9,13 @@ const { PROTOCOLS, DEFAULTS, deepMerge } = require("../../lib/config");
 const { ANON_CODE } = require("../../lib/store");
 
 // 管理密码 → users 表（权威源）：
-//  非空 → 设置/激活 admin 用户密码（无则创建）；空 → 停用（adminEnabled 转 false，
-//  等价旧版「清空密码 = 管理未启用」；保留用户行与会话归属）
-function syncAdminPassword(store, security) {
+//  非空 → 设置/激活 admin 用户密码（无则创建）；
+//  空且显式提交（请求体含 security.admin_password 字段）→ 停用（adminEnabled 转 false，
+//  等价旧版「清空密码 = 管理未启用」；保留用户行与会话归属）；
+//  空且未显式提交（P8.43 修复）→ 保持不动：users 表是密码权威源，首启引导/重置密码
+//  后 config 的 admin_password 恒为空遗留字段，UI 保存系统设置从不携带该字段，
+//  无条件停用会让管理员每次保存系统设置都被锁定（本机 2026-07-22 实测触发过）。
+function syncAdminPassword(store, security, explicit) {
   const pw = security && typeof security.admin_password === "string" ? security.admin_password : "";
   const u = store.getUserByUsername("admin");
   if (pw) {
@@ -22,13 +26,13 @@ function syncAdminPassword(store, security) {
     } else {
       store.createUser({ username: "admin", passwordHash: hashPassword(pw), displayName: "管理员", role: "admin" });
     }
-  } else if (u && u.status === "active") {
+  } else if (explicit && u && u.status === "active") {
     store.updateUser(u.id, { status: "disabled" });
   }
 }
 
 // next = 已深合并的完整配置（PUT /api/config 校验后）
-function syncConfigToStore(store, next) {
+function syncConfigToStore(store, next, opts) {
   for (const p of PROTOCOLS) {
     store.setProtocolDefault(p, (next.protocols && next.protocols[p]) || {});
   }
@@ -54,7 +58,7 @@ function syncConfigToStore(store, next) {
         store.createAccessCode({ code: c.code, expiresAt: exp, createdBy: null });
       }
     }
-    syncAdminPassword(store, next.security);
+    syncAdminPassword(store, next.security, !!(opts && opts.adminPwExplicit));
   }
 }
 

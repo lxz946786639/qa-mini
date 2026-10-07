@@ -2,7 +2,7 @@
 // 管理路由（双轨期）：
 //  访问码生成/延期/清理/失效 + /api/config GET/PUT（深合并 → config.json + v2 库同步）
 const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf, uaOf } = require("../middleware");
-const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS } = require("../../lib/config");
+const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS, protocolEnabled } = require("../../lib/config");
 const { EventBus } = require("../services/event_bus");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
@@ -282,17 +282,21 @@ function register(router, ctx) {
       const a = resolveProtocolConfig(s, prev, p);
       const b = resolveProtocolConfig(s, next, p);
       const sameStr = (x, y) => String(x || "") === String(y || "");
+      // P8.43: enabled 状态翻转（停用/恢复）同样清空后端会话 ID
+      const enFlip = (a.enabled !== false) !== (b.enabled !== false);
       if (p === "ragflow" &&
-          (!sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key) || !sameStr(a.chat_id, b.chat_id))) {
+          (enFlip || !sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key) || !sameStr(a.chat_id, b.chat_id))) {
         if (s.ragflow_session_id) { s.ragflow_session_id = ""; invalidated++; }
       }
-      if (p === "dify" && (!sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key))) {
+      if (p === "dify" && (enFlip || !sameStr(a.url, b.url) || !sameStr(a.api_key, b.api_key))) {
         if (s.dify_conversation_id) { s.dify_conversation_id = ""; invalidated++; }
       }
     }
     if (invalidated) ctx.manager.save();
+    // P8.43：仅当请求体显式携带 security.admin_password 字段时执行「清空=停用」旧语义
+    const adminPwExplicit = typeof patch.security === "object" && patch.security !== null && "admin_password" in patch.security;
     try {
-      syncConfigToStore(ctx.store, next); // v2 库同步（protocol_defaults/system_configs/access_codes/admin 密码）
+      syncConfigToStore(ctx.store, next, { adminPwExplicit }); // v2 库同步（protocol_defaults/system_configs/access_codes/admin 密码）
     } catch (e) {
       console.error("[config] v2 库同步失败（已落盘 config.json）:", e && e.message || e);
     }
@@ -306,7 +310,8 @@ function register(router, ctx) {
     const cfg = ctx.store.getAgentConfig(x.id);
     const m = JSON.parse(JSON.stringify((cfg && cfg.config) || {}));
     if (m && typeof m.api_key === "string" && m.api_key) m.api_key = "…已设置";
-    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, prompt: x.prompt || "", protocol: (cfg && cfg.protocol) || "ragflow", config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
+    const proto = (cfg && cfg.protocol) || "ragflow";
+    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, prompt: x.prompt || "", protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
   };
 
   router.exact("GET", "/api/admin/agents", (req, res, ctx_, urlObj) => {
@@ -326,6 +331,8 @@ function register(router, ctx) {
     if (!name || name.length > 40) return sendJSON(res, 400, { ok: false, detail: "name 必填且 ≤40 字符" });
     const protocol = typeof body.protocol === "string" && body.protocol ? body.protocol : "ragflow";
     if (!PROTOCOLS.includes(protocol)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + protocol });
+    // P8.43: 停用协议不可用于新建智能体
+    if (!protocolEnabled(protocol, ctx.config)) return sendJSON(res, 400, { ok: false, detail: "协议 " + protocol + " 已停用，请先在「系统设置 → 协议全局默认」启用" });
     if (body.config !== undefined && (typeof body.config !== "object" || body.config === null || Array.isArray(body.config))) {
       return sendJSON(res, 400, { ok: false, detail: "config 必须是对象" });
     }
@@ -379,6 +386,7 @@ function register(router, ctx) {
     let protoChanged = false;
     if (body.protocol !== undefined) {
       if (typeof body.protocol !== "string" || !PROTOCOLS.includes(body.protocol)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + body.protocol });
+      if (!protocolEnabled(body.protocol, ctx.config)) return sendJSON(res, 400, { ok: false, detail: "协议 " + body.protocol + " 已停用，请先在「系统设置 → 协议全局默认」启用" });
       protoChanged = true; changed.protocol = body.protocol;
     }
     if (body.config !== undefined) {

@@ -5,6 +5,7 @@
 //  每智能体一个协议：agents 表无 protocol 列，协议与配置存 agent_configs（每智能体一行）。
 const { sendJSON } = require("../middleware");
 const { agentAllows } = require("../services/principal");
+const { protocolEnabled } = require("../../lib/config");
 
 function maskCfg(cfg) {
   const m = JSON.parse(JSON.stringify(cfg || {}));
@@ -14,9 +15,10 @@ function maskCfg(cfg) {
 
 function agentView(ctx, a) {
   const cfg = ctx.store.getAgentConfig(a.id);
+  const proto = (cfg && cfg.protocol) || "ragflow";
   return {
     id: a.id, code: a.code, name: a.name, description: a.description || "",
-    icon: a.icon || "", protocol: (cfg && cfg.protocol) || "ragflow", sort: a.sort,
+    icon: a.icon || "", protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), sort: a.sort,
     // P8.9：访问控制标志随公开视图下发（落地页「访问」徽标；门控仍在入口端点）
     allow_anon: a.allow_anon === true, allow_code: a.allow_code === true, allow_user: a.allow_user === true
   };

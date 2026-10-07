@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 151 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 155 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 42 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
@@ -87,7 +87,7 @@ server/          服务端模块化（P2）：app.js 启动装配 / context.js �
 lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 EchoScribe 同源）
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
-lib/config.js    配置加载/深合并/校验 + 旧 JSON 会话兼容（存储已迁 store.js）
+lib/config.js    配置加载/深合并/校验 + protocolEnabled（P8.43 全局协议启用状态）+ 旧 JSON 会话兼容（存储已迁 store.js）
 lib/migrations.js v1→v2→v3→v4→v5→v6 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围）
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
@@ -113,7 +113,13 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  P8.36 智能体管理「操作」栏：启用智能体提供「进入」快捷入口（直达该智能体工作区 /agents/<code>）；
                  P8.40 用户管理/访问码「权限范围」（共享组件 components/AgentScopeDialog.vue：允许全部 /
                  仅以下智能体多选 agent id；列表「权限」列徽标；管理员恒全量且按钮禁用；PATCH /api/admin/users/:id
-                 与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope））；
+                 与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）；
+                 P8.41 系统设置布局重构：三类配置（协议全局默认 / 语音输入 ASR / 访问控制）改 el-tabs
+                 分类页签切换（各 tab 独立保存）；
+                 P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，
+                 缺省启用）；停用协议 → 智能体管理列表「协议」列红色「已停用」标签 + 新建对话框协议下拉
+                 禁用该选项（加「（已停用）」后缀）+ 编辑停用协议智能体显示警示条；提问被拒（400「已停用」）、
+                 新建/改选停用协议 400；PUT /api/config 显式清空管理密码才停用 admin（UI 保存不携带该字段））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导)；
                  components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
@@ -130,7 +136,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 151 项断言全绿
+npm test                                        # 155 项断言全绿
 node tests/store_tests.js                       # 42 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；

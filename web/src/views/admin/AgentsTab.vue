@@ -12,6 +12,7 @@ interface Agent {
   id: string; code: string; name: string; description: string; icon: string;
   enabled: boolean; sort: number; prompt: string; protocol: string; config: Record<string, any>;
   allow_anon: boolean; allow_code: boolean; allow_user: boolean; // P8.8 访问控制
+  protocol_enabled?: boolean; // P8.43 该智能体协议是否全局启用
 }
 const PROTOCOLS = [
   { value: "ragflow", label: "知识引擎（RAGFlow）" },
@@ -45,6 +46,8 @@ const CFG_FIELDS: Record<string, { key: string; label: string; secret?: boolean 
 const router = useRouter();
 const agents = ref<Agent[]>([]);
 const loading = ref(true);
+// P8.43：全局协议启用状态（GET /api/config；=== false = 停用）
+const protoState = ref<Record<string, boolean>>({});
 const dialog = ref(false);
 const editing = ref<string | null>(null); // code 或 null=新建
 const atTab = ref("basic"); // P8.8 对话框 tab（基本/协议/安全）
@@ -64,6 +67,12 @@ async function load() {
   loading.value = true;
   const { ok, data } = await api<{ agents?: Agent[] }>("/api/admin/agents");
   if (ok) agents.value = (data.agents || []).slice().sort((a, b) => a.sort - b.sort || a.code.localeCompare(b.code));
+  const cfg = await api<{ protocols?: Record<string, { enabled?: boolean }> }>("/api/config"); // P8.43
+  if (cfg.ok && cfg.data.protocols) {
+    const st: Record<string, boolean> = {};
+    for (const k of Object.keys(cfg.data.protocols)) st[k] = cfg.data.protocols[k].enabled !== false;
+    protoState.value = st;
+  }
   loading.value = false;
 }
 function openCreate() {
@@ -140,9 +149,10 @@ onMounted(load);
           <div class="sub">{{ row.code }}</div>
         </template>
       </el-table-column>
-      <el-table-column label="协议" min-width="120">
+      <el-table-column label="协议" min-width="130">
         <template #default="{ row }">
           <el-tag size="small" effect="plain">{{ row.protocol }}</el-tag>
+          <el-tag v-if="row.protocol_enabled === false" size="small" type="danger" effect="plain">已停用</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="访问" min-width="130">
@@ -207,9 +217,21 @@ onMounted(load);
           <el-form label-position="top">
             <el-form-item label="协议（每智能体一个）">
               <el-select v-model="form.protocol" :disabled="!!editing">
-                <el-option v-for="p in PROTOCOLS" :key="p.value" :label="p.label" :value="p.value" />
+                <el-option
+                  v-for="p in PROTOCOLS"
+                  :key="p.value"
+                  :label="p.label + (protoState[p.value] === false ? '（已停用）' : '')"
+                  :value="p.value"
+                  :disabled="protoState[p.value] === false"
+                />
               </el-select>
             </el-form-item>
+            <el-alert
+              v-if="editing && protoState[form.protocol] === false"
+              type="warning" :closable="false" show-icon style="margin-bottom: 12px"
+              title="当前协议已停用"
+              description="该智能体的提问会被拒绝，直到在「系统设置 → 协议全局默认」重新启用该协议。"
+            />
             <template v-for="f in fields" :key="f.key">
               <el-form-item :label="f.label + '（留空 = 回退全局默认' + (f.key === 'api_key' && editing ? '；已设置项不回显）' : '）')">
                 <el-input v-model="form.config[f.key]" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" />

@@ -2178,6 +2178,47 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p840-b", { enabled: false }, adminTok)).status, 200);
   });
 
+  await test("p8.43: 协议启用状态（停用协议 → 智能体管理端同步标注 + 提问拒绝 + 新建/改选被拒）", async () => {
+    const gMock = "http://127.0.0.1:" + PORTS.generic + "/ask";
+    // generic 智能体（指向 mock generic 后端）→ 停用前提问正常
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p843-a", name: "P8.43 协议停用体", protocol: "generic", config: { url: gMock, api_key: "", body: JSON.stringify({ q: "{question}" }) } }, adminTok);
+    assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
+    const s1 = await adminFetch("POST", "/api/sessions", { name: "p843", agent_code: "p843-a", protocol: "generic" }, adminTok); // 会话协议 = 智能体协议（与前端 Workspace 一致）
+    assert.strictEqual(s1.status, 201, s1.data && s1.data.detail);
+    const t1 = s1.data.session.token;
+    const ok1 = await api("POST", "/api/push?sync=true", { token: t1, text: "hello p843" });
+    assert.strictEqual(ok1.status, 200, "停用前提问正常: " + (ok1.data && ok1.data.detail));
+    assert.ok(ok1.data && ok1.data.ok === true, "停用前 mock 正常应答");
+    // 停用 generic 协议
+    const dis = await adminFetch("PUT", "/api/config", { protocols: { generic: { enabled: false } } }, adminTok);
+    assert.strictEqual(dis.status, 200, dis.data && dis.data.detail);
+    assert.strictEqual((await adminFetch("GET", "/api/config", undefined, adminTok)).data.protocols.generic.enabled, false, "配置回显 enabled=false");
+    // P8.43 修复：保存（不携带 security.admin_password 的）协议配置不得停用 admin 用户（users 表为密码权威源）
+    assert.strictEqual((await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users.find((x) => x.username === "admin").status, "active", "保存协议配置不停用 admin 用户");
+    // 管理端同步：管理列表 + 公开列表 protocol_enabled=false
+    assert.strictEqual((await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((x) => x.code === "p843-a").protocol_enabled, false, "管理列表协议已停用标注");
+    assert.strictEqual((await api("GET", "/api/agents")).data.agents.find((x) => x.code === "p843-a").protocol_enabled, false, "公开列表协议已停用标注");
+    // 停用协议新建智能体 → 400
+    const mk2 = await adminFetch("POST", "/api/admin/agents", { code: "p843-b", name: "B", protocol: "generic" }, adminTok);
+    assert.strictEqual(mk2.status, 400, "停用协议新建智能体 → 400");
+    assert.ok(String((mk2.data && mk2.data.detail) || "").includes("已停用"), "错误文案注明已停用");
+    // 提问被拒
+    const dis2 = await api("POST", "/api/push?sync=true", { token: t1, text: "停用后" });
+    assert.strictEqual(dis2.status, 400, "停用后提问 → 400");
+    assert.ok(String((dis2.data && dis2.data.detail) || "").includes("已停用"), "拒绝文案注明协议已停用");
+    // 重新启用 → 全面恢复
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { generic: { enabled: true } } }, adminTok)).status, 200, "重新启用");
+    assert.strictEqual((await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((x) => x.code === "p843-a").protocol_enabled, true, "重新启用 → 标注恢复");
+    const ok2 = await api("POST", "/api/push?sync=true", { token: t1, text: "hello again" });
+    assert.strictEqual(ok2.status, 200, "重新启用后提问正常");
+    assert.ok(ok2.data && ok2.data.ok === true, "重新启用后 mock 正常应答");
+    // 清理：删测试会话 + 停用测试智能体
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + s1.data.session.id, undefined, adminTok)).status, 200, "删除测试会话");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p843-a", { enabled: false }, adminTok)).status, 200, "停用测试智能体");
+  });
+
+
+
   await test("p8.10: 权限与数据边界（admin 新建 → 管理员私有桶；重构前共享保持共享）", async () => {
     const users = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users;
     const adminU = users.find((u) => u.role === "admin");

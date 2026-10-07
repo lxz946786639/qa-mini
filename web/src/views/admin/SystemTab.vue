@@ -2,6 +2,9 @@
 // 系统设置（P7：移植自旧前端「⚙ 设置」抽屉，仅 admin 控制台可达）
 // 协议全局默认（config.protocols）/ 语音输入 ASR（config.asr + /api/asr/test 草稿探测）/
 // 访问控制（security.allow_anonymous）。PUT /api/config 深合并：清空字段保存 = 清除该字段。
+// P8.41 布局重构：三类配置改为 el-tabs 分类页签切换（各自独立保存）。
+// P8.43 协议启用状态：每协议卡片「启用协议」开关（config.protocols.<p>.enabled，
+// 缺省 = 启用；停用后该协议智能体提问被拒，智能体管理端同步标注「已停用」）。
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../../api";
@@ -14,6 +17,8 @@ const form = reactive({
   asr: { url: "", api_key: "", model: "", language: "", timeout: 60 },
   allow_anonymous: true
 });
+// P8.43：协议启用状态（全局；protoEnabled[p] !== false = 启用）
+const protoEnabled = reactive<Record<string, boolean>>({ openai: true, dify: true, generic: true, ragflow: true });
 
 const PROTO_NAMES: Record<string, string> = {
   openai: "OpenAI 兼容",
@@ -47,6 +52,7 @@ const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret
 function protoVal(p: string, k: string) { return String(form.protocols[p][k as keyof ProtoForm] ?? ""); }
 function setProto(p: string, k: string, v: string) { (form.protocols[p] as Record<string, string>)[k] = v; }
 
+const tab = ref<"proto" | "asr" | "sec">("proto");
 const busy = ref<"" | "proto" | "asr" | "sec">("");
 const asrTest = reactive({ running: false, text: "", ok: null as boolean | null });
 
@@ -58,6 +64,7 @@ async function load() {
   const c = data || {};
   for (const p of Object.keys(form.protocols)) {
     const srcp = (c.protocols && c.protocols[p]) || {};
+    protoEnabled[p] = srcp.enabled !== false; // P8.43
     for (const fld of PROTO_FIELDS[p]) {
       form.protocols[p][fld.key] = typeof srcp[fld.key] === "string" ? srcp[fld.key] : "";
     }
@@ -69,9 +76,9 @@ async function load() {
 }
 
 function protoPayload() {
-  const out: Record<string, Record<string, string>> = {};
+  const out: Record<string, Record<string, string | boolean>> = {};
   for (const p of Object.keys(form.protocols)) {
-    out[p] = {};
+    out[p] = { enabled: !!protoEnabled[p] }; // P8.43
     for (const fld of PROTO_FIELDS[p]) out[p][fld.key] = String(form.protocols[p][fld.key] ?? "").trim();
   }
   return out;
@@ -121,11 +128,17 @@ async function testAsr() {
 
 <template>
   <div class="sys-wrap">
+    <el-tabs v-model="tab" class="sys-tabs">
+      <el-tab-pane label="协议全局默认" name="proto">
     <section class="sys-sec">
-      <h4>协议全局默认</h4>
       <p class="tab-note">智能体在「智能体管理」中设置了自有配置时优先于全局；此处是全局回退值。</p>
       <div v-for="(fields, p) in PROTO_FIELDS" :key="p" class="sys-proto">
         <div class="sys-proto-name">{{ PROTO_NAMES[p] }}</div>
+        <div class="sys-row">
+          <label>启用协议</label>
+          <el-switch v-model="protoEnabled[p]"></el-switch>
+        </div>
+        <p v-if="protoEnabled[p] === false" class="danger" style="font-size: 12px; margin: 0 0 8px;">该协议已停用：使用该协议的智能体无法提问（智能体管理端同步标注「已停用」，新建/改选该协议被拒）</p>
         <div v-for="f in fields" :key="f.key" class="sys-row">
           <label>{{ f.label }}</label>
           <el-input
@@ -145,11 +158,13 @@ async function testAsr() {
         </div>
       </div>
       <el-button type="primary" :loading="busy === 'proto'" @click="saveProtocols">保存协议全局默认</el-button>
-      <span class="tab-note">保存后 ragflow/dify 的 url/api_key/chat_id 变化会自动重置回退全局会话的后端会话。</span>
+      <span class="tab-note">保存后 ragflow/dify 的 url/api_key/chat_id 变化（含启用/停用切换）会自动重置回退全局会话的后端会话。</span>
     </section>
+      </el-tab-pane>
 
+      <el-tab-pane label="语音输入 ASR" name="asr">
     <section class="sys-sec">
-      <h4>语音输入（ASR · 网页语音与电脑音频识别共用）</h4>
+      <p class="tab-note">网页语音输入与电脑音频识别共用同一 ASR 配置；URL 留空 = 停用网页语音输入。</p>
       <div class="sys-row">
         <label>服务地址 URL（OpenAI 兼容，空 = 停用）</label>
         <el-input v-model="form.asr.url"></el-input>
@@ -176,9 +191,10 @@ async function testAsr() {
       </div>
       <el-button type="primary" :loading="busy === 'asr'" @click="saveAsr">保存语音输入配置</el-button>
     </section>
+      </el-tab-pane>
 
+      <el-tab-pane label="访问控制" name="sec">
     <section class="sys-sec">
-      <h4>访问控制</h4>
       <div class="sys-row">
         <label>允许匿名访问（可看/可问）</label>
         <el-switch v-model="form.allow_anonymous"></el-switch>
@@ -186,5 +202,7 @@ async function testAsr() {
       <p class="tab-note">关闭后打开应用需 6 位访问码（「访问码」模块生成/管理）；控制台与 API 管理端点始终需管理登录。管理密码修改在「用户管理」模块（重置密码）。</p>
       <el-button type="primary" :loading="busy === 'sec'" @click="saveSec">应用</el-button>
     </section>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
