@@ -21,6 +21,9 @@ const router = useRouter();
 const auth = useAuthStore();
 const sess = useSessionsStore();
 
+// P8.52：顶栏品牌位（左上角 Logo）点击 = 刷新本页（替代原跳首屏 router-link）
+function reloadPage() { window.location.reload(); }
+
 const agentCode = computed(() => String(route.params.code || ""));
 // 过滤用智能体 id（服务端会话归属键）：id ≠ code（播种/新建均为随机 id），
 // 必须取 /api/agents/:code 返回的 agent.id，不能用路由 code 直接比对（P7.7 修复：
@@ -618,12 +621,12 @@ onBeforeUnmount(() => {
     <!-- P8.5：满宽顶栏（对齐首页排版：logo + 名称左上角，右侧控制组同款） -->
     <header class="ws-top">
       <div class="ws-top-left">
-        <!-- P8.6：品牌与官网首页一致（同款波形 logo + 名称） -->
-        <router-link to="/" class="brand">
+        <!-- P8.6：品牌与官网首页一致（同款波形 logo + 名称）；P8.52：点击刷新本页（不再跳首屏） -->
+        <span class="brand" role="button" tabindex="0" title="刷新本页" @click="reloadPage" @keydown.enter.prevent="reloadPage" @keydown.space.prevent="reloadPage">
           <span class="ws-brand-logo" v-html="LOGO_SVG"></span>
           <!-- P8.15：品牌位直接显示当前智能体名称（替代「回响答」+ 原智能体徽章） -->
           <span class="brand-text">EchoAnswer<em class="brand-agent"> · {{ agentName }}</em></span>
-        </router-link>
+        </span>
         <span v-if="runningCount > 0" class="nav-sep" aria-hidden="true"></span>
         <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
       </div>
