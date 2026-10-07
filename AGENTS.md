@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 155 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 158 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2/v3/v4 数据层 42 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
@@ -105,7 +105,12 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  + P8.37 顶栏一键分享（Share 图标按钮，复制智能体链接，非安全上下文 execCommand 回退）
                  + 匿名直访被门控智能体 → 自动跳登录页（?next 登录成功回跳；已登录无权 → 友好提示卡））)/
                  AdminView(P6 控制台：左侧导航 + 顶栏标题/副标题 + 内容卡片，Ant Design Admin 风格；
-                 users/agents/codes/audit/sys 五模块 + P7 首启引导；
+                 users/agents/codes/online/audit/sys 七模块 + P7 首启引导 +
+                 P8.48 仪表盘（默认页签，tab=dash 缺省；views/admin/DashboardTab.vue +
+                 composables/useEcharts.ts：ECharts 模块化注册 + EP CSS 变量主题自适应；
+                 GET /api/admin/stats?days=7|14|30[&fresh=1] 多维聚合，纯查询无 DDL，30s 缓存；
+                 提问趋势/访问趋势/活跃时段/智能体/协议/错误分布 + 运行情况 + 六指标卡；
+                 60s 自动刷新可关）；
                  P8.25 智能体图标改 Element Plus 图标点选（emoji 禁用，遗留 emoji 自动映射）；
                  P8.26 控制台四表格列宽均衡（全 min-width 比例伸展）；
                  P8.27 品牌波形 logo 四处统一（utils/brandLogo.ts 单一来源，「回」字砖移除）；
@@ -142,7 +147,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 155 项断言全绿
+npm test                                        # 158 项断言全绿
 node tests/store_tests.js                       # 42 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；

@@ -6,9 +6,10 @@ import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import { useRouter, useRoute } from "vue-router";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor, Odometer } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
+import DashboardTab from "./admin/DashboardTab.vue";
 import AgentsTab from "./admin/AgentsTab.vue";
 import CodesTab from "./admin/CodesTab.vue";
 import AuditTab from "./admin/AuditTab.vue";
@@ -27,6 +28,7 @@ const { lightTheme, toggleTheme } = useTheme();
 
 // 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
 const MENU = [
+  { key: "dash", icon: Odometer, label: "仪表盘", sub: "访问 / 提问 / 活跃 / 运行 多维统计（图表；近 7/14/30 天 + 实时运行情况）" },
   { key: "agents", icon: Cpu, label: "智能体管理", sub: "code / 名称 / 描述 / 协议（创建后锁定）；停用即前端不可见" },
   { key: "codes", icon: Key, label: "访问码", sub: "6 位码：生成 / 启用停用 / 有效期 / 权限范围（允许全部或指定智能体）；访问码主体共享会话桶" },
   { key: "online", icon: Monitor, label: "访问控制", sub: "在线访问者（登录用户 / 访问码用户按会话、匿名按长连接；设备指纹 + IP 判定唯一），支持一键下线（会话吊销 / 5 分钟禁入冷却）" },
@@ -35,24 +37,24 @@ const MENU = [
   { key: "sys", icon: Setting, label: "系统设置", sub: "两类配置分 tab：协议全局默认 / 语音识别 ASR（P8.44 移除匿名访问开关：首屏与匿名问答恒公开）" }
 ];
 // P8.39：当前页签写入 URL（/admin?tab=<key>）——刷新/分享链接保持在对应菜单页；
-// 默认页签（第一项「智能体管理」agents）不带参数（URL 干净）
+// 默认页签（第一项「仪表盘」dash，P8.48）不带参数（URL 干净）
 const tab = ref(
   typeof route.query.tab === "string" && MENU.some((m) => m.key === route.query.tab)
     ? (route.query.tab as string)
-    : "agents"
+    : "dash"
 );
 const activeMeta = computed(() => MENU.find((m) => m.key === tab.value) || MENU[0]);
 function syncTabQuery() {
   const q: Record<string, string> = {};
   for (const [k, v] of Object.entries(route.query)) if (k !== "tab" && typeof v === "string") q[k] = v;
-  if (tab.value !== "agents") q.tab = tab.value;
+  if (tab.value !== "dash") q.tab = tab.value;
   if (JSON.stringify(q) !== JSON.stringify(route.query)) router.replace({ path: route.path, query: q });
 }
 watch(tab, syncTabQuery);
 watch(
   () => route.query.tab,
   (v) => {
-    if (v === undefined) { if (tab.value !== "agents") tab.value = "agents"; return; }
+    if (v === undefined) { if (tab.value !== "dash") tab.value = "dash"; return; }
     if (typeof v === "string" && v !== tab.value && MENU.some((m) => m.key === v)) tab.value = v;
   }
 );
@@ -165,7 +167,8 @@ async function onLogout() {
           </template>
         </div>
         <div v-else class="adm-card">
-          <UsersTab v-if="tab === 'users'" />
+          <DashboardTab v-if="tab === 'dash'" />
+          <UsersTab v-else-if="tab === 'users'" />
           <AgentsTab v-else-if="tab === 'agents'" />
           <CodesTab v-else-if="tab === 'codes'" />
           <OnlineTab v-else-if="tab === 'online'" />

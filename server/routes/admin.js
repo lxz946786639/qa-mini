@@ -421,5 +421,133 @@ function register(router, ctx) {
     sendJSON(res, 200, { items });
     return Promise.resolve();
   });
+
+  // ---- 仪表盘统计（管理 · P8.48）----
+  // GET /api/admin/stats?days=7[&fresh=1]：访问/提问/活跃/运行多维聚合（无 DDL，纯查询，时间桶 localtime）；
+  // 30s TTL 缓存（延迟 ≤30s；fresh=1 强制重算——手动刷新/测试用）；days 缺省 7，非整数或 <1 → 400，>90 截断 90
+  const statsCache = new Map(); // days → { ts, data }
+  const STATS_TTL_MS = 30000;
+  router.exact("GET", "/api/admin/stats", (req, res, ctx_, urlObj) => {
+    if (admin401(req, urlObj, res)) return Promise.resolve();
+    let days = 7;
+    const rawDays = urlObj.searchParams.get("days");
+    if (rawDays !== null && rawDays !== "") {
+      if (!/^\d+$/.test(rawDays) || Number(rawDays) < 1) {
+        sendJSON(res, 400, { ok: false, detail: "days 参数必须是 >=1 的整数" });
+        return Promise.resolve();
+      }
+      days = Math.min(Number(rawDays), 90);
+    }
+    const now = Date.now();
+    const fresh = urlObj.searchParams.get("fresh") === "1";
+    const hit = fresh ? undefined : statsCache.get(days);
+    if (hit && now - hit.ts < STATS_TTL_MS) {
+      sendJSON(res, 200, Object.assign({ cached: true }, hit.data));
+      return Promise.resolve();
+    }
+    // 窗口起点：本地今天 0 点 − (days−1) 天（ISO UTC 字符串）
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+    const fromIso = start.toISOString();
+    const raw = ctx_.store.getDashboardStats(fromIso);
+    const roleById = new Map(raw.userRoles);
+    const agentById = new Map(raw.agents);
+    const localDate = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    // daily 零填充（升序）
+    const daily = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      daily.push({ date: localDate(d), total: 0, ok: 0, err: 0, admin: 0, user: 0, code: 0, anon: 0, logins: 0, new_sessions: 0, avg_duration_s: 0 });
+    }
+    const dmap = new Map(daily.map((x) => [x.date, x]));
+    for (const r of raw.dailyQuestions) {
+      const t = dmap.get(r.d);
+      if (!t) continue;
+      const n = Number(r.n), okn = Number(r.okn || 0);
+      t.total += n; t.ok += okn; t.err += n - okn;
+      let key;
+      if (r.m === "code") key = "code";
+      else if (r.m === "shared") key = "anon";
+      else key = r.uid && roleById.get(r.uid) === "admin" ? "admin" : "user";
+      t[key] += n;
+    }
+    for (const r of raw.dailyDuration) {
+      const t = dmap.get(r.d);
+      if (t && r.avg_s != null) t.avg_duration_s = Math.round(Number(r.avg_s) * 10) / 10;
+    }
+    for (const r of raw.dailyLogins) { const t = dmap.get(r.d); if (t) t.logins += Number(r.n); }
+    for (const r of raw.dailyNewSessions) { const t = dmap.get(r.d); if (t) t.new_sessions += Number(r.n); }
+    // 近 7 天小时分布（24 桶）
+    const hours = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+    for (const r of raw.hours) { if (r.h >= 0 && r.h <= 23) hours[r.h].count = Number(r.n); }
+    // 按智能体（提问量降序）
+    const agents = raw.byAgent.map((r) => {
+      const a = r.aid ? agentById.get(r.aid) : null;
+      const n = Number(r.n), okn = Number(r.okn || 0);
+      return {
+        id: r.aid || "", code: a ? a.code : "", name: a ? a.name : "未知",
+        questions: n, ok: okn, err: n - okn,
+        rate_pct: n ? Math.round((okn / n) * 1000) / 10 : 0,
+        avg_duration_s: r.avg_s != null ? Math.round(Number(r.avg_s) * 10) / 10 : 0,
+        last_active: r.last_at || null
+      };
+    }).sort((a, b) => b.questions - a.questions);
+    // 按协议（固定顺序；enabled 走 P8.43 protocolEnabled）
+    const pmap = new Map(raw.byProtocol.map((r) => [r.protocol, r]));
+    const protocols = PROTOCOLS.map((p) => {
+      const r = pmap.get(p);
+      const n = r ? Number(r.n) : 0, okn = r ? Number(r.okn || 0) : 0;
+      return {
+        name: p, questions: n, ok: okn, err: n - okn,
+        rate_pct: n ? Math.round((okn / n) * 1000) / 10 : 0,
+        avg_duration_s: r && r.avg_s != null ? Math.round(Number(r.avg_s) * 10) / 10 : 0,
+        enabled: protocolEnabled(ctx_.config, p)
+      };
+    });
+    const errors = raw.errors.map((r) => ({ protocol: r.protocol, detail: r.detail, count: Number(r.n) }));
+    // 运行实时块（与 /api/health、/api/admin/online 同源）
+    const authSess = ctx_.store.listAuthSessions();
+    const validSids = new Set(authSess.map((s) => s.id));
+    const online = ctx_.bus.listOnline();
+    const anonGroups = new Set(
+      online
+        .filter((c) => !c.meta || !c.meta.sessionId || !validSids.has(c.meta.sessionId))
+        .map((c) => ((c.meta && c.meta.dev) || "") + "|" + ((c.meta && c.meta.ip) || ""))
+    );
+    const activeIds = ctx_.manager.activeIds();
+    const rangeTotal = daily.reduce((s, x) => s + x.total, 0);
+    const rangeOk = daily.reduce((s, x) => s + x.ok, 0);
+    const data = {
+      ok: true,
+      days,
+      generated_at: new Date(now).toISOString(),
+      summary: {
+        records_total: raw.totals.records_total,
+        records_today: raw.totals.records_today,
+        records_today_prev: raw.totals.records_today_prev,
+        records_range: rangeTotal,
+        sessions_total: raw.totals.sessions_total,
+        sessions_range: daily.reduce((s, x) => s + x.new_sessions, 0),
+        users_active: raw.totals.users_active,
+        codes_active: raw.totals.codes_active,
+        agents_total: raw.totals.agents_total,
+        online: { auth_sessions: authSess.length, sse: online.length, groups: anonGroups.size },
+        active_qa: Array.isArray(activeIds) ? activeIds.length : Number(activeIds || 0),
+        uptime_s: Math.round(process.uptime()),
+        error_rate_range_pct: rangeTotal ? Math.round(((rangeTotal - rangeOk) / rangeTotal) * 1000) / 10 : 0,
+        avg_duration_s: Math.round(raw.rangeDuration * 10) / 10
+      },
+      daily,
+      hours,
+      agents,
+      protocols,
+      errors
+    };
+    statsCache.set(days, { ts: now, data });
+    sendJSON(res, 200, data);
+    return Promise.resolve();
+  });
 }
 module.exports = { register };

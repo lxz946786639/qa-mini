@@ -2444,6 +2444,114 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(r.status, 200);
     assert.ok((await r.text()).includes('<div id="app">'));
   });
+
+  // ================= P8.48：/api/admin/stats 仪表盘统计 =================
+  await test("p8.48: /api/admin/stats 鉴权（匿名/普通用户 401）", async () => {
+    const anon = await api("GET", "/api/admin/stats");
+    assert.strictEqual(anon.status, 401, "无凭证 401");
+    const ju = makeJar();
+    const lu = await jarFetch(ju, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(lu.status, 200, "carol 登录: " + (lu.data && lu.data.detail));
+    const cu = await jarFetch(ju, "GET", "/api/admin/stats");
+    assert.strictEqual(cu.status, 401, "普通用户 401");
+  });
+  await test("p8.48: days 参数（缺省 7 / 999→90 / 0→400）+ 顶层形状", async () => {
+    const r0 = await adminFetch("GET", "/api/admin/stats?days=0", undefined, adminTok);
+    assert.strictEqual(r0.status, 400, "days=0 → 400");
+    const r9 = await adminFetch("GET", "/api/admin/stats?days=999&fresh=1", undefined, adminTok);
+    assert.strictEqual(r9.status, 200);
+    assert.strictEqual(r9.data.days, 90, "999 截断 90");
+    assert.strictEqual(r9.data.daily.length, 90, "daily 90 天");
+    const rd = await adminFetch("GET", "/api/admin/stats?fresh=1", undefined, adminTok);
+    assert.strictEqual(rd.data.days, 7, "缺省 7 天");
+    assert.strictEqual(rd.data.daily.length, 7, "daily 7 天");
+    assert.strictEqual(rd.data.hours.length, 24, "hours 24 桶");
+    for (const k of ["ok", "generated_at", "summary", "agents", "protocols", "errors"]) assert.ok(k in rd.data, "缺字段 " + k);
+    for (const k of ["records_total", "records_today", "online", "active_qa", "uptime_s", "error_rate_range_pct", "avg_duration_s"]) assert.ok(k in rd.data.summary, "缺 summary." + k);
+  });
+  await test("p8.48: 聚合准确性（四主体 + 协议/智能体/错误，差值法）", async () => {
+    const before = await adminFetch("GET", "/api/admin/stats?days=30&fresh=1", undefined, adminTok);
+    assert.strictEqual(before.status, 200, "admin 200");
+    const b = before.data;
+    // 1) 匿名共享桶（默认会话）：成功 1 + 失败 1（把该会话协议的 url 指向死端口 → ok=0 记录，finally 语义：立即恢复）
+    const lsA = await api("GET", "/api/sessions");
+    assert.strictEqual(lsA.status, 200);
+    const shared = (lsA.data.sessions || []).find((x) => x.name === "默认会话") || (lsA.data.sessions || [])[0];
+    assert.ok(shared, "默认共享会话存在");
+    const a1 = await api("POST", "/api/chat", { session_id: shared.id, question: "dash-anon-ok" });
+    assert.strictEqual(a1.status, 202, "匿名提问: " + (a1.data && a1.data.detail));
+    const rec1 = await waitDone(a1.data.qa_id);
+    assert.strictEqual(rec1.ok, true, "匿名成功记录");
+    const cfgNow = await adminFetch("GET", "/api/config", undefined, adminTok);
+    const protoName = shared.protocol || "ragflow";
+    const savedUrl = (cfgNow.data.protocols || {})[protoName] && (cfgNow.data.protocols[protoName]).url;
+    assert.ok(savedUrl, "协议 " + protoName + " 当前 url 存在");
+    await adminFetch("PUT", "/api/config", { protocols: { [protoName]: { url: "http://127.0.0.1:1/dead" } } }, adminTok);
+    const a2 = await api("POST", "/api/chat", { session_id: shared.id, question: "dash-anon-fail" });
+    assert.strictEqual(a2.status, 202);
+    const rec2 = await waitDone(a2.data.qa_id);
+    assert.strictEqual(rec2.ok, false, "连接拒绝记录 ok=false");
+    assert.ok(String(rec2.detail).length > 0, "错误文案非空: " + rec2.detail);
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { [protoName]: { url: savedUrl } } }, adminTok)).status, 200, "恢复协议 url");
+    // 2) 管理员私有桶（新建专用会话 → 桶归属 admin）
+    const ja = makeJar();
+    const la = await jarFetch(ja, "POST", "/api/admin/login", { password: "newpw456" });
+    assert.strictEqual(la.status, 200, "admin cookie 登录: " + (la.data && la.data.detail));
+    const csA = await jarFetch(ja, "POST", "/api/sessions", { name: "dash-admin", agent_code: "industry-brain" });
+    assert.strictEqual(csA.status, 201, "建管理员私有会话");
+    const q1 = await jarFetch(ja, "POST", "/api/chat", { session_id: csA.data.session.id, question: "dash-admin-ok" });
+    assert.strictEqual(q1.status, 202);
+    await waitDoneAs(ja, q1.data.qa_id);
+    // 3) 用户私有桶（carol，P8.40 已恢复全量范围）
+    const jc = makeJar();
+    const lc = await jarFetch(jc, "POST", "/api/auth/login", { username: "carol", password: "carolpw1" });
+    assert.strictEqual(lc.status, 200);
+    const csC = await jarFetch(jc, "POST", "/api/sessions", { name: "dash-user", agent_code: "industry-brain" });
+    assert.strictEqual(csC.status, 201, "建用户私有会话");
+    const q2 = await jarFetch(jc, "POST", "/api/chat", { session_id: csC.data.session.id, question: "dash-user-ok" });
+    assert.strictEqual(q2.status, 202);
+    await waitDoneAs(jc, q2.data.qa_id);
+    // 4) 访问码桶（新建专用码 + 专用会话）
+    let mk = await adminFetch("POST", "/api/admin/access-codes", { code: "888899" }, adminTok);
+    if (mk.status === 409) mk = await adminFetch("POST", "/api/admin/access-codes", { code: "888898" }, adminTok);
+    assert.ok(mk.status === 201 || mk.status === 200, "建专用码: " + (mk.data && mk.data.detail));
+    const newCode = mk.data.entry && mk.data.entry.code;
+    const jk = makeJar();
+    const lk = await jarFetch(jk, "POST", "/api/auth/access-code", { code: newCode });
+    assert.strictEqual(lk.status, 200, "码登录");
+    const csK = await jarFetch(jk, "POST", "/api/sessions", { name: "dash-code", agent_code: "industry-brain" });
+    assert.strictEqual(csK.status, 201, "建访问码私有会话");
+    const q3 = await jarFetch(jk, "POST", "/api/chat", { session_id: csK.data.session.id, question: "dash-code-ok" });
+    assert.strictEqual(q3.status, 202);
+    await waitDoneAs(jk, q3.data.qa_id);
+    // ---- 差值断言 ----
+    const after = await adminFetch("GET", "/api/admin/stats?days=30&fresh=1", undefined, adminTok);
+    assert.strictEqual(after.status, 200);
+    const a = after.data;
+    assert.strictEqual(a.summary.records_total - b.summary.records_total, 5, "累计提问 +5");
+    const dayA = a.daily[a.daily.length - 1], dayB = b.daily[b.daily.length - 1];
+    assert.strictEqual(dayA.total - dayB.total, 5, "今日提问 +5");
+    assert.strictEqual(dayA.anon - dayB.anon, 2, "匿名 +2");
+    assert.strictEqual(dayA.admin - dayB.admin, 1, "管理员 +1");
+    assert.strictEqual(dayA.user - dayB.user, 1, "用户 +1");
+    assert.strictEqual(dayA.code - dayB.code, 1, "访问码 +1");
+    assert.ok(dayA.err - dayB.err >= 1, "错误计数 +>=1");
+    assert.ok(dayA.logins - dayB.logins >= 3, "登录 +>=3（admin/carol/code）");
+    assert.ok(dayA.new_sessions - dayB.new_sessions >= 3, "新建会话 +>=3（dash-admin/user/code）");
+    const protoDeltaAll = a.protocols.reduce((s, x) => s + x.questions, 0) - b.protocols.reduce((s, x) => s + x.questions, 0);
+    assert.strictEqual(protoDeltaAll, 5, "协议提问合计 +5");
+    assert.ok(a.protocols.some((x) => { const y = b.protocols.find((v) => v.name === x.name) || { err: 0 }; return x.err - y.err >= 1; }), "协议错误 +>=1");
+    assert.ok(a.protocols.every((x) => typeof x.enabled === "boolean"), "协议 enabled 字段（P8.43）");
+    const brainA = a.agents.find((x) => x.code === "industry-brain");
+    const brainB = b.agents.find((x) => x.code === "industry-brain");
+    assert.ok(brainA, "agents 含 industry-brain 行");
+    assert.strictEqual(brainA.questions - (brainB ? brainB.questions : 0), 5, "industry-brain 提问 +5（5 条记录全归 brain）");
+    assert.ok(a.errors.some((e) => e.detail === String(rec2.detail).slice(0, 80)), "errors 含注入的失败文案");
+    assert.ok(a.errors.every((e) => typeof e.protocol === "string" && e.count >= 1), "错误行形状");
+    assert.ok(a.summary.uptime_s >= 0, "uptime");
+    assert.ok(a.summary.online.sse >= 0 && a.summary.online.auth_sessions >= 0 && a.summary.online.groups >= 0, "online 形状");
+  });
+
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);
