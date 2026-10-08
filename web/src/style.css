@@ -148,7 +148,7 @@ body {
 .user-btn[aria-expanded="true"] .user-caret { transform: rotate(180deg); }
 .user-menu {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 100;
-  min-width: 110px; padding: 6px;
+  min-width: 132px; padding: 6px;
   background: var(--card); border: 1px solid var(--border);
   border-radius: 10px; box-shadow: var(--menu-shadow);
 }
@@ -156,9 +156,9 @@ body {
   display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
   background: none; border: none; font-family: inherit; cursor: pointer;
   color: var(--text-dim); font-size: 13.5px; padding: 8px 12px; border-radius: 7px;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s; white-space: nowrap; /* P8.56：防「个人设置」换行 */
 }
-/* P8.55：下拉「个人设置」图标 */
+/* P8.55：下拉「个人设置」图标（P8.56「退出」同款 SwitchButton） */
 .user-menu-ic { font-size: 14px; }
 .user-menu-item:hover { background: var(--accent-soft); color: var(--text); }
 .user-menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

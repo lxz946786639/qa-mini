@@ -9,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView, SessionView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight, User } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight, User, SwitchButton } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -681,7 +681,7 @@ onBeforeUnmount(() => {
           <div v-if="userMenuOpen" class="user-menu" role="menu">
             <!-- P8.55：个人设置（显示名 / 修改密码；仅账号主体，访问码无 user） -->
             <button v-if="auth.principal?.user" type="button" class="user-menu-item" role="menuitem" @click="userMenuOpen = false; profileOpen = true"><el-icon class="user-menu-ic"><User /></el-icon>个人设置</button>
-            <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
+            <button type="button" class="user-menu-item" role="menuitem" @click="onLogout"><el-icon class="user-menu-ic"><SwitchButton /></el-icon>退出</button>
           </div>
         </div>
         <router-link v-else to="/login" class="topnav-link">登录</router-link>

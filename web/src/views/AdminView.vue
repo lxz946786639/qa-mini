@@ -6,7 +6,7 @@ import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import { useRouter, useRoute } from "vue-router";
-import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor, Odometer, Lock } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, User, Cpu, Key, Document, Setting, Back, Fold, Expand, Monitor, Odometer, Lock, SwitchButton } from "@element-plus/icons-vue";
 import { LOGO_SVG } from "../utils/brandLogo";
 import UsersTab from "./admin/UsersTab.vue";
 import DashboardTab from "./admin/DashboardTab.vue";
@@ -151,7 +151,7 @@ async function onLogout() {
             <div v-if="userMenuOpen" class="user-menu" role="menu">
               <!-- P8.55：个人设置（显示名 / 修改密码；仅账号主体） -->
               <button v-if="auth.principal?.user" type="button" class="user-menu-item" role="menuitem" @click="userMenuOpen = false; profileOpen = true"><el-icon class="user-menu-ic"><User /></el-icon>个人设置</button>
-              <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
+              <button type="button" class="user-menu-item" role="menuitem" @click="onLogout"><el-icon class="user-menu-ic"><SwitchButton /></el-icon>退出</button>
             </div>
           </div>
         </div>
