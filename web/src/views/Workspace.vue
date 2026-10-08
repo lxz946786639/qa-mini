@@ -637,6 +637,8 @@ onBeforeUnmount(() => {
   <div class="ws-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
     <!-- P8.5：满宽顶栏（对齐首页排版：logo + 名称左上角，右侧控制组同款） -->
     <header class="ws-top">
+      <!-- P8.72：窄屏会话列表入口（桌面隐藏；≤720px 顶栏唯一抽屉开关） -->
+      <button class="ws-top-menu" type="button" :title="sideOpen ? '关闭会话列表' : '打开会话列表'" @click="sideOpen = !sideOpen"><el-icon><Menu /></el-icon></button>
       <div class="ws-top-left">
         <!-- P8.6：品牌与官网首页一致（同款波形 logo + 名称）；P8.52：点击刷新本页（不再跳首屏） -->
         <span class="brand" role="button" tabindex="0" title="刷新本页" @click="reloadPage" @keydown.enter.prevent="reloadPage" @keydown.space.prevent="reloadPage">
@@ -703,6 +705,8 @@ onBeforeUnmount(() => {
     </header>
 
     <div class="ws-body">
+    <!-- P8.72：窄屏抽屉遮罩（点外部关闭；z 55 低于抽屉 60） -->
+    <div v-if="sideOpen" class="ws-side-mask" aria-hidden="true" @click="sideOpen = false"></div>
     <!-- 左侧会话栏（P7.2 对齐旧版 #sidebar；P8.5 下移至满宽顶栏之下；≤720px 左滑出抽屉） -->
     <aside class="ws-side">
       <div class="ws-side-head">

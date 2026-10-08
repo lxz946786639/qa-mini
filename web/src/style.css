@@ -305,6 +305,13 @@ body {
   background: var(--bg-soft); border-bottom: 1px solid var(--border); position: relative; z-index: 20;
 }
 .ws-top-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: none; }
+/* P8.72：窄屏会话列表汉堡（≤720px 显示；桌面隐藏） */
+.ws-top-menu {
+  display: none; align-items: center; justify-content: center;
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  font-size: 16px; cursor: pointer; padding: 4px 7px; border-radius: 7px; line-height: 1; flex: none;
+}
+.ws-top-menu:hover { color: var(--text); border-color: var(--border); background: var(--card); }
 /* P8.6：品牌与官网首页一致（波形 logo 26px accent + 名称 16px/700） */
 .ws-brand-logo { display: inline-flex; }
 .ws-brand-logo svg { width: 26px; height: 26px; color: var(--accent); }
@@ -372,7 +379,7 @@ body {
 /* P8.65：末卡与输入框间距收紧（末卡不再带 14px 底距） */
 .qcard:last-of-type { margin-bottom: 0; }
 .q-block {
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px;
   background: var(--card-head);
   border-bottom: 1px solid var(--border); border-left: 3px solid var(--accent);
   padding: 10px 14px;
@@ -404,12 +411,12 @@ body {
 }
 .tag-a { background: none; border: 1px solid var(--green); color: var(--green); }
 .q-text {
-  flex: 1 1 auto; font-weight: 600;
+  flex: 1 1 auto; min-width: 0; font-weight: 600;
   font-size: var(--qa-size, 14.5px); line-height: var(--qa-line, 1.55);
   white-space: pre-wrap; word-break: break-word;
 }
 /* P8.14：问题行元信息（对齐旧版：来源徽章 + 协议徽章 + HH:MM:SS） */
-.card-meta { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.card-meta { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 .badge {
   display: inline-flex; align-items: center; gap: 4px; font-style: normal;
   font-size: 11px; padding: 2px 8px; border-radius: 999px;
@@ -606,8 +613,16 @@ body {
     box-shadow: 12px 0 30px rgba(0, 0, 0, 0.45);
   }
   .adm-app.sidebar-open .adm-side { transform: translateX(0); }
+  /* P8.72：抽屉遮罩（点外部关闭，修复弹出后无法收起） */
+  .adm-side-mask { position: fixed; inset: 0; z-index: 55; background: rgba(2, 6, 16, 0.55); }
   .adm-col { height: auto; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  .adm-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; }
+  /* P8.72：顶栏单行紧凑（原三行 ~133px → 隐藏副标题 + 收紧间距） */
+  .adm-top { flex-wrap: wrap; row-gap: 4px; gap: 8px; padding: 6px 10px; }
+  .adm-top-sub { display: none; }
+  .adm-top-title { font-size: 14px; }
+  .adm-top-right { gap: 8px; flex-wrap: wrap; }
+  .adm-body { padding: 10px; }
+  .adm-card { padding: 12px; }
 }
 .tab-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -722,9 +737,30 @@ body {
   .ws-app.sidebar-open .ws-side { transform: translateX(0); }
   .ws-side-close { display: block; }
   .ws-side-toggle { display: none; }
+  /* P8.72：抽屉遮罩（点外部关闭；z 55 低于抽屉 60） */
+  .ws-side-mask { position: fixed; inset: 0; z-index: 55; background: rgba(2, 6, 16, 0.55); }
+  /* P8.72：顶栏两行规整——第 1 行汉堡 + 品牌（单行省略），第 2 行按钮左对齐可换行 */
+  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 12px; height: auto; }
+  .ws-top-menu { display: inline-flex; }
+  .ws-top-left { flex: 1 1 auto; min-width: 0; }
+  .ws-top .brand { min-width: 0; }
+  .ws-top .brand-text { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ws-top-left .nav-sep { display: none; }
+  .ws-head-right { flex: 1 1 100%; flex-wrap: wrap; row-gap: 6px; justify-content: flex-start; gap: 8px; }
+  .ws-head-right .nav-sep { display: none; }
+  .prefs-btn { padding: 3px 8px; font-size: 12.5px; }
+  /* P8.72：卡片 / 输入框左右边距（窄/宽/铺满统一 12px，修「窄宽贴边、仅铺满正常」） */
+  .ws-main { padding-left: 12px; padding-right: 12px; }
+  .ws-foot { padding-left: 12px; padding-right: 12px; }
+  /* P8.72：输入框底部两行——协议标签独占一行，操作行左对齐（原 3 行错位） */
+  .ws-composer-bar { flex-direction: column; align-items: stretch; row-gap: 6px; }
+  .ws-composer-proto { flex: none; max-width: 100%; order: -1; }
+  .ws-composer-actions { justify-content: flex-start; }
   .ws-col { height: auto; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 10px; height: auto; }
-  .ws-head-right { flex-wrap: wrap; row-gap: 6px; }
-  .ws-composer-actions { justify-content: flex-end; }
+}
+
+/* P8.72：移动端对话框安全网——定宽弹窗（640px 等）缩至屏宽内、体内内部滚动 */
+@media (max-width: 720px) {
+  .el-dialog { width: calc(100vw - 20px) !important; max-width: calc(100vw - 20px) !important; }
+  .el-dialog__body { max-height: calc(100dvh - 140px); overflow-y: auto; }
 }

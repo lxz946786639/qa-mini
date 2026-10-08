@@ -305,10 +305,25 @@ function onEdgeScroll() {
 function snapGoNext() { snapAnimate(Math.min(SNAP_IDS.length - 1, snapIndex() + 1)); }
 function snapGoPrev() { snapAnimate(Math.max(0, snapIndex() - 1)); }
 
+// P8.72：区块内容高于视口（手机叠排）时允许区块内自由滚动——滚到区块边缘才拦截吸附，
+// 否则超高区块（工作流）底部不可达（「滚不到底」）
+function sectionRange(i: number) {
+  const el = document.getElementById(SNAP_IDS[i]);
+  if (!el) return null;
+  const top = el.getBoundingClientRect().top + window.scrollY;
+  return { top, bottom: top + el.offsetHeight };
+}
 function onWheel(e: WheelEvent) {
-  e.preventDefault(); // 满屏区块页：全部滚轮输入归一为区块步
   const now = performance.now();
   if (now < snapPauseUntil) { snapAcc = 0; return; } // P8.24：动画/停顿期——丢弃
+  const r0 = sectionRange(snapIndex());
+  if (r0 && r0.bottom - r0.top > window.innerHeight) {
+    const atTop = window.scrollY <= r0.top + 2;
+    const atBottom = window.scrollY >= r0.bottom - window.innerHeight - 2;
+    if (e.deltaY > 0 && !atBottom) return; // 向下且未到底 → 自由滚
+    if (e.deltaY < 0 && !atTop) return; // 向上且未到顶 → 自由滚
+  }
+  e.preventDefault(); // 满屏区块页：全部滚轮输入归一为区块步
   snapAcc += e.deltaY;
   if (Math.abs(snapAcc) >= SNAP_ACC_THRESHOLD) {
     const dir = snapAcc > 0 ? 1 : -1;

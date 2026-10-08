@@ -101,6 +101,8 @@ async function onLogout() {
 
 <template>
   <div class="adm-app" :class="{ 'side-collapsed': sideCollapsed, 'sidebar-open': sideOpen }">
+    <!-- P8.72：窄屏抽屉遮罩（点外部关闭；修复「弹出后无法收起」） -->
+    <div v-if="sideOpen" class="adm-side-mask" aria-hidden="true" @click="sideOpen = false"></div>
     <!-- 左侧导航（品牌 + 模块菜单 + 返回首屏） -->
     <aside class="adm-side">
       <div class="adm-brand">
@@ -117,7 +119,7 @@ async function onLogout() {
         <span class="adm-brand-sub">回响答 · 控制台</span>
       </div>
       <ul class="adm-nav">
-        <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" :title="m.label" @click="tab = m.key">
+        <li v-for="m in MENU" :key="m.key" :class="{ on: m.key === tab }" :title="m.label" @click="tab = m.key; sideOpen = false">
           <el-icon class="adm-ic"><component :is="m.icon" /></el-icon><span class="adm-nav-lb">{{ m.label }}</span>
         </li>
       </ul>
