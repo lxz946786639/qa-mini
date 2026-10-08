@@ -9,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView, SessionView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight, User, SwitchButton } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight, User, SwitchButton, View } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -130,8 +130,15 @@ function applyPrefs() {
     localStorage.setItem("echoanswer-line", JSON.stringify(lineState));
   } catch {}
 }
+// P8.65：仅阅读模式（收起底部输入框、不占底部空间；本地记忆 echoanswer-readonly）
+const readonlyMode = ref(false);
+function toggleReadonly() {
+  readonlyMode.value = !readonlyMode.value;
+  try { localStorage.setItem("echoanswer-readonly", readonlyMode.value ? "1" : "0"); } catch {}
+}
 (function loadPrefs() {
   try {
+    if (localStorage.getItem("echoanswer-readonly") === "1") readonlyMode.value = true;
     const raw = localStorage.getItem("echoanswer-font");
     if (raw) {
       const f = JSON.parse(raw);
@@ -669,6 +676,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </el-popover>
+        <!-- P8.65：仅阅读开关（收起底部输入框） -->
+        <button class="prefs-btn" :class="{ on: readonlyMode }" :title="readonlyMode ? '退出仅阅读模式（恢复输入框）' : '仅阅读模式：收起输入框，不占底部空间（本地记忆）'" @click="toggleReadonly"><el-icon><View /></el-icon>仅阅读</button>
         <button v-if="auth.isAdmin && currentSession" class="prefs-btn" title="会话设置（管理）" @click="openSettings"><el-icon><Setting /></el-icon>会话设置</button>
         <span class="nav-sep" aria-hidden="true"></span>
         <!-- P8.37：一键分享 = 复制当前智能体链接 -->
@@ -743,7 +752,7 @@ onBeforeUnmount(() => {
     </aside>
 
     <!-- 主列（P8.5：顶栏已上移为满宽 .ws-top；本列仅 main#chat / footer composer） -->
-    <div class="ws-col">
+    <div class="ws-col" :class="{ readonly: readonlyMode }">
       <button
         v-if="sess.currentSid && cards.length && showToLatest"
         class="ws-to-latest"

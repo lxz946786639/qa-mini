@@ -318,7 +318,7 @@ body {
 /* 主区滚动容器（对齐旧版 main#chat：卡片自行按 --qa-maxw 居中；scrollbar-gutter 与 footer 同口径） */
 .ws-main {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  padding: 18px 0 30px; scrollbar-gutter: stable;
+  padding: 18px 0 10px; scrollbar-gutter: stable;
 }
 .prefs-btn {
   display: inline-flex; align-items: center; gap: 4px;
@@ -335,6 +335,9 @@ body {
 .prefs-box .el-select { width: 148px; flex: none; }
 /* P8.63：自定义数值框定宽，避免被浮层右缘裁切（浮层 340px 内 label 62 + select 148 + 输入 78 恰好排下） */
 .prefs-box .el-input-number { width: 78px; flex: none; }
+/* P8.65：仅阅读模式（顶栏开关）——选中态高亮 + 收起 composer（不占底部空间） */
+.prefs-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.ws-col.readonly .ws-foot { display: none; }
 .ws-empty-main { text-align: center; color: var(--text-dim); margin-top: 80px; }
 .ws-empty-main .login-back { display: inline-flex; align-items: center; gap: 4px; }
 .ws-empty-chat { text-align: center; color: var(--text-dim); margin-top: 60px; padding: 0 16px; }
@@ -362,6 +365,8 @@ body {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 10px; overflow: hidden;
 }
+/* P8.65：末卡与输入框间距收紧（末卡不再带 14px 底距） */
+.qcard:last-of-type { margin-bottom: 0; }
 .q-block {
   display: flex; align-items: flex-start; gap: 8px;
   background: var(--card-head);
@@ -489,7 +494,7 @@ body {
 
 /* 底部输入（对齐旧版 footer + .composer：与主区卡片同 --qa-maxw 中心线） */
 .ws-foot {
-  flex: 0 0 auto; padding: 10px 0 calc(14px + env(safe-area-inset-bottom));
+  flex: 0 0 auto; padding: 6px 0 calc(14px + env(safe-area-inset-bottom));
   background: linear-gradient(transparent, var(--bg) 30%);
   overflow-y: auto; scrollbar-gutter: stable;
 }
