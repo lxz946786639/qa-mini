@@ -652,7 +652,7 @@ onBeforeUnmount(() => {
       <div class="ws-head-right">
         <el-popover placement="bottom-end" :width="340" trigger="click">
           <template #reference>
-            <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
+            <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon><span class="prefs-btn-lb">显示</span></button>
           </template>
           <div class="prefs-box">
             <div class="prefs-row">
@@ -684,8 +684,8 @@ onBeforeUnmount(() => {
           </div>
         </el-popover>
         <!-- P8.65：仅阅读开关（收起底部输入框） -->
-        <button class="prefs-btn" :class="{ on: readonlyMode }" :title="readonlyMode ? '退出仅阅读模式（恢复输入框）' : '仅阅读模式：收起输入框，不占底部空间（本地记忆）'" @click="toggleReadonly"><el-icon><View /></el-icon>仅阅读</button>
-        <button v-if="auth.isAdmin && currentSession" class="prefs-btn" title="会话设置（管理）" @click="openSettings"><el-icon><Setting /></el-icon>会话设置</button>
+        <button class="prefs-btn" :class="{ on: readonlyMode }" :title="readonlyMode ? '退出仅阅读模式（恢复输入框）' : '仅阅读模式：收起输入框，不占底部空间（本地记忆）'" @click="toggleReadonly"><el-icon><View /></el-icon><span class="prefs-btn-lb">仅阅读</span></button>
+        <button v-if="auth.isAdmin && currentSession" class="prefs-btn" title="会话设置（管理）" @click="openSettings"><el-icon><Setting /></el-icon><span class="prefs-btn-lb">会话设置</span></button>
         <span class="nav-sep" aria-hidden="true"></span>
         <!-- P8.37：一键分享 = 复制当前智能体链接 -->
         <button type="button" class="ws-share-btn" :title="shared ? '链接已复制' : '复制智能体链接（分享）'" @click="shareAgent"><el-icon><Check v-if="shared" /><Share v-else /></el-icon></button>
@@ -805,7 +805,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div
-            v-for="c in cards"
+            v-for="(c, ci) in cards"
             :key="c.id"
             class="qcard"
             :class="{ running: c.status === 'running' }"
@@ -843,7 +843,7 @@ onBeforeUnmount(() => {
                     <button v-if="c.ok && c.answer" class="st-btn" :class="{ copied: copiedKey === c.id + ':a' }" @click="copyA(c)">
                       <el-icon class="btn-ic"><CopyDocument /></el-icon>{{ copiedKey === c.id + ':a' ? '已复制' : '复制' }}
                     </button>
-                    <button class="st-btn" :disabled="!canRegen(c)" @click="regen(c)"><el-icon class="btn-ic"><RefreshRight /></el-icon>重新生成</button>
+                    <button v-if="ci === cards.length - 1" class="st-btn" :disabled="!canRegen(c)" @click="regen(c)" title="重新生成（仅最新一条可用）"><el-icon class="btn-ic"><RefreshRight /></el-icon>重新生成</button>
                     <button class="st-btn st-danger" @click="deleteCard(c)"><el-icon class="btn-ic"><Delete /></el-icon>删除</button>
                   </span>
                 </template>

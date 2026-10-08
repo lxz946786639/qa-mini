@@ -623,6 +623,10 @@ body {
   .adm-top-right { gap: 8px; flex-wrap: wrap; }
   .adm-body { padding: 10px; }
   .adm-card { padding: 12px; }
+  /* P8.74：系统设置表单行窄屏改「标签在上 / 输入框满宽」（原 240px 固定标签致输入框仅 ~110px） */
+  .sys-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .sys-row label { width: auto; }
+  .sys-row:has(.el-switch) { flex-direction: row; align-items: center; }
 }
 .tab-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -739,8 +743,15 @@ body {
   .ws-side-toggle { display: none; }
   /* P8.72：抽屉遮罩（点外部关闭；z 55 低于抽屉 60） */
   .ws-side-mask { position: fixed; inset: 0; z-index: 55; background: rgba(2, 6, 16, 0.55); }
-  /* P8.72：顶栏两行规整——第 1 行汉堡 + 品牌（单行省略），第 2 行按钮左对齐可换行 */
-  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 12px; height: auto; }
+  /* P8.72：顶栏两行规整——第 1 行汉堡 + 品牌（单行省略），第 2 行按钮左对齐可换行；P8.73：按钮文字隐藏纯图标（再降高度） */
+  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 6px 12px; height: auto; }
+  .prefs-btn-lb { display: none; }
+  .prefs-btn { padding: 4px 8px; }
+  /* P8.73：卡片状态行保持一行——状态文本不换行 + 按钮不换行紧凑化 */
+  .a-status { gap: 6px; }
+  .st { white-space: nowrap; }
+  .st-btns { flex-wrap: nowrap; gap: 4px; }
+  .st-btn { padding: 0 6px; height: 21px; }
   .ws-top-menu { display: inline-flex; }
   .ws-top-left { flex: 1 1 auto; min-width: 0; }
   .ws-top .brand { min-width: 0; }
