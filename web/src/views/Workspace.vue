@@ -9,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView, SessionView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
@@ -75,6 +75,9 @@ const composerProto = computed(() => {
 const proto = PROTO_NAMES[s.protocol] || s.protocol || "";
   return (proto ? proto + " · " : "") + (s.name || "未命名会话");
 });
+// P8.54：空会话「查看更多」折叠态（切会话时收起）
+const emptyMore = ref(false);
+watch(() => sess.currentSid, () => { emptyMore.value = false; });
 // 主题（对齐旧版键 echoanswer-theme；useTheme 共享：工作区 / 控制台顶栏 ☀️/🌙）
 const { lightTheme, toggleTheme } = useTheme();
 
@@ -762,11 +765,21 @@ onBeforeUnmount(() => {
           <router-link v-else to="/login" class="login-back">先登录 →</router-link>
         </div>
         <template v-else>
+          <!-- P8.54：空会话提示通俗化，专业对接信息折叠「查看更多」 -->
           <div v-if="!cards.length" class="ws-empty-chat">
-            <h3>本会话暂无问答</h3>
-            <p>在下方输入问题，按 <code>Enter</code> 发送，答案实时流式显示；<br>或用 <b>EchoScribe 推送模式</b>把语音识别结果自动推送到本会话。</p>
+            <h3>这个会话还没有问答</h3>
+            <p>在下方输入框里输入问题，按 <code>Enter</code> 发送，答案会实时显示在这里。</p>
             <p v-if="currentSession" class="ws-empty-proto">当前会话：{{ composerProto }}</p>
-            <p class="ws-empty-dim">EchoScribe 对接：打开「会话设置」复制 echoscribe.toml 片段（token + 会话ID）。推送接口 <code>POST /api/push</code></p>
+            <div class="ws-empty-more">
+              <span class="ws-empty-toggle" role="button" tabindex="0" @click="emptyMore = !emptyMore" @keydown.enter="emptyMore = !emptyMore">
+                <el-icon class="ws-empty-toggle-ic"><ArrowDown v-if="emptyMore" /><ArrowRight v-else /></el-icon>
+                {{ emptyMore ? "收起" : "查看更多（EchoScribe 对接）" }}
+              </span>
+              <div v-if="emptyMore" class="ws-empty-detail">
+                <p>想把语音设备的识别结果自动推送到这个会话？打开「会话设置」，复制 <code>echoscribe.toml</code> 片段（含 token 与会话ID）到设备配置即可。</p>
+                <p class="ws-empty-dim">推送接口 <code>POST /api/push</code>（token + 会话ID）</p>
+              </div>
+            </div>
           </div>
           <div
             v-for="c in cards"
