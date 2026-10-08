@@ -623,6 +623,10 @@ body {
   .adm-top-right { gap: 8px; flex-wrap: wrap; }
   .adm-body { padding: 10px; }
   .adm-card { padding: 12px; }
+  /* P8.74：系统设置表单行窄屏改「标签在上 / 输入框满宽」（原 240px 固定标签致输入框仅 ~110px） */
+  .sys-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .sys-row label { width: auto; }
+  .sys-row:has(.el-switch) { flex-direction: row; align-items: center; }
 }
 .tab-bar {
   display: flex; align-items: center; justify-content: space-between;
