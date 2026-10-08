@@ -215,10 +215,12 @@ body {
 .ws-body { flex: 1 1 auto; display: flex; min-height: 0; }
 @media (min-width: 721px) {
   .ws-app.side-collapsed .ws-side { width: 44px; }
+  /* P8.68 修复：P8.66 移除 .ws-side-foot 时误删分组选择器末行（display:none 丢失），
+     title/list/empty 并入 head 规则 → 窄轨下标题换行、列表被压扁出滚动条 */
   .ws-app.side-collapsed .ws-side-title,
   .ws-app.side-collapsed .ws-sess-list,
-  .ws-app.side-collapsed .ws-side-empty,
-    .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
+  .ws-app.side-collapsed .ws-side-empty { display: none; }
+  .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
   .ws-app.side-collapsed .ws-side-actions { flex-direction: column; gap: 6px; }
 }
 .ws-side {
