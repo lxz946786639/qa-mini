@@ -26,7 +26,10 @@ const adminSet = ref<boolean | null>(null); // null = 查询中
 
 function backTarget(): string {
   const n = route.query.next;
-  return typeof n === "string" && n.startsWith("/") ? n : "/";
+  const t = typeof n === "string" && n.startsWith("/") ? n : "/";
+  // P8.62：/admin 仅 admin——非 admin 落在 /admin（登录成功 / 已登录直访 / 首启完成）→ 首屏
+  if (t.startsWith("/admin") && !auth.isAdmin) return "/";
+  return t;
 }
 
 async function afterLogin() {

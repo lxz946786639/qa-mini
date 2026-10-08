@@ -16,16 +16,12 @@ import AuditTab from "./admin/AuditTab.vue";
 import OnlineTab from "./admin/OnlineTab.vue";
 import SecurityTab from "./admin/SecurityTab.vue";
 import SystemTab from "./admin/SystemTab.vue";
-import AdminBootstrap from "../components/AdminBootstrap.vue";
 import ProfileDialog from "../components/ProfileDialog.vue";
 
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const checked = ref(false);
-// 首启引导（对齐旧版 /admin 首屏）：admin 未初始化时（GET /api/status admin_set=false）
-// 显示「设置管理账号」表单（共享组件 AdminBootstrap，/login 首启访问同样展示）
-const adminSet = ref<boolean | null>(null);
 const { lightTheme, toggleTheme } = useTheme();
 
 // 左侧导航（P7.3）：模块 = 旧 el-tabs 五页签；顶栏标题/副标题随选中项切换
@@ -73,11 +69,11 @@ function toggleSide() {
 onMounted(async () => {
   await auth.me();
   if (!auth.isAdmin) {
-    try {
-      const r = await fetch("/api/status");
-      const d = (await r.json()) as { admin_set?: boolean };
-      adminSet.value = !!d.admin_set;
-    } catch { adminSet.value = true; }
+    // P8.62：非 admin 不再显示「无管理权限」页——未认证 → 登录页（成功后 ?next 自动回跳），
+    // 已登录非 admin → 首屏；首启（admin 未初始化）时登录页自身显示设置管理账号表单
+    const next = "/admin" + (tab.value !== "dash" ? "?tab=" + tab.value : "");
+    router.replace(auth.isAuthed ? "/" : "/login?next=" + encodeURIComponent(next));
+    return;
   }
   checked.value = true;
   document.addEventListener("click", onUserDocClick);
@@ -95,10 +91,6 @@ function onUserDocClick(e: MouseEvent) {
   if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) userMenuOpen.value = false;
 }
 
-async function onBootstrapDone() {
-  // 初始化通道已签发 ea_sid cookie（以 admin 登录）→ 重新取主体进入控制台
-  await auth.me();
-}
 async function onLogout() {
   await auth.logout();
   ElMessage.success("已退出登录");
@@ -160,19 +152,6 @@ async function onLogout() {
       <ProfileDialog :open="profileOpen" @update:open="profileOpen = $event" />
       <main class="adm-body">
         <div v-if="!checked" class="admin-wait">校验身份中…</div>
-        <div v-else-if="!auth.isAdmin" class="admin-deny">
-          <template v-if="adminSet === false">
-            <p>管理密码尚未初始化</p>
-            <p class="admin-dim">首次部署：设置管理账号密码后进入控制台（初始化通道，对齐旧版 /admin 首屏）。</p>
-            <AdminBootstrap @done="onBootstrapDone" />
-          </template>
-          <template v-else>
-            <p>当前身份无管理权限</p>
-            <p class="admin-dim">控制台仅对 admin 角色开放（账号登录；访问码/匿名身份不可用）。</p>
-            <el-button type="primary" size="small" @click="auth.me()">重新校验</el-button>
-            <router-link to="/" class="topnav-link"><el-icon><Back /></el-icon>返回首屏</router-link>
-          </template>
-        </div>
         <div v-else class="adm-card">
           <DashboardTab v-if="tab === 'dash'" />
           <UsersTab v-else-if="tab === 'users'" />
