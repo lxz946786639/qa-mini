@@ -333,6 +333,8 @@ body {
 .prefs-box .prefs-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .prefs-box .prefs-row label { width: 62px; flex: none; font-size: 13px; color: var(--text-dim); }
 .prefs-box .el-select { width: 148px; flex: none; }
+/* P8.63：自定义数值框定宽，避免被浮层右缘裁切（浮层 340px 内 label 62 + select 148 + 输入 78 恰好排下） */
+.prefs-box .el-input-number { width: 78px; flex: none; }
 .ws-empty-main { text-align: center; color: var(--text-dim); margin-top: 80px; }
 .ws-empty-main .login-back { display: inline-flex; align-items: center; gap: 4px; }
 .ws-empty-chat { text-align: center; color: var(--text-dim); margin-top: 60px; padding: 0 16px; }

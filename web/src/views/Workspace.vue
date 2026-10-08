@@ -636,14 +636,14 @@ onBeforeUnmount(() => {
         <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
       </div>
       <div class="ws-head-right">
-        <el-popover placement="bottom-end" :width="300" trigger="click">
+        <el-popover placement="bottom-end" :width="340" trigger="click">
           <template #reference>
             <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
           </template>
           <div class="prefs-box">
             <div class="prefs-row">
               <label>字号</label>
-              <el-select v-model="fontState.mode" size="small" @change="applyPrefs">
+              <el-select v-model="fontState.mode" size="small" :teleported="false" @change="applyPrefs">
                 <el-option label="默认（15px）" value="default" />
                 <el-option label="大（18px）" value="large" />
                 <el-option label="自定义" value="custom" />
@@ -652,7 +652,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="prefs-row">
               <label>内容宽度</label>
-              <el-select v-model="widthMode" size="small" @change="applyPrefs">
+              <el-select v-model="widthMode" size="small" :teleported="false" @change="applyPrefs">
                 <el-option label="窄（860px）" value="narrow" />
                 <el-option label="宽（1180px）" value="wide" />
                 <el-option label="铺满" value="full" />
@@ -660,7 +660,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="prefs-row">
               <label>行间距</label>
-              <el-select v-model="lineState.mode" size="small" @change="applyPrefs">
+              <el-select v-model="lineState.mode" size="small" :teleported="false" @change="applyPrefs">
                 <el-option label="默认" value="default" />
                 <el-option label="窄（1.35）" value="narrow" />
                 <el-option label="自定义" value="custom" />
