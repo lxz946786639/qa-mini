@@ -223,7 +223,7 @@ body {
   .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
   .ws-app.side-collapsed .ws-side-actions { flex-direction: column; gap: 6px; }
   /* P8.70：窄轨底部保留连接状态——仅显示状态点（文字 font-size:0），居中 */
-  .ws-app.side-collapsed .ws-side-foot { padding: 8px 0; display: flex; justify-content: center; }
+  .ws-app.side-collapsed .ws-side-foot { padding: 8px 0; display: flex; justify-content: center; margin-top: auto; } /* P8.71：列表 display:none 后无 flex:1 撑底，auto 把状态点推至窄轨底部 */
   .ws-app.side-collapsed .ws-side-foot .conn { font-size: 0; gap: 0; }
 }
 .ws-side {
