@@ -17,6 +17,7 @@ import OnlineTab from "./admin/OnlineTab.vue";
 import SecurityTab from "./admin/SecurityTab.vue";
 import SystemTab from "./admin/SystemTab.vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
+import ProfileDialog from "../components/ProfileDialog.vue";
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -88,6 +89,7 @@ onBeforeUnmount(() => {
 // ---------- P8.4 顶栏用户名下拉（与首页一致交互） ----------
 const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const userMenuOpen = ref(false);
+const profileOpen = ref(false); // P8.55 个人设置对话框
 const userWrap = ref<HTMLElement | null>(null);
 function onUserDocClick(e: MouseEvent) {
   if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) userMenuOpen.value = false;
@@ -147,12 +149,15 @@ async function onLogout() {
           <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
             <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '管理员' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
             <div v-if="userMenuOpen" class="user-menu" role="menu">
+              <!-- P8.55：个人设置（显示名 / 修改密码；仅账号主体） -->
+              <button v-if="auth.principal?.user" type="button" class="user-menu-item" role="menuitem" @click="userMenuOpen = false; profileOpen = true"><el-icon class="user-menu-ic"><User /></el-icon>个人设置</button>
               <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
             </div>
           </div>
         </div>
       </header>
 
+      <ProfileDialog :open="profileOpen" @update:open="profileOpen = $event" />
       <main class="adm-body">
         <div v-if="!checked" class="admin-wait">校验身份中…</div>
         <div v-else-if="!auth.isAdmin" class="admin-deny">

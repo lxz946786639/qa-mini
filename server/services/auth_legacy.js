@@ -329,6 +329,59 @@ function createAuthService(ctx, opts) {
     return sendJSON(res, 401, { ok: false, detail: "未登录" });
   }
 
+  // ---- P8.55 /api/auth/me (PUT)：个人设置自助（显示名 / 修改密码；仅账号主体） ----
+  async function handleAuthMeUpdate(req, res, ctx_, urlObj) {
+    const p = principal(req, urlObj);
+    if (!p || p.kind === "anon" || !p.userId) {
+      return sendJSON(res, 401, { ok: false, detail: "需要账号登录（访问码主体不可用）" });
+    }
+    const u = store.getUser(p.userId);
+    if (!u) return sendJSON(res, 401, { ok: false, detail: "用户不存在" });
+    let body;
+    try { body = await parseJSONBody(req); }
+    catch { return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" }); }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON" });
+    }
+    const patch = {};
+    const changed = {};
+    if (body.display_name !== undefined) {
+      if (typeof body.display_name !== "string") {
+        return sendJSON(res, 400, { ok: false, detail: "display_name 必须是字符串" });
+      }
+      patch.display_name = body.display_name.trim().slice(0, 32);
+      changed.display_name = patch.display_name;
+    }
+    const np = typeof body.new_password === "string" ? body.new_password : "";
+    const op = typeof body.old_password === "string" ? body.old_password : "";
+    if (np !== "" || op !== "") {
+      if (!op) {
+        return sendJSON(res, 400, { ok: false, detail: "修改密码需填写当前密码" });
+      }
+      if (np.length < 4 || np.length > 64) {
+        return sendJSON(res, 400, { ok: false, detail: "新密码需 4-64 位字符" });
+      }
+      if (!verifyPassword(op, u.password_hash)) {
+        return sendJSON(res, 403, { ok: false, detail: "当前密码不正确" });
+      }
+      patch.password_hash = hashPassword(np);
+      changed.password = "••••";
+    }
+    if (!Object.keys(patch).length) {
+      return sendJSON(res, 400, { ok: false, detail: "无有效字段（display_name / old_password + new_password）" });
+    }
+    store.updateUser(u.id, patch);
+    store.insertAudit({
+      actorType: u.role === "admin" ? "admin" : "user", actorId: u.id, action: "auth.profile_update",
+      detail: changed, ip: ipOf(req), userAgent: uaOf(req)
+    });
+    const nu = store.getUser(u.id);
+    return sendJSON(res, 200, {
+      ok: true,
+      user: { id: nu.id, username: nu.username, display_name: nu.display_name, role: nu.role }
+    });
+  }
+
   // ---- P3 /api/auth/access-code：访问码 → cookie（显式码登录；无匿名捷径） ----
   async function handleAuthCodeLogin(req, res) {
     const ip = ipOf(req);
@@ -368,7 +421,7 @@ function createAuthService(ctx, opts) {
     principal, issueSidCookie, clearSidCookie,
     touchSessionActivity, sessionActivityOf, dropSessionActivity, pruneSessionActivity,
     handleAdminLogin, handleAccessLogin,
-    handleAuthLogin, handleAuthLogout, handleAuthMe, handleAuthCodeLogin
+    handleAuthLogin, handleAuthLogout, handleAuthMe, handleAuthCodeLogin, handleAuthMeUpdate
   };
 }
 

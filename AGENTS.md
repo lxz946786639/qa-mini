@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 165 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 166 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v7 数据层 45 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
@@ -99,7 +99,7 @@ public/          （P7 已退役：旧纯静态前端目录已删除，能力全
 web/             新代前端（v59 P4 起，独立 package；P7 起即站点根）：Vue3+Vite+TS+Element Plus+Pinia+PWA；
                  src/（views: Landing(P8 官网首页四区块：Hero/智能体选择/产品矩阵/工作流，
                  landing.css --lp-* 双主题 + 内联 SVG + IO 渐入)/Login/Workspace(P5 工作区 + P5.5 语音输入/
-                 音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口 + P8.12 会话窗口交互对齐旧版：问题复制/输入框底部停止/重新生成确认（含错误卡）/「↓ 最新」浮钮 + 流式自动跟随/生成中实时秒数（后端配套：recordFromRow 回读补齐 status 字段）+ P8.14 卡片样式对齐旧版（问/答单卡/胶囊徽章/完成（N 字）/图标按钮/流式光标/发送图标）+ P8.15 顶栏品牌位 =「EchoAnswer · 智能体名」（P8.52 点击品牌位/左上角 Logo = 刷新本页，不再跳首屏）+ P8.54 空会话提示通俗化（「这个会话还没有问答」+ EchoScribe 对接专业信息默认折叠「查看更多」，style.css .ws-empty-toggle/.ws-empty-detail）+ P8.30 会话栏头部：新建改图标按钮、收起/展开 Fold/Expand 语义图标 + P8.34 三视图登出统一跳登录页（?next 记忆原页，登录成功回跳原页）+ P8.45 登出场景细分：首屏登出保持在首屏、控制台登出返回首屏、工作区登出（及被踢出）仍跳登录页 ?next 回跳
+                 音频识别/会话设置 + P7 显示偏好 + P7.2 布局对齐旧版会话窗口 + P8.12 会话窗口交互对齐旧版：问题复制/输入框底部停止/重新生成确认（含错误卡）/「↓ 最新」浮钮 + 流式自动跟随/生成中实时秒数（后端配套：recordFromRow 回读补齐 status 字段）+ P8.14 卡片样式对齐旧版（问/答单卡/胶囊徽章/完成（N 字）/图标按钮/流式光标/发送图标）+ P8.15 顶栏品牌位 =「EchoAnswer · 智能体名」（P8.52 点击品牌位/左上角 Logo = 刷新本页，不再跳首屏）+ P8.54 空会话提示通俗化（「这个会话还没有问答」+ EchoScribe 对接专业信息默认折叠「查看更多」，style.css .ws-empty-toggle/.ws-empty-detail）+ P8.55 用户名下拉「个人设置」（显示名 + 修改密码对话框 components/ProfileDialog.vue，PUT /api/auth/me 自助；控制台顶栏同款）+ P8.30 会话栏头部：新建改图标按钮、收起/展开 Fold/Expand 语义图标 + P8.34 三视图登出统一跳登录页（?next 记忆原页，登录成功回跳原页）+ P8.45 登出场景细分：首屏登出保持在首屏、控制台登出返回首屏、工作区登出（及被踢出）仍跳登录页 ?next 回跳
                  + P8.47 会话列表桶标记：侧栏条目标注桶类型（共享 / 我的；管理端「私有·属主」/「访问码」，悬停可见性说明）；
                  列表项含 access_mode，管理端另含 user_id/owner_name）
                  + P8.37 顶栏一键分享（Share 图标按钮，复制智能体链接，非安全上下文 execCommand 回退）
@@ -148,7 +148,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
                  security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导；P8.46 登录页双页签「访问码/账号登录」：访问码在前（默认显示）、账号登录第二)；
-                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config)/AdminBootstrap(首启管理账号)；
+                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config)/ProfileDialog(P8.55 个人设置：显示名 + 修改密码，PUT /api/auth/me)/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
                  utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
@@ -163,7 +163,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 165 项断言全绿
+npm test                                        # 166 项断言全绿
 node tests/store_tests.js                       # 45 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；

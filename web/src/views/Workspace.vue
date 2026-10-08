@@ -9,11 +9,12 @@ import { useAuthStore } from "../stores/auth";
 import { useSessionsStore, RecordView, SessionView } from "../stores/sessions";
 import { useSse } from "../composables/useSse";
 import { useTheme } from "../composables/useTheme";
-import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight } from "@element-plus/icons-vue";
+import { Menu, Sunny, Moon, Plus, Close, MoreFilled, Headset, SetUp, Setting, Microphone, CopyDocument, RefreshRight, Delete, VideoPause, Check, ChatDotRound, Fold, Expand, Share, Lock, ArrowDown, ArrowRight, User } from "@element-plus/icons-vue";
 import { useMic } from "../composables/useMic";
 import { renderMarkdown } from "../utils/markdown";
 import AudioPanel from "../components/AudioPanel.vue";
 import SessionSettings from "../components/SessionSettings.vue";
+import ProfileDialog from "../components/ProfileDialog.vue";
 
 // 工作区（P5）：某智能体下「我的会话」列表 + 流式问答（SSE 按主体作用域投递）
 const route = useRoute();
@@ -590,6 +591,7 @@ function srcName(source: string): string {
 const SEND_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>';
 const CARET_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
 const userMenuOpen = ref(false);
+const profileOpen = ref(false); // P8.55 个人设置对话框
 const userWrap = ref<HTMLElement | null>(null);
 function onUserDocClick(e: MouseEvent) {
   if (userMenuOpen.value && userWrap.value && !userWrap.value.contains(e.target as Node)) userMenuOpen.value = false;
@@ -677,6 +679,8 @@ onBeforeUnmount(() => {
         <div v-if="auth.isAuthed" class="user-wrap" ref="userWrap">
           <button type="button" class="user-btn" aria-haspopup="menu" :aria-expanded="userMenuOpen ? 'true' : 'false'" @click="userMenuOpen = !userMenuOpen" @keydown.esc="userMenuOpen = false">{{ auth.displayName || '用户' }}<span class="user-caret" v-html="CARET_SVG" aria-hidden="true"></span></button>
           <div v-if="userMenuOpen" class="user-menu" role="menu">
+            <!-- P8.55：个人设置（显示名 / 修改密码；仅账号主体，访问码无 user） -->
+            <button v-if="auth.principal?.user" type="button" class="user-menu-item" role="menuitem" @click="userMenuOpen = false; profileOpen = true"><el-icon class="user-menu-ic"><User /></el-icon>个人设置</button>
             <button type="button" class="user-menu-item" role="menuitem" @click="onLogout">退出</button>
           </div>
         </div>
@@ -888,5 +892,6 @@ onBeforeUnmount(() => {
       @saved="onSettingsSaved"
       @delete="onSettingsDelete"
     />
+    <ProfileDialog :open="profileOpen" @update:open="profileOpen = $event" @saved="() => {}" />
   </div>
 </template>

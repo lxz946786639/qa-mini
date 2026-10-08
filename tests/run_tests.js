@@ -2724,6 +2724,30 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(ov.data.events.length > 0 && ov.data.events.length <= 20, "总览 events ≤20");
   });
 
+  await test("p8.55: 个人设置自助（PUT /api/auth/me 显示名 / 修改密码；匿名 401）", async () => {
+    const pu = await adminFetch("POST", "/api/admin/users", { username: "p855u", password: "p855pw1" }, adminTok);
+    assert.strictEqual(pu.status, 201, pu.data && pu.data.detail);
+    const jar = makeJar();
+    assert.strictEqual((await jarFetch(jar, "POST", "/api/auth/login", { username: "p855u", password: "p855pw1" })).status, 200);
+    // 显示名
+    const p1 = await jarFetch(jar, "PUT", "/api/auth/me", { display_name: "小P" });
+    assert.strictEqual(p1.status, 200, p1.data && p1.data.detail);
+    assert.strictEqual(p1.data.user.display_name, "小P", "显示名更新");
+    const ul = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users.find((u) => u.username === "p855u");
+    assert.strictEqual(ul.display_name, "小P", "管理端列表可见显示名");
+    // 修改密码：缺当前密码 → 400；当前密码错 → 403；正确 → 200
+    assert.strictEqual((await jarFetch(jar, "PUT", "/api/auth/me", { new_password: "p855pw2" })).status, 400, "缺当前密码 → 400");
+    assert.strictEqual((await jarFetch(jar, "PUT", "/api/auth/me", { old_password: "wrong", new_password: "p855pw2" })).status, 403, "当前密码错 → 403");
+    const p2 = await jarFetch(jar, "PUT", "/api/auth/me", { old_password: "p855pw1", new_password: "p855pw2" });
+    assert.strictEqual(p2.status, 200, p2.data && p2.data.detail);
+    assert.strictEqual((await jarFetch(makeJar(), "POST", "/api/auth/login", { username: "p855u", password: "p855pw1" })).status, 401, "旧密码失效");
+    assert.strictEqual((await jarFetch(makeJar(), "POST", "/api/auth/login", { username: "p855u", password: "p855pw2" })).status, 200, "新密码可登录");
+    // 匿名 → 401
+    assert.strictEqual((await api("PUT", "/api/auth/me", { display_name: "x" })).status, 401, "匿名不可用");
+    // 清理：停用测试用户
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + pu.data.user.id, { status: "disabled" }, adminTok)).status, 200);
+  });
+
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);

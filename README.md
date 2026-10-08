@@ -182,6 +182,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/auth/login` | **P3 用户登录** `{username, password}` → 200 + `ea_sid` cookie（HttpOnly/SameSite=Lax，12h，落 DB 可吊销） |
 | POST | `/api/auth/access-code` | **P3 访问码登录** `{code}` → 200 + `ea_sid` cookie（无匿名捷径；无效/过期 401） |
 | GET | `/api/auth/me` | 当前主体 `{principal（admin/user/code）, anonymous?}` |
+| PUT | `/api/auth/me` | **P8.55 个人设置自助**（账号主体）：`{display_name?, old_password?, new_password?}`（改密码需当前密码校验；访问码/匿名 401） |
 | POST | `/api/auth/logout` | 吊销当前 cookie 会话 |
 | GET | `/api/agents` | 启用中智能体列表（首屏选择器：code/name/description/protocol/…；P8.9 全量展示含 `allow_anon/allow_code/allow_user` 供访问徽标，门控在入口端点） |
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |

@@ -9,6 +9,8 @@ function register(router, ctx) {
   router.exact("POST", "/api/auth/login", (req, res) => ctx.auth.handleAuthLogin(req, res));
   router.exact("POST", "/api/auth/access-code", (req, res) => ctx.auth.handleAuthCodeLogin(req, res));
   router.exact("GET", "/api/auth/me", (req, res, ctx_, urlObj) => ctx.auth.handleAuthMe(req, res, ctx_, urlObj));
+  // P8.55：个人设置自助（显示名 / 修改密码；账号主体，访问码 401）
+  router.exact("PUT", "/api/auth/me", (req, res, ctx_, urlObj) => ctx.auth.handleAuthMeUpdate(req, res, ctx_, urlObj));
   router.exact("POST", "/api/auth/logout", (req, res) => ctx.auth.handleAuthLogout(req, res));
 }
 module.exports = { register };
