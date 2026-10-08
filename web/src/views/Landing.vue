@@ -579,7 +579,7 @@ onBeforeUnmount(() => {
           <button class="lp-btn lp-btn-soft" type="button" @click="comingSoon">查看文档</button>
         </div>
         </div>
-        <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2026 Echo Tech Co., Ltd. All rights reserved.</footer>
+        <footer class="lp-foot">EchoAnswer v{{ APP_VERSION }} · © 2025-现在 Echo Tech Co., Ltd. All rights reserved.</footer>
       </section>
     </main>
 
