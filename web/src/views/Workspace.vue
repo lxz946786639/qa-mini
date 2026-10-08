@@ -474,7 +474,7 @@ async function deleteSession(sid: string, name: string) {
     const rest = agentSessions.value[0];
     if (rest) await openSession(rest.id);
     else { cards.value = []; router.replace("/agents/" + encodeURIComponent(agentCode.value)); }
-  } else ElMessage.error("删除失败");
+  } else ElMessage.error(r.data?.detail || "删除失败"); // P8.79：透传服务端原因（无权限 =「您无权限删除…」）
 }
 
 async function send() {
@@ -523,7 +523,7 @@ async function deleteCard(rec: RecordView) {
   } catch { return; }
   const r = await sess.removeRecord(sess.currentSid!, rec.id);
   if (r.ok) ElMessage.success("已删除");
-  else ElMessage.error("删除失败");
+  else ElMessage.error(r.data?.detail || "删除失败"); // P8.79：透传服务端原因（无权限 =「您无权限删除…」）
 }
 
 async function regen(rec: RecordView) {
@@ -532,7 +532,7 @@ async function regen(rec: RecordView) {
     await ElMessageBox.confirm("重新生成回答？\n将删除这条记录，并按相同上下文重新提问。", "重新生成", { confirmButtonText: "重新生成", cancelButtonText: "取消", type: "warning" });
   } catch { return; }
   const r = await sess.removeRecord(sess.currentSid!, rec.id);
-  if (!r.ok) { ElMessage.error("重新生成失败"); return; }
+  if (!r.ok) { ElMessage.error(r.data?.detail || "重新生成失败"); return; } // P8.79：透传服务端原因
   await sendQuestionOnly(rec.question);
 }
 

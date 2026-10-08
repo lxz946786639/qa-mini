@@ -128,7 +128,8 @@ function register(router, ctx) {
   router.regex("DELETE", /^\/api\/sessions\/([a-zA-Z0-9]+)\/history\/([a-zA-Z0-9]+)$/, (req, res, ctx_, urlObj, params) => {
     const p = ctx.auth.principal(req, urlObj);
     if (!ctx.auth.isAdmin(req, urlObj) && !ownWrite(p, ctx.manager.sessionById(params[0]))) {
-      return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      // P8.79：无权限删除 → 明确提示（前端透传 detail）
+      return sendJSON(res, 401, { ok: false, detail: "您无权限删除（仅会话属主/管理员可删除）" });
     }
     const ok = ctx.manager.removeRecord(params[0], params[1]);
     sendJSON(res, ok ? 200 : 404, { ok, detail: ok ? "已删除" : "记录不存在" });
@@ -182,7 +183,8 @@ function register(router, ctx) {
   router.regex("DELETE", /^\/api\/sessions\/([a-zA-Z0-9]+)$/, (req, res, ctx_, urlObj, params) => {
     const p = ctx.auth.principal(req, urlObj);
     if (!ctx.auth.isAdmin(req, urlObj) && !ownWrite(p, ctx.manager.sessionById(params[0]))) {
-      return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
+      // P8.79：无权限删除 → 明确提示（前端透传 detail）
+      return sendJSON(res, 401, { ok: false, detail: "您无权限删除（仅会话属主/管理员可删除）" });
     }
     const id = params[0];
     const ok = ctx.manager.remove(id);

@@ -159,10 +159,10 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?, agent_id?/agent_code?}` → 201 会话；P3：管理/登录用户（自身私有桶）/访问码主体（自身码桶），匿名 401 |
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖：protocol_config 仅管理生效（P8.53，非 admin 提交被静默忽略） / 电脑输出音频 `{enabled, preferred_device}`） |
-| DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」） |
+| DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 EchoScribe「清空」） |
 | POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿，留空项回退全局）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
-| DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除） |
+| DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | GET | `/api/events` | SSE 广播（EventSource 自动重连）：连接即推 `sessions` 列表 → `qa_start`/`delta`/`done`（均带 session_id）/`sessions`（列表变更）/`session_reset`/`config`（**P8.33** 带 `?dev=` 设备指纹入在线注册表；踢出冷却期内 403 `evicted`） |
 | GET | `/api/events/check` | **P8.33 踢出探针** `?dev=`：仅回答本端 dev+IP 是否处于踢出冷却（无需主体；冷却期 403 `evicted`） |
 | POST | `/api/cancel` | `{id}` 取消在途问答（保留部分答案） |
@@ -244,7 +244,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   `/login`（账号 / 6 位访问码 → `ea_sid` cookie；
   管理密码未初始化时先显示「初始化管理账号」表单，初始化后直接以 admin 进入）+
   `/agents/:code` 工作区（P5：按智能体过滤的「我的会话」+ 流式问答卡片 + SSE 实时事件 +
-  停止/复制（问题/答案）/删除/重新生成（确认，含错误卡）/ 输入框底部「停止」/ 上滑「↓ 最新」
+  停止/复制（问题/答案）/删除/重新生成（确认，含错误卡；P8.79：无权限被拒时透传服务端原因「您无权限删除…」，不再通用「删除失败」）/ 输入框底部「停止」/ 上滑「↓ 最新」
   浮钮 + 流式自动跟随 / 生成中实时秒数（P8.12 会话窗口交互对齐重构前）+ P8.14 卡片样式对齐旧版（问/答单卡 / 来源·协议胶囊徽章 / 「完成（N 字）」/ 图标化操作按钮 / 流式光标 / 发送纸飞机）；P7.2 布局对齐旧版 + P8.5/P8.6 满宽顶栏对齐首页
   （官网同款 logo + 「EchoAnswer · 智能体名」左上角（P8.15）、右侧 = 显示/会话设置 ghost 按钮 +
   主题/控制台/用户名下拉「退出」，会话栏下移至顶栏之下，头部右缘 ☰ 收起为 44px 窄栏），
