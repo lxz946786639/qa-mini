@@ -2218,6 +2218,45 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p840-b", { enabled: false }, adminTok)).status, 200);
   });
 
+  await test("p8.53: 会话级协议配置仅管理可改（用户属主 PUT protocol_config 被忽略；protocol-test 仅管理）", async () => {
+    const du0 = (await adminFetch("GET", "/api/admin/users", undefined, adminTok)).data.users;
+    const dana = du0.find((u) => u.username === "dana");
+    assert.ok(dana, "dana 存在（p8.51 建，仅放行 p840-b）");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p840-b", { enabled: true }, adminTok)).status, 200);
+    const danaJar = makeJar();
+    assert.strictEqual((await jarFetch(danaJar, "POST", "/api/auth/login", { username: "dana", password: "danapw123" })).status, 200);
+    const cs = await jarFetch(danaJar, "POST", "/api/sessions", { name: "p853", agent_code: "p840-b" });
+    assert.strictEqual(cs.status, 201, cs.data && cs.data.detail);
+    const sid = cs.data.session.id;
+    // 1) 用户属主 PUT：name 生效，protocol_config 被静默忽略（保持空）
+    const p1 = await jarFetch(danaJar, "PUT", "/api/sessions/" + sid, {
+      name: "p853-renamed",
+      protocol_config: { ragflow: { url: "http://evil.test", api_key: "evilkey", chat_id: "c1" } }
+    });
+    assert.strictEqual(p1.status, 200, p1.data && p1.data.detail);
+    assert.strictEqual(p1.data.session.name, "p853-renamed", "name 生效");
+    const g1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    const pc1 = g1.data.session.protocol_config || {};
+    assert.ok(!pc1.ragflow || pc1.ragflow.url !== "http://evil.test", "非 admin protocol_config 未落库");
+    // 2) 用户 protocol-test → 401（仅管理）
+    assert.strictEqual((await jarFetch(danaJar, "POST", "/api/sessions/" + sid + "/protocol-test", { protocol: "ragflow", config: {} })).status, 401);
+    // 3) 管理 PUT protocol_config → 生效（管理视图回读）
+    const p2 = await adminFetch("PUT", "/api/sessions/" + sid, {
+      protocol_config: { ragflow: { url: "http://127.0.0.1:1", api_key: "p853key", chat_id: "p853chat" } }
+    }, adminTok);
+    assert.strictEqual(p2.status, 200, p2.data && p2.data.detail);
+    const g2 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
+    assert.strictEqual(g2.data.session.protocol_config.ragflow.api_key, "p853key", "管理 protocol_config 生效");
+    // 4) 非 admin GET：视图不含 protocol_config / token（不暴露明文密钥）
+    const g3 = await jarFetch(danaJar, "GET", "/api/sessions/" + sid);
+    assert.strictEqual(g3.status, 200);
+    assert.strictEqual(g3.data.session.protocol_config, undefined, "非 admin 视图无 protocol_config");
+    assert.strictEqual(g3.data.session.token, undefined, "非 admin 视图无 token");
+    // 清理：属主删会话 + 停用测试智能体
+    assert.strictEqual((await jarFetch(danaJar, "DELETE", "/api/sessions/" + sid)).status, 200);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p840-b", { enabled: false }, adminTok)).status, 200);
+  });
+
   await test("p8.43: 协议启用状态（停用协议 → 智能体管理端同步标注 + 提问拒绝 + 新建/改选被拒）", async () => {
     const gMock = "http://127.0.0.1:" + PORTS.generic + "/ask";
     // generic 智能体（指向 mock generic 后端）→ 停用前提问正常

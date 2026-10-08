@@ -169,6 +169,8 @@ function register(router, ctx) {
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
     }
+    // P8.53：会话级协议配置仅管理可改 —— 非 admin（用户属主 / 访问码）静默忽略 protocol_config（保持原值）
+    if (!ctx.auth.isAdmin(req, urlObj)) delete body.protocol_config;
     if (body.protocol_config !== undefined &&
         (typeof body.protocol_config !== "object" || body.protocol_config === null || Array.isArray(body.protocol_config))) {
       return sendJSON(res, 400, { ok: false, detail: "protocol_config 必须是对象（按协议分组：{ 协议: { 字段: 值 } }）" });

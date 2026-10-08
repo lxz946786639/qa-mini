@@ -6,7 +6,9 @@
 // 推送token/配置片段/body 值，admin 页签）/ 音频（电脑输出音频接收 + 首选设备）/
 // 管理（重置后端上下文，admin 页签）；底部 = 保存状态 + 删除会话 + 保存。
 // 服务端契约：PUT /api/sessions/:id（admin 或本桶拥有者；protocol_config 按协议分组，
-// 空值丢弃 = 回退全局默认）；POST .../protocol-test（管理）；POST .../reset（管理）。
+// 空值丢弃 = 回退全局默认；**P8.53 protocol_config 仅管理生效**，非 admin 静默忽略）；
+// POST .../protocol-test（管理）；POST .../reset（管理）。
+// P8.53：协议配置页签仅 admin 可见（普通用户/访问码/匿名只余 基本/音频 等页签）。
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
@@ -137,9 +139,10 @@ async function save() {
   saveState.text = "保存中…"; saveState.cls = "";
   const body: Record<string, any> = {
     name: form.name, protocol: form.protocol, continue_session: form.continue_session,
-    audio_remote: { enabled: form.audio_enabled, preferred_device: form.preferred_device },
-    protocol_config: { [form.protocol]: cfgVals() }
+    audio_remote: { enabled: form.audio_enabled, preferred_device: form.preferred_device }
   };
+  // P8.53：协议配置仅管理可改 —— 非 admin 不提交 protocol_config（服务端亦忽略）
+  if (props.isAdmin) body.protocol_config = { [form.protocol]: cfgVals() };
   try {
     const r = await api<{ ok: boolean; detail?: string }>(
       "/api/sessions/" + encodeURIComponent(s.id), { method: "PUT", body }
@@ -255,9 +258,10 @@ function copyText(t: string, tip?: string) {
             </el-form-item>
           </el-form>
         </el-tab-pane>
-        <el-tab-pane label="协议配置" name="protocol">
+        <!-- P8.53：会话级协议配置仅管理可改（普通用户/访问码/匿名不展示该页签） -->
+        <el-tab-pane v-if="isAdmin" label="协议配置" name="protocol">
           <el-form label-position="top">
-            <p class="ss-small ss-pane-note">本会话协议配置：留空 = 回退全局默认；修改后需测试通过才能保存。</p>
+            <p class="ss-small ss-pane-note">本会话协议配置：留空 = 回退全局默认；修改后需测试通过才能保存（仅管理可改）。</p>
             <template v-for="f in fields" :key="f.key">
               <el-form-item :label="f.label">
                 <el-input

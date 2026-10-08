@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 164 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 165 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v7 数据层 45 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
@@ -148,7 +148,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
                  security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导；P8.46 登录页双页签「访问码/账号登录」：访问码在前（默认显示）、账号登录第二)；
-                 components: AudioPanel/SessionSettings/AdminBootstrap(首启管理账号)；
+                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config)/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
                  utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
@@ -163,7 +163,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 164 项断言全绿
+npm test                                        # 165 项断言全绿
 node tests/store_tests.js                       # 45 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；

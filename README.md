@@ -158,7 +158,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET | `/api/sessions` | 会话列表，**按最新对话时间（updated_at）倒序**（摘要：id/name/token/protocol/continue_session/qa_count/active/last_question/last_at/access_mode（**P8.47** 桶标记 shared/user/code；管理端另含 user_id/owner_name））；P3：按主体作用域（只看可见桶） |
 | POST | `/api/sessions` | 新建会话。body `{name?, protocol?, continue_session?, agent_id?/agent_code?}` → 201 会话；P3：管理/登录用户（自身私有桶）/访问码主体（自身码桶），匿名 401 |
 | GET | `/api/sessions/:id` | 会话详情 `{session（含历史）, running（在途问答+部分答案）}` |
-| PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖 / 电脑输出音频 `{enabled, preferred_device}`） |
+| PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖：protocol_config 仅管理生效（P8.53，非 admin 提交被静默忽略） / 电脑输出音频 `{enabled, preferred_device}`） |
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」） |
 | POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 EchoScribe「清空」） |
 | POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿，留空项回退全局）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
