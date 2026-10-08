@@ -199,7 +199,8 @@ function revealInit() {
     );
   }
   els.forEach((el, i) => {
-    el.style.transitionDelay = (i % 8) * 55 + "ms";
+    // P8.73：Hero 入场编排的延迟/曲线由 CSS 类承担（.lp-hero .lp-io nth-child），不设内联
+    if (!el.closest(".lp-hero")) el.style.transitionDelay = (i % 8) * 55 + "ms";
     io!.observe(el);
   });
 }
@@ -300,10 +301,33 @@ function edgeRest() {
 let edgeRaf = 0;
 function onEdgeScroll() {
   if (edgeRaf) return;
-  edgeRaf = requestAnimationFrame(() => { edgeRaf = 0; edgeRest(); });
+  edgeRaf = requestAnimationFrame(() => { edgeRaf = 0; edgeRest(); navSync(); });
 }
 function snapGoNext() { snapAnimate(Math.min(SNAP_IDS.length - 1, snapIndex() + 1)); }
 function snapGoPrev() { snapAnimate(Math.max(0, snapIndex() - 1)); }
+
+// ---------- P8.73 导航 scrollspy（滑动下划线跟随当前吸附区块） ----------
+const NAV_SECS = [
+  { id: "top", label: "首页" },
+  { id: "agents", label: "智能体" },
+  { id: "matrix", label: "产品矩阵" },
+  { id: "workflow", label: "工作流" }
+];
+const navIdx = ref(0);
+const navLinksWrap = ref<HTMLElement | null>(null);
+let inkEl: HTMLElement | null = null;
+let navLinkEls: HTMLButtonElement[] = [];
+// ink 位置 = 当前区块对应按钮的 offsetLeft/offsetWidth（.lp-nav-links 为参照系）
+function navSync() {
+  const idx = Math.max(0, Math.min(NAV_SECS.length - 1, snapIndex()));
+  navIdx.value = idx;
+  const el = navLinkEls[idx];
+  if (el && inkEl) {
+    inkEl.style.width = el.offsetWidth + "px";
+    inkEl.style.transform = "translateX(" + el.offsetLeft + "px)";
+  }
+}
+function onNavResize() { navSync(); }
 
 // P8.72：区块内容高于视口（手机叠排）时允许区块内自由滚动——滚到区块边缘才拦截吸附，
 // 否则超高区块（工作流）底部不可达（「滚不到底」）
@@ -344,6 +368,14 @@ onMounted(() => {
   window.addEventListener("wheel", onWheel, { passive: false });
   document.addEventListener("click", onDocClick);
   window.setTimeout(startTyping, 900);
+  // P8.73：导航滑动下划线初始化（按钮几何量测 + 首次定位）
+  if (navLinksWrap.value) {
+    inkEl = navLinksWrap.value.querySelector(".lp-nav-ink");
+    navLinkEls = Array.from(navLinksWrap.value.querySelectorAll<HTMLButtonElement>(".lp-nav-link"));
+    navLinksWrap.value.classList.add("has-ink");
+  }
+  navSync();
+  window.addEventListener("resize", onNavResize);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", onEdgeScroll);
@@ -352,6 +384,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("wheel", onWheel);
   document.removeEventListener("click", onDocClick);
   if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+  window.removeEventListener("resize", onNavResize);
   if (snapRaf) cancelAnimationFrame(snapRaf);
   snapRaf = 0;
   snapAcc = 0;
@@ -369,11 +402,16 @@ onBeforeUnmount(() => {
         <span>EchoAnswer 回响答</span>
       </a>
       <nav class="lp-nav-right" aria-label="主导航">
-        <div class="lp-nav-links">
-          <button class="lp-nav-link" type="button" @click="scrollTo('top')">首页</button>
-          <button class="lp-nav-link" type="button" @click="scrollTo('agents')">智能体</button>
-          <button class="lp-nav-link" type="button" @click="scrollTo('matrix')">产品矩阵</button>
-          <button class="lp-nav-link" type="button" @click="scrollTo('workflow')">工作流</button>
+        <div class="lp-nav-links" ref="navLinksWrap">
+          <button
+            v-for="(sec, i) in NAV_SECS"
+            :key="sec.id"
+            class="lp-nav-link"
+            :class="{ 'lp-active': i === navIdx }"
+            type="button"
+            @click="scrollTo(sec.id)"
+          >{{ sec.label }}</button>
+          <span class="lp-nav-ink" aria-hidden="true"></span>
         </div>
         <span class="lp-nav-sep" aria-hidden="true"></span>
         <button

@@ -3,7 +3,10 @@
    主题：--lp-* 变量两套（深色默认 = 无 data-theme；浅色 = :root[data-theme="light"]），
    与全站主题机制（useTheme / index.html 内联防闪烁脚本）共用同一 data-theme 驱动；
    浅色为完整重着色（视觉元素重新着色，无破坏主题的硬编码颜色）。
-   动效：CSS animation/transition 为主；JS 只做主题切换 + IO 滚动渐入 + 滚动提示淡出。
+   动效：CSS animation/transition 为主；JS 只做主题切换 + IO 滚动渐入 + 滚动提示淡出 +
+   P8.73 导航滑动下划线（JS 量测当前吸附区块）。P8.73 动效增强：Hero 入场编排（级联
+   延迟 + 回弹曲线 + 标题左→右擦入）/ 声波行波（逐柱相位延迟）/ 矩阵连线光带（替代小圆点）
+   + 产品卡按「听/答」角色着色 hover / 工作流四步顺序点亮（随光点经过，纯 CSS）。
    断点：>1024 桌面 / 641–1024 平板 / ≤640 手机。
    P8.3：四区块各满屏 100svh + 滚轮区块吸附；页脚位于末区块内。
    ============================================================ */
@@ -89,7 +92,17 @@
 .lp-brand svg { width: 26px; height: 26px; color: var(--lp-accent); }
 /* P8.2 导航布局：锚点链接（智能体/产品矩阵/工作流）｜ 无边框主题按钮 · 控制台 · 登录/用户名下拉 */
 .lp-nav-right { display: flex; align-items: center; gap: 4px; }
-.lp-nav-links { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
+/* P8.73：导航 scrollspy——当前位置相对 .lp-nav-links（ink 量测 offsetLeft/width 的参照系） */
+.lp-nav-links { display: flex; align-items: center; gap: 2px; margin-right: 8px; position: relative; }
+.lp-nav-link.lp-active { color: var(--lp-text); }
+/* P8.73：滑动下划线（JS 跟随当前吸附区块，transform/width 过渡；链接隐藏时随容器隐藏） */
+.lp-nav-ink {
+  position: absolute; left: 0; bottom: -2px; height: 2px; width: 0; border-radius: 2px;
+  background: linear-gradient(90deg, var(--lp-grad-a), var(--lp-grad-b));
+  opacity: 0; pointer-events: none;
+  transition: transform 0.32s cubic-bezier(0.25, 0.9, 0.3, 1), width 0.32s cubic-bezier(0.25, 0.9, 0.3, 1), opacity 0.25s ease;
+}
+.lp-nav-links.has-ink .lp-nav-ink { opacity: 1; }
 .lp-nav-link {
   background: none; border: none; padding: 6px 10px; font-family: inherit;
   color: var(--lp-dim); text-decoration: none; font-size: 14px; cursor: pointer;
@@ -219,13 +232,38 @@
 .lp-hero-ctas { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 26px; }
 .lp-hero-meta { margin: 0; font-size: 13px; color: var(--lp-dim); }
 .lp-hero-trust { margin: 8px 0 0; font-size: 12px; color: var(--lp-dim); opacity: 0.8; letter-spacing: 0.04em; }
+/* P8.73：Hero 入场编排——.lp-in 时机仍由 IO 控制（首屏即现），延迟/曲线由类承担
+   （Landing.vue revealInit 对 .lp-hero 内元素不设内联 transitionDelay）；
+   标题一次性左→右擦入（clip-path，与渐显叠加），视觉区自右上方滑入 */
+.lp-hero .lp-io { transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1.22, 0.36, 1); }
+.lp-hero-copy > .lp-io:nth-child(1) { transition-delay: 0.05s; }
+.lp-hero-copy > .lp-io:nth-child(2) { transition-delay: 0.17s; }
+.lp-hero-copy > .lp-io:nth-child(3) { transition-delay: 0.30s; }
+.lp-hero-copy > .lp-io:nth-child(4) { transition-delay: 0.44s; }
+.lp-hero-copy > .lp-io:nth-child(5) { transition-delay: 0.56s; }
+.lp-hero-copy > .lp-io:nth-child(6) { transition-delay: 0.64s; }
+.lp-viz.lp-io { transform: translate(22px, 10px); transition-delay: 0.4s; }
+.lp-hero h1 { animation: lp-title-in 0.9s 0.12s cubic-bezier(0.3, 0.9, 0.3, 1) both; }
+@keyframes lp-title-in { from { clip-path: inset(-12% 102% -12% -4%); } to { clip-path: inset(-12% -4% -12% -4%); } }
 /* 右侧视觉：声波 → 文字 → 答案卡片 */
 .lp-viz { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 430px; margin: 0 auto; }
 .lp-viz-wave { width: 100%; max-width: 300px; display: block; margin: 0 auto; color: var(--lp-accent-2); }
 .lp-viz-wave rect { animation: lp-wave 1.6s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
-.lp-viz-wave rect:nth-child(2n) { animation-delay: 0.2s; }
-.lp-viz-wave rect:nth-child(3n) { animation-delay: 0.45s; }
-.lp-viz-wave rect:nth-child(5n) { animation-delay: 0.7s; }
+/* P8.73：行波——逐柱相位延迟（0.12s/柱，负延迟 = 全柱同周期运行、峰值向右传播） */
+.lp-viz-wave rect:nth-child(1)  { animation-delay: -1.56s; }
+.lp-viz-wave rect:nth-child(2)  { animation-delay: -1.44s; }
+.lp-viz-wave rect:nth-child(3)  { animation-delay: -1.32s; }
+.lp-viz-wave rect:nth-child(4)  { animation-delay: -1.20s; }
+.lp-viz-wave rect:nth-child(5)  { animation-delay: -1.08s; }
+.lp-viz-wave rect:nth-child(6)  { animation-delay: -0.96s; }
+.lp-viz-wave rect:nth-child(7)  { animation-delay: -0.84s; }
+.lp-viz-wave rect:nth-child(8)  { animation-delay: -0.72s; }
+.lp-viz-wave rect:nth-child(9)  { animation-delay: -0.60s; }
+.lp-viz-wave rect:nth-child(10) { animation-delay: -0.48s; }
+.lp-viz-wave rect:nth-child(11) { animation-delay: -0.36s; }
+.lp-viz-wave rect:nth-child(12) { animation-delay: -0.24s; }
+.lp-viz-wave rect:nth-child(13) { animation-delay: -0.12s; }
+.lp-viz-wave rect:nth-child(14) { animation-delay: 0s; }
 @keyframes lp-wave { 0%, 100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
 .lp-viz-flow {
   display: flex; align-items: center; gap: 10px;
@@ -360,7 +398,10 @@
   padding: clamp(18px, 2.6vw, 28px);
   transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
 }
-.lp-prod-card:hover { transform: translateY(-3px); border-color: var(--lp-accent); box-shadow: var(--lp-shadow); }
+/* P8.73：hover 按「听/答」角色着色（听 = 青 / 答 = 蓝），光晕随角色 */
+.lp-prod-card:hover { transform: translateY(-3px); }
+.lp-prod-card[data-role="hear"]:hover   { border-color: var(--lp-accent-2); box-shadow: 0 14px 36px var(--lp-glow-2); }
+.lp-prod-card[data-role="answer"]:hover { border-color: var(--lp-accent); box-shadow: 0 14px 36px var(--lp-glow); }
 .lp-prod-head { display: flex; align-items: center; gap: 12px; }
 .lp-prod-ic { display: inline-flex; }
 .lp-prod-ic svg { width: 38px; height: 38px; }
@@ -382,13 +423,14 @@
   position: absolute; inset: 0;
   background: repeating-linear-gradient(90deg, var(--lp-border) 0 7px, transparent 7px 14px);
 }
+/* P8.73：小圆点 → 渐变光带（64px 尾迹，前端淡出、后端实色） */
 .lp-matrix-link .lp-dot {
-  position: absolute; top: -3px; left: 0; width: 8px; height: 8px; border-radius: 50%;
-  background: linear-gradient(120deg, var(--lp-grad-a), var(--lp-grad-b));
-  box-shadow: 0 0 10px var(--lp-glow);
+  position: absolute; top: -1px; left: 0; width: 64px; height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--lp-grad-a) 55%, var(--lp-grad-b));
+  box-shadow: 0 0 12px var(--lp-glow);
   animation: lp-flow-x 2.4s linear infinite;
 }
-@keyframes lp-flow-x { from { left: 0; } to { left: calc(100% - 8px); } }
+@keyframes lp-flow-x { from { left: -64px; } to { left: 100%; } }
 .lp-matrix-link-v { display: none; justify-content: center; color: var(--lp-dim); }
 .lp-matrix-link-v svg { width: 14px; height: 22px; }
 .lp-matrix-note { margin-top: clamp(26px, 4vw, 40px); text-align: center; display: flex; flex-direction: column; gap: 6px; }
@@ -422,21 +464,38 @@
   box-shadow: 0 0 10px var(--lp-glow);
   animation: lp-flow-step 4.8s linear infinite;
 }
+/* P8.73：四步顺序点亮——光点（4.8s 线性）第 1.58s×i 经过第 i+1 步中心，
+   各步同周期动画按相位延迟对齐；--lp-on 在关键帧间离散切换（0→1），
+   子元素以 transition 平滑过渡（纯 CSS，无 JS）。桌面/平板/手机均生效。 */
+.lp-flow .lp-step { --lp-on: 0; animation: lp-step-cycle 4.8s linear infinite; }
+.lp-flow .lp-step:nth-child(1) { animation-delay: -0.7s; }
+.lp-flow .lp-step:nth-child(3) { animation-delay: 0.9s; }
+.lp-flow .lp-step:nth-child(5) { animation-delay: 2.5s; }
+.lp-flow .lp-step:nth-child(7) { animation-delay: 4.0s; }
+@keyframes lp-step-cycle { 0%, 29% { --lp-on: 1; } 33%, 100% { --lp-on: 0; } }
 @keyframes lp-flow-step { 0% { left: 12%; } 100% { left: calc(88% - 8px); } }
 .lp-step { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; position: relative; }
 .lp-step-no {
   height: 46px; display: flex; align-items: flex-end;
-  font-size: 40px; font-weight: 800; line-height: 1; color: var(--lp-step-no);
+  font-size: 40px; font-weight: 800; line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* P8.73：点亮时序号转强调色（--lp-on 离散切换 → transition 平滑） */
+  color: color-mix(in srgb, var(--lp-accent) calc(var(--lp-on) * 92%), var(--lp-step-no));
+  transition: color 0.5s ease;
 }
 .lp-step-ic {
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: 12px;
-  background: var(--lp-bg-soft); border: 1px solid var(--lp-border); color: var(--lp-accent);
+  background: var(--lp-bg-soft);
+  border: 1px solid color-mix(in srgb, var(--lp-accent) calc(var(--lp-on) * 100%), var(--lp-border));
+  box-shadow: 0 0 calc(var(--lp-on) * 18px) color-mix(in srgb, var(--lp-glow) calc(var(--lp-on) * 100%), transparent);
+  transform: scale(calc(1 + var(--lp-on) * 0.06));
+  color: var(--lp-accent);
+  transition: border-color 0.5s ease, box-shadow 0.5s ease, transform 0.5s ease;
 }
 .lp-step-ic svg { width: 24px; height: 24px; }
-.lp-step h3 { margin: 4px 0 0; font-size: 16px; font-weight: 700; }
-.lp-step p { margin: 0; font-size: 13px; color: var(--lp-dim); line-height: 1.55; max-width: 220px; }
+.lp-step h3 { margin: 4px 0 0; font-size: 16px; font-weight: 700; color: color-mix(in srgb, var(--lp-accent) calc(var(--lp-on) * 55%), var(--lp-text)); transition: color 0.5s ease; }
+.lp-step p { margin: 0; font-size: 13px; color: var(--lp-dim); line-height: 1.55; max-width: 220px; opacity: calc(0.72 + var(--lp-on) * 0.28); transition: opacity 0.5s ease; }
 .lp-step-arrow { display: none; justify-content: center; color: var(--lp-dim); }
 .lp-step-arrow svg { width: 14px; height: 22px; }
 @media (max-width: 1024px) {
@@ -465,7 +524,11 @@
 @media (prefers-reduced-motion: reduce) {
   .lp-viz-wave rect, .lp-scroll-cue svg, .lp-matrix-link .lp-dot,
   .lp-flow::after, .lp-caret, .lp-skel { animation: none !important; }
+  /* P8.73：新增动效同步关闭（光带停在连线中部静态展示；工作流恒为常亮态） */
+  .lp-matrix-link .lp-dot { left: 40%; }
+  .lp-flow .lp-step, .lp-hero h1 { animation: none !important; --lp-on: 1; }
   .lp-type { animation: none; clip-path: none; }
   .lp-io { opacity: 1; transform: none; transition: none; }
-  .lp-btn, .lp-agent-card, .lp-prod-card, .lp-agent-go .lp-arrow svg { transition: none; }
+  .lp-btn, .lp-agent-card, .lp-prod-card, .lp-agent-go .lp-arrow svg, .lp-nav-ink { transition: none; }
+  .lp-nav-ink { opacity: 0; }
 }
