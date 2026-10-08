@@ -1,7 +1,8 @@
 
 <script setup lang="ts">
 // 会话设置（P7.9 按重构前 public/ 会话抽屉重排版；P8.7 内容分类为 5 个 tab，
-// 缩短弹窗高度）：自含 el-dialog（头部/主体/底部）。tab = 基本（名称/问答协议/
+// 缩短弹窗高度；P8.67 行距统一：字段注记并入 label 槽位、token 警示贴控制项下、
+// 独立提示不再占 form-item 行距、弹窗体超高内部滚动）：自含 el-dialog（头部/主体/底部）。tab = 基本（名称/问答协议/
 // 提问续接）/ 协议配置（修改后需测试通过才能保存，含测试守护）/ EchoScribe（会话ID/
 // 推送token/配置片段/body 值，admin 页签）/ 音频（电脑输出音频接收 + 首选设备）/
 // 管理（重置后端上下文，admin 页签）；底部 = 保存状态 + 删除会话 + 保存。
@@ -234,6 +235,7 @@ function copyText(t: string, tip?: string) {
 <template>
   <el-dialog
     :model-value="open"
+    class="ss-dialog"
     title="会话设置"
     width="640px"
     :close-on-click-modal="false"
@@ -281,8 +283,8 @@ function copyText(t: string, tip?: string) {
         </el-tab-pane>
         <el-tab-pane v-if="isAdmin" label="EchoScribe" name="push">
           <el-form label-position="top">
-            <el-form-item label="会话 ID">
-              <span class="ss-small ss-label-note">（EchoScribe 推送请求体需同时携带）</span>
+            <el-form-item>
+              <template #label>会话 ID<span class="ss-label-note">（EchoScribe 推送请求体需同时携带）</span></template>
               <el-input :model-value="session.id" readonly class="ss-mono">
                 <template #append><el-button @click="copyText(session.id, '会话 ID 已复制')">复制</el-button></template>
               </el-input>
@@ -294,17 +296,15 @@ function copyText(t: string, tip?: string) {
                   <el-button type="danger" plain @click="regenToken">重生成</el-button>
                 </template>
               </el-input>
+              <span class="ss-small ss-warn ss-warn-line">重新生成后旧 token 立即失效，对接方需同步更新 body</span>
             </el-form-item>
             <el-form-item>
-              <span class="ss-small ss-warn">重新生成后旧 token 立即失效，对接方需同步更新 body</span>
-            </el-form-item>
-            <el-form-item label="EchoScribe 配置片段">
-              <span class="ss-small ss-label-note">（echoscribe.toml · 推送模式，可直接粘贴）</span>
+              <template #label>EchoScribe 配置片段<span class="ss-label-note">（echoscribe.toml · 推送模式，可直接粘贴）</span></template>
               <pre class="ss-pre">{{ snippet }}</pre>
               <el-button size="small" @click="copyText(snippet, 'EchoScribe 配置片段已复制')">复制片段</el-button>
             </el-form-item>
-            <el-form-item label="body 值">
-              <span class="ss-small ss-label-note">（EchoScribe 设置页「第三方接口 body」直接粘贴）</span>
+            <el-form-item>
+              <template #label>body 值<span class="ss-label-note">（EchoScribe 设置页「第三方接口 body」直接粘贴）</span></template>
               <pre class="ss-pre">{{ pushBody }}</pre>
               <el-button size="small" @click="copyText(pushBody, 'body 值已复制')">复制 body</el-button>
             </el-form-item>
@@ -318,9 +318,7 @@ function copyText(t: string, tip?: string) {
             <el-form-item label="首选设备（可空 = 首个推流设备）">
               <el-input v-model="form.preferred_device" placeholder="如 Speakers (Realtek Audio)" />
             </el-form-item>
-            <el-form-item>
-              <span class="ss-small">推流中的设备识别操作见底部 composer「🎧 音频」面板</span>
-            </el-form-item>
+            <p class="ss-small ss-plain-note">推流中的设备识别操作见底部 composer「音频」面板</p>
           </el-form>
         </el-tab-pane>
         <el-tab-pane v-if="isAdmin" label="管理" name="advanced">

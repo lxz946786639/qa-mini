@@ -692,7 +692,7 @@ body {
 /* P7.9 会话设置对话框（对齐旧抽屉排版）：小字注释 / mono 只读输入 / 底部操作条 */
 .ss-small { font-size: 12px; color: var(--text-dim); font-weight: 400; }
 .ss-label-note { margin-left: 6px; }
-/* P8.66 表单行距统一：警示贴控制项（独立行、无左偏移）/ 独立提示行不占 form-item 行距 /
+/* P8.67 表单行距统一：警示贴控制项（独立行、无左偏移）/ 独立提示行不占 form-item 行距 /
    弹窗体超高内部滚动（表单不超出视口） */
 .ss-warn-line { margin-left: 0; margin-top: 4px; display: block; }
 .ss-plain-note { margin: 0; }

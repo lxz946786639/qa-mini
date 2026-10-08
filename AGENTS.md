@@ -149,7 +149,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
                  security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导；P8.46 登录页双页签「访问码/账号登录」：访问码在前（默认显示）、账号登录第二)；
-                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config)/ProfileDialog(P8.55 个人设置：显示名 + 修改密码，PUT /api/auth/me)/AdminBootstrap(首启管理账号)；
+                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config；P8.67 表单行距统一：注记并入 el-form-item label 槽位、token 警示贴控制项下（4px）、独立指引行不占 form-item 行距（顺带移除提示 emoji，P8.25）、弹窗体 max-height + 内部滚动；全站表单审计其余对话框为标准 el-form 无同类问题)/ProfileDialog(P8.55 个人设置：显示名 + 修改密码，PUT /api/auth/me)/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
                  utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
