@@ -648,8 +648,6 @@ onBeforeUnmount(() => {
         <span v-if="runningCount > 0" class="ws-active-pill" title="在途问答">生成中 {{ runningCount }}</span>
       </div>
       <div class="ws-head-right">
-        <!-- P8.66：SSE 连接状态移至顶栏（侧栏收起时仍可见） -->
-        <span class="conn" :class="connCls" title="实时通道（SSE）连接状态">{{ connText }}</span>
         <el-popover placement="bottom-end" :width="340" trigger="click">
           <template #reference>
             <button class="prefs-btn" title="显示偏好（本地记忆）"><el-icon><SetUp /></el-icon>显示</button>
@@ -753,6 +751,10 @@ onBeforeUnmount(() => {
           <div v-if="s.last_question" class="ws-sess-last">{{ s.last_question }}</div>
         </li>
       </ul>
+      <!-- P8.70：连接状态回到侧栏左下角；收起窄轨时仅显示状态点 -->
+      <div class="ws-side-foot">
+        <span class="conn" :class="connCls" title="实时通道（SSE）连接状态">{{ connText }}</span>
+      </div>
     </aside>
 
     <!-- 主列（P8.5：顶栏已上移为满宽 .ws-top；本列仅 main#chat / footer composer） -->

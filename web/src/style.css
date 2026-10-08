@@ -222,6 +222,9 @@ body {
   .ws-app.side-collapsed .ws-side-empty { display: none; }
   .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
   .ws-app.side-collapsed .ws-side-actions { flex-direction: column; gap: 6px; }
+  /* P8.70：窄轨底部保留连接状态——仅显示状态点（文字 font-size:0），居中 */
+  .ws-app.side-collapsed .ws-side-foot { padding: 8px 0; display: flex; justify-content: center; }
+  .ws-app.side-collapsed .ws-side-foot .conn { font-size: 0; gap: 0; }
 }
 .ws-side {
   width: 252px; flex: 0 0 auto; border-right: 1px solid var(--border);
@@ -290,6 +293,7 @@ body {
 .conn-on::before { background: var(--green); }
 .conn-cx::before { background: #d29922; }
 .conn-off::before { background: var(--red); }
+.ws-side-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .ws-col {
   flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
   position: relative;
