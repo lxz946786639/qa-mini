@@ -37,7 +37,7 @@ const MENU = [
   { key: "security", icon: Lock, label: "安全监控", sub: "访问 / 提问监测 + 异常检测（爆破 / 高频 / 无效码 / 错误激增）+ IP 封禁（手动 / 自动）与解除" },
   { key: "users", icon: User, label: "用户管理", sub: "管理门户登录账号、角色与状态（建号 / 提权降级 / 停用 / 重置密码 / 权限范围：全部 / 指定 / 无，新建默认最小权限「无」，建号后自动弹窗引导；管理员恒全量）" },
   { key: "audit", icon: Document, label: "审计日志", sub: "admin 操作留痕（初始化 / 建号 / 改密 / 配置 / 会话重置等）" },
-  { key: "sys", icon: Setting, label: "系统设置", sub: "两类配置分 tab：协议全局默认 / 语音识别 ASR（P8.44 移除匿名访问开关：首屏与匿名问答恒公开）" }
+  { key: "sys", icon: Setting, label: "系统设置", sub: "两类配置分 tab：协议全局默认 / 语音识别 ASR" }
 ];
 // P8.39：当前页签写入 URL（/admin?tab=<key>）——刷新/分享链接保持在对应菜单页；
 // 默认页签（第一项「仪表盘」dash，P8.48）不带参数（URL 干净）

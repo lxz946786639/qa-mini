@@ -157,7 +157,7 @@ function audioN(sid: string): number {
 }
 function fmtDevName(d: any): string {
   d = String(d == null ? "" : d);
-  return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
+  return d;
 }
 // P7.10 对齐旧版 onRmtAudioToggle：常显入口 + 前置条件 toast
 async function openAudioPanel() {

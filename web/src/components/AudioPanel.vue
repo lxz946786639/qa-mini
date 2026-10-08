@@ -28,7 +28,7 @@ const streams = ref<any[]>([]);
 
 function fmtDevName(d: any): string {
   d = String(d == null ? "" : d);
-  return /^\d+$/.test(d) ? d + "（旧版序号编码）" : d;
+  return d;
 }
 function fmtBytes(n: any): string {
   n = Number(n) || 0;
