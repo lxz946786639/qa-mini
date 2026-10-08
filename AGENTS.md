@@ -33,7 +33,7 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 166 项断言全绿，
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 167 项断言全绿，
    含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v7 数据层 45 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
@@ -136,7 +136,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）+ P8.51 权限范围三态 + 最小权限
                  默认（agent_scope：'' = 全部 / '[]' = 无（最小权限）/ '[ids]' = 仅列出；新建用户/访问码默认
                  「无」，创建后前端自动弹出 AgentScopeDialog（三态单选 + 多选）引导分配；PATCH agent_scope 增
-                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）；
+                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）；
                  P8.41 系统设置布局重构：三类配置（协议全局默认 / 语音输入 ASR / 访问控制）改 el-tabs
                  分类页签切换（各 tab 独立保存）；
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，
@@ -163,7 +163,7 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 166 项断言全绿
+npm test                                        # 167 项断言全绿
 node tests/store_tests.js                       # 45 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；

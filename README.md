@@ -189,7 +189,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin；**P8.51 新建用户默认最小权限**：不允许任何智能体，需经 PATCH 放行） |
 | PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?, agent_scope?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie；**P8.40/P8.51** `agent_scope` = 权限范围三态：空数组 = 全部智能体、null = 不允许任何（最小权限）、非空 = 仅列出的智能体；管理员恒全量不受限） |
 | GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
-| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, prompt?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
+| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
 | GET | `/api/admin/stats?days=7&fresh=1` | **仪表盘统计（P8.48）**：访问/提问/活跃/运行多维聚合（每日×身份提问与成功率、每日登录/新建会话、近 7 天按小时活跃、智能体/协议维度、错误 Top8、总量与实时运行情况；**P8.50** agents 行新增 `icon` 字段（仪表盘智能体排行展示用））；`days` 1–90 缺省 7（非整数或 <1 → 400，>90 截断），`fresh=1` 强制重算（缺省 30s 缓存）；仅 admin |
 | GET | `/api/admin/security?days=7&fresh=1` | **安全监控总览（P8.49）**：24h 登录成功/失败 + 提问分桶 + 逐日聚合 + 风险告警（登录爆破 ≥5 高危 / ≥3 关注、提问高频、错误激增）+ Top IP（近 7 天审计 ∪ 近 24h 提问）+ 封禁（生效 + 近 7 天过期）+ 最近 20 安全事件；`days` 1–90 缺省 7，`fresh=1` 强制重算（缺省 30s 缓存）；仅 admin |

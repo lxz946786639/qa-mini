@@ -315,7 +315,7 @@ function register(router, ctx) {
     const m = JSON.parse(JSON.stringify((cfg && cfg.config) || {}));
     if (m && typeof m.api_key === "string" && m.api_key) m.api_key = "…已设置";
     const proto = (cfg && cfg.protocol) || "ragflow";
-    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, prompt: x.prompt || "", protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
+    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
   };
 
   router.exact("GET", "/api/admin/agents", (req, res, ctx_, urlObj) => {
@@ -367,10 +367,6 @@ function register(router, ctx) {
     if (body.icon !== undefined) {
       if (typeof body.icon !== "string") return sendJSON(res, 400, { ok: false, detail: "icon 必须是字符串" });
       patch.icon = body.icon.trim().slice(0, 64); changed.icon = patch.icon;
-    }
-    if (body.prompt !== undefined) {
-      if (typeof body.prompt !== "string") return sendJSON(res, 400, { ok: false, detail: "prompt 必须是字符串" });
-      patch.prompt = body.prompt.slice(0, 4000); changed.prompt = "•••";
     }
     if (body.enabled !== undefined) {
       if (typeof body.enabled !== "boolean") return sendJSON(res, 400, { ok: false, detail: "enabled 必须是布尔" });

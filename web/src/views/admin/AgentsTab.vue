@@ -10,7 +10,7 @@ import { useRouter } from "vue-router";
 
 interface Agent {
   id: string; code: string; name: string; description: string; icon: string;
-  enabled: boolean; sort: number; prompt: string; protocol: string; config: Record<string, any>;
+  enabled: boolean; sort: number; protocol: string; config: Record<string, any>;
   allow_anon: boolean; allow_code: boolean; allow_user: boolean; // P8.8 访问控制
   protocol_enabled?: boolean; // P8.43 该智能体协议是否全局启用
 }
@@ -53,7 +53,7 @@ const editing = ref<string | null>(null); // code 或 null=新建
 const atTab = ref("basic"); // P8.8 对话框 tab（基本/协议/安全）
 const form = reactive({
   code: "", name: "", description: "", icon: "", sort: 0,
-  enabled: true, protocol: "ragflow", prompt: "",
+  enabled: true, protocol: "ragflow",
   allow_anon: true, allow_code: true, allow_user: true, // P8.8 访问控制
   config: { url: "", api_key: "", chat_id: "", model: "", body: "" }
 });
@@ -78,7 +78,7 @@ async function load() {
 function openCreate() {
   editing.value = null;
   atTab.value = "basic";
-  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", prompt: "", allow_anon: true, allow_code: true, allow_user: true, config: { url: "", api_key: "", chat_id: "", model: "", body: "" } });
+  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", allow_anon: true, allow_code: true, allow_user: true, config: { url: "", api_key: "", chat_id: "", model: "", body: "" } });
   dialog.value = true;
 }
 function openEdit(a: Agent) {
@@ -86,7 +86,7 @@ function openEdit(a: Agent) {
   atTab.value = "basic";
   Object.assign(form, {
     code: a.code, name: a.name, description: a.description, icon: normalizeAgentIcon(a.icon), sort: a.sort,
-    enabled: a.enabled, protocol: a.protocol, prompt: a.prompt,
+    enabled: a.enabled, protocol: a.protocol,
     allow_anon: a.allow_anon !== false, allow_code: a.allow_code !== false, allow_user: a.allow_user !== false,
     config: { url: "", api_key: "", chat_id: "", model: "", body: "", ...a.config }
   });
@@ -112,7 +112,7 @@ function cfgPayload(): Record<string, string> {
 async function save() {
   const body: Record<string, any> = {
     name: form.name, description: form.description, icon: form.icon, sort: Number(form.sort) || 0,
-    enabled: form.enabled, protocol: form.protocol, prompt: form.prompt, config: cfgPayload(),
+    enabled: form.enabled, protocol: form.protocol, config: cfgPayload(),
     allow_anon: form.allow_anon, allow_code: form.allow_code, allow_user: form.allow_user // P8.8
   };
   let r;
@@ -237,9 +237,6 @@ onMounted(load);
                 <el-input v-model="form.config[f.key]" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" />
               </el-form-item>
             </template>
-            <el-form-item label="系统提示词 Prompt（≤4000，可空 = 回退全局）">
-              <el-input v-model="form.prompt" type="textarea" :rows="3" />
-            </el-form-item>
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="安全" name="security">

@@ -2748,6 +2748,17 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/users/" + pu.data.user.id, { status: "disabled" }, adminTok)).status, 200);
   });
 
+  await test("p8.58: 智能体「系统提示词」字段移除（问答流程未使用，API/UI 不再暴露）", async () => {
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p858-a", name: "P8.58 字段移除体", protocol: "openai", prompt: "should-be-ignored" }, adminTok);
+    assert.strictEqual(mk.status, 201, "创建智能体（prompt 被忽略）");
+    const pp = await adminFetch("PATCH", "/api/admin/agents/p858-a", { prompt: "hello" }, adminTok);
+    assert.strictEqual(pp.status, 400, "PATCH 仅含 prompt = 无有效字段");
+    assert.match(String(pp.data && pp.data.detail), /无有效字段/);
+    const view = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((a) => a.code === "p858-a");
+    assert.ok(view && !("prompt" in view), "智能体视图不再含 prompt 字段");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p858-a", { enabled: false }, adminTok)).status, 200, "清理");
+  });
+
   // 收尾
   await new Promise((resolve) => {
     serverProc.once("exit", resolve);
