@@ -218,8 +218,7 @@ body {
   .ws-app.side-collapsed .ws-side-title,
   .ws-app.side-collapsed .ws-sess-list,
   .ws-app.side-collapsed .ws-side-empty,
-  .ws-app.side-collapsed .ws-side-foot { display: none; }
-  .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
+    .ws-app.side-collapsed .ws-side-head { flex-direction: column; gap: 6px; justify-content: center; padding: 10px 4px; }
   .ws-app.side-collapsed .ws-side-actions { flex-direction: column; gap: 6px; }
 }
 .ws-side {
@@ -284,7 +283,6 @@ body {
   font-size: 11.5px; color: var(--text-dim); margin-top: 4px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ws-side-foot { padding: 8px 12px; border-top: 1px solid var(--border); }
 .conn { font-size: 12px; color: var(--text-dim); display: inline-flex; align-items: center; gap: 6px; }
 .conn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--text-dim); }
 .conn-on::before { background: var(--green); }
@@ -694,6 +692,11 @@ body {
 /* P7.9 会话设置对话框（对齐旧抽屉排版）：小字注释 / mono 只读输入 / 底部操作条 */
 .ss-small { font-size: 12px; color: var(--text-dim); font-weight: 400; }
 .ss-label-note { margin-left: 6px; }
+/* P8.66 表单行距统一：警示贴控制项（独立行、无左偏移）/ 独立提示行不占 form-item 行距 /
+   弹窗体超高内部滚动（表单不超出视口） */
+.ss-warn-line { margin-left: 0; margin-top: 4px; display: block; }
+.ss-plain-note { margin: 0; }
+.ss-dialog .el-dialog__body { max-height: calc(100vh - 210px); overflow-y: auto; }
 .ss-mono .el-input__inner { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .ss-footer { display: flex; align-items: center; gap: 12px; width: 100%; }
 .ss-footer-btns { margin-left: auto; display: flex; gap: 8px; }
