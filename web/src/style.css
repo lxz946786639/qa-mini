@@ -623,10 +623,6 @@ body {
   .adm-top-right { gap: 8px; flex-wrap: wrap; }
   .adm-body { padding: 10px; }
   .adm-card { padding: 12px; }
-  /* P8.74：系统设置表单行窄屏改「标签在上 / 输入框满宽」（原 240px 固定标签致输入框仅 ~110px） */
-  .sys-row { flex-direction: column; align-items: stretch; gap: 4px; }
-  .sys-row label { width: auto; }
-  .sys-row:has(.el-switch) { flex-direction: row; align-items: center; }
 }
 .tab-bar {
   display: flex; align-items: center; justify-content: space-between;
@@ -651,6 +647,13 @@ body {
 .sys-proto-name { font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
 .sys-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .sys-row label { width: 240px; flex: none; font-size: 13px; color: var(--text-dim); }
+/* P8.74/P8.75：系统设置表单行窄屏改「标签置顶居左 / 输入框满宽」（原 240px 固定标签致输入框仅 ~110px）；
+P8.75 修正：本块必须位于上方基础规则之后（P8.74 误置于前被同特异性覆盖，标签盒仍 240px 居中） */
+@media (max-width: 720px) {
+  .sys-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .sys-row label { width: auto; text-align: left; }
+  .sys-row:has(.el-switch) { flex-direction: row; align-items: center; }
+}
 
 /* ---------- P5.5 语音输入 / 音频面板 / 会话设置 ---------- */
 .mic-btn {
