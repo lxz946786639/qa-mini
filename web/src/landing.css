@@ -531,3 +531,22 @@
   .lp-btn, .lp-agent-card, .lp-prod-card, .lp-agent-go .lp-arrow svg, .lp-nav-ink { transition: none; }
   .lp-nav-ink { opacity: 0; }
 }
+
+/* ---------- P8.78：移动端（≤640px）排版优化 ----------
+   ① 产品矩阵单列双卡原无 grid gap，两卡贴在一起（用户反馈「堆到一起」）→ 行距 14px；
+   ② 卡内 padding 18→20px、能力列表行距 10→12px 增加呼吸感；
+   ③ 工作流竖向 chevron 行 gap 6px 过挤 → 10px；
+   ④ 「上一区块」边缘钮固定右上，与内容顶到高位（矩阵/工作流）的区块标题重叠 → 改左下底角，
+      与右下「下一区块」对称（各区块左下内容为空，无遮挡）。 */
+@media (max-width: 640px) {
+  .lp-matrix-wrap { gap: 14px; }
+  .lp-prod-card { padding: 20px; }
+  .lp-prod-list { gap: 12px; }
+  .lp-flow { row-gap: 10px; }
+  .lp-edge-top { top: auto; bottom: 18px; right: auto; left: 16px; }
+  /* 边缘钮下移后，矩阵标语行（区块尾部）被底部 dock 压住 → note 底部加空间（居中内容整体上移避让） */
+  /* 区块内容高于视口时顶部对齐，note 的 margin-bottom 无法上移内容 → 改用顶部内边距收紧
+     （84→74px，仍高于固定导航 60px）+ note margin-top 收紧，标语整体上移避开底部 dock */
+  .lp-section { padding-top: 74px; }
+  .lp-matrix-note { margin-top: 16px; margin-bottom: 100px; }
+}
