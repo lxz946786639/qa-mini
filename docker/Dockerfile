@@ -7,6 +7,8 @@ WORKDIR /app
 # 无 npm 依赖：直接拷贝运行文件（前端构建产物 web/dist 随仓库提交，部署不跑构建；P7 起站点根 = web/dist）
 COPY package.json ./
 COPY server.js ./
+# P8.79：P2 模块化后 server.js 依赖 ./server/app，此层缺失则容器启动 MODULE_NOT_FOUND（101 升级 v58→v116 时暴露）
+COPY server ./server
 COPY lib ./lib
 COPY web/dist ./web/dist
 
