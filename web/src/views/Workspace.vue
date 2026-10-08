@@ -102,7 +102,12 @@ function saveAutosend() {
 
 // ---- P5.5 电脑输出音频（EchoScribe 持续推流；管理视图 token 级）----
 const currentSession = computed(() => (sess.detail && sess.detail.session) || null);
-// P7.10 对齐旧版：提问框「音频」入口常显，前置条件不满足时点击提示（不再整钮隐藏）
+// P7.10 对齐旧版：提问框「音频」入口（P8.68 起仅对启用「电脑输出音频接收」的会话显示，
+// 未启用会话整钮隐藏；openAudioPanel 保留防御性提示兜底）
+const audioEnabled = computed(() => {
+  const s = currentSession.value;
+  return !!s && !!s.audio_remote && s.audio_remote.enabled === true;
+});
 const audioListening = ref(false);
 // ---------- 显示偏好（P7 移植自旧前端；localStorage 键沿用 echoanswer-font/-width/-line） ----------
 const FONT_SIZES: Record<string, number> = { default: 15, large: 18 };
@@ -876,6 +881,7 @@ onBeforeUnmount(() => {
                 @click="onMicClick"
               ><el-icon v-if="!mic.st.value.recording"><Microphone /></el-icon>{{ mic.st.value.recording ? mic.st.value.timeLabel : (mic.st.value.transcribing ? '识别中…' : '语音') }}</button>
               <button
+                v-if="audioEnabled"
                 class="mic-btn"
                 :class="{ on: showAudio && !audioListening, listening: audioListening }"
                 :disabled="audioListening"
