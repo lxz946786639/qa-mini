@@ -117,7 +117,7 @@ const lineState = reactive<{ mode: string; val: number }>({
 });
 function applyPrefs() {
   const root = document.documentElement;
-  const size = fontState.mode === "custom" ? Math.min(28, Math.max(12, Math.round(fontState.px || 15))) : (FONT_SIZES[fontState.mode] || 15);
+  const size = fontState.mode === "custom" ? Math.min(36, Math.max(12, Math.round(fontState.px || 15))) : (FONT_SIZES[fontState.mode] || 15);
   root.style.setProperty("--qa-size", size + "px");
   root.classList.remove("qa-w-narrow", "qa-w-wide", "qa-w-full");
   root.classList.add("qa-w-" + widthMode.value);
@@ -648,7 +648,7 @@ onBeforeUnmount(() => {
                 <el-option label="大（18px）" value="large" />
                 <el-option label="自定义" value="custom" />
               </el-select>
-              <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="28" size="small" controls-position="right" @change="applyPrefs" />
+              <el-input-number v-if="fontState.mode === 'custom'" v-model="fontState.px" :min="12" :max="36" size="small" controls-position="right" @change="applyPrefs" />
             </div>
             <div class="prefs-row">
               <label>内容宽度</label>
