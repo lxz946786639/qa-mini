@@ -739,8 +739,15 @@ body {
   .ws-side-toggle { display: none; }
   /* P8.72：抽屉遮罩（点外部关闭；z 55 低于抽屉 60） */
   .ws-side-mask { position: fixed; inset: 0; z-index: 55; background: rgba(2, 6, 16, 0.55); }
-  /* P8.72：顶栏两行规整——第 1 行汉堡 + 品牌（单行省略），第 2 行按钮左对齐可换行 */
-  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 8px 12px; height: auto; }
+  /* P8.72：顶栏两行规整——第 1 行汉堡 + 品牌（单行省略），第 2 行按钮左对齐可换行；P8.73：按钮文字隐藏纯图标（再降高度） */
+  .ws-top { flex-wrap: wrap; row-gap: 6px; padding: 6px 12px; height: auto; }
+  .prefs-btn-lb { display: none; }
+  .prefs-btn { padding: 4px 8px; }
+  /* P8.73：卡片状态行保持一行——状态文本不换行 + 按钮不换行紧凑化 */
+  .a-status { gap: 6px; }
+  .st { white-space: nowrap; }
+  .st-btns { flex-wrap: nowrap; gap: 4px; }
+  .st-btn { padding: 0 6px; height: 21px; }
   .ws-top-menu { display: inline-flex; }
   .ws-top-left { flex: 1 1 auto; min-width: 0; }
   .ws-top .brand { min-width: 0; }
