@@ -226,6 +226,13 @@ function ragflowServer() {
       ], 5);
     }
 
+    // P8.81 续：全局级探测 GET /chats（列表；认证已在上方统一校验）
+    if (url === "/api/v1/chats") {
+      m.chatsListCalls = (m.chatsListCalls || 0) + 1;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ code: 0, message: "", data: [] }));
+    }
+
     const chatMatch = url.match(/^\/api\/v1\/chats\/([^/]+)$/);
     if (chatMatch) {
       m.chatGetCalls = (m.chatGetCalls || 0) + 1;

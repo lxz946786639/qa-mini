@@ -3,7 +3,7 @@
 //  访问码生成/延期/清理/失效 + /api/config GET/PUT（深合并 → config.json + v2 库同步）
 const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf, uaOf } = require("../middleware");
 const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS, protocolEnabled, PROTOCOL_FIELDS, IDENTITY_FIELDS, AGENT_CFG_KEEP_SENTINEL } = require("../../lib/config");
-const { testProtocol } = require("../../lib/protocol_test");
+const { testProtocol, testGlobal } = require("../../lib/protocol_test");
 const { EventBus } = require("../services/event_bus");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
@@ -323,9 +323,10 @@ function register(router, ctx) {
   });
 
   // ---- 协议连接测试（管理 · P8.81）----
-  // POST /api/admin/protocol-test：body { protocol, config?, agent_code? }
+  // POST /api/admin/protocol-test：body { protocol, config?, agent_code?, mode? }
   // 合并链 = 全局 ← 智能体（agent_code 现有配置）← 草稿（config，含空串），与运行时解析一致；
   // 供智能体创建/编辑对话框「测试连接」、智能体列表「测试」操作使用。
+  // P8.81 续 mode="global"：全局级连接探测（仅连接级配置，身份字段不覆盖）——系统设置各协议卡「测试连接（全局配置）」。
   router.exact("POST", "/api/admin/protocol-test", async (req, res, ctx_, urlObj) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
     let body;
@@ -347,7 +348,9 @@ function register(router, ctx) {
           !(typeof c.protocol === "string" && c.protocol !== proto) ? c.config : null;
       }
     }
-    const r = await testProtocol(proto, ctx.config, body.config || {}, agentCfg);
+    const r = body.mode === "global"
+      ? await testGlobal(proto, ctx.config, body.config || {})
+      : await testProtocol(proto, ctx.config, body.config || {}, agentCfg);
     return sendJSON(res, 200, { ok: r.ok, detail: r.detail });
   });
 

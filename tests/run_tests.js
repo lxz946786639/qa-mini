@@ -1801,8 +1801,39 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("POST", "/api/sessions/ffffffff/protocol-test", {}, adminTok)).status, 404, "会话不存在 -> 404");
     assert.strictEqual((await adminFetch("POST", "/api/sessions/" + sid + "/protocol-test", {}, "")).status, 401, "非管理 -> 401");
     // 恢复全局 ragflow（url/key/chat_id 全量还原）+ 清理会话
+    //（global 探测测试见下一块）
     assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+  });
+
+  await test("p8.81 续: 系统设置全局连接测试 testGlobal/mode=global（ragflow 地址+Key / dify 接口可达性 / 预检 / 端点 400/401）", async () => {
+    const pt = require("../lib/protocol_test");
+    const g = (proto, cfg) => pt.testGlobal(proto, cfg, {});
+    // 预检
+    assert.strictEqual((await g("ragflow", { protocols: { ragflow: {} } })).detail, "未配置服务地址 URL");
+    assert.strictEqual((await g("ragflow", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1" } } })).detail, "未配置 API Key");
+    assert.strictEqual((await g("dify", { protocols: { dify: {} } })).detail, "未配置服务地址 URL");
+    // ragflow：地址 + 全局 Key
+    const rg1 = await g("ragflow", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key" } } });
+    assert.ok(rg1.ok, "ragflow 全局地址+Key: " + rg1.detail);
+    assert.ok(rg1.detail.includes("Chat ID"), "detail 提示 Chat ID 在智能体级: " + rg1.detail);
+    assert.strictEqual((await g("ragflow", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "wrong-key" } } })).detail, "地址可达但 API Key 无效");
+    assert.strictEqual((await g("ragflow", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/nope/v1", api_key: "ragflow-key" } } })).detail, "地址可达但接口路径不存在（请检查服务地址）");
+    assert.ok(MOCKS.ragflow.chatsListCalls >= 1, "mock 收到 GET /chats 探测");
+    // dify：接口可达性（全局无 Key → 401 = 服务在线）
+    const dg = await g("dify", { protocols: { dify: { url: "http://127.0.0.1:" + PORTS.dify } } });
+    assert.ok(dg.ok, "dify 全局可达（401 = 在线）: " + dg.detail);
+    assert.ok(dg.detail.includes("智能体"), dg.detail);
+    // 端点 mode=global
+    const e1 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "ragflow", mode: "global", config: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key" } }, adminTok);
+    assert.strictEqual(e1.status, 200);
+    assert.strictEqual(e1.data.ok, true, e1.data.detail);
+    const e2 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "dify", mode: "global", config: { url: "http://127.0.0.1:" + PORTS.dify } }, adminTok);
+    assert.strictEqual(e2.status, 200);
+    assert.strictEqual(e2.data.ok, true, e2.data.detail);
+    const e3 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "nope", mode: "global" }, adminTok);
+    assert.strictEqual(e3.status, 400, "未知协议 -> 400");
+    assert.strictEqual((await adminFetch("POST", "/api/admin/protocol-test", { protocol: "ragflow", mode: "global" }, "")).status, 401, "非管理 -> 401");
   });
 
   await test("asr: /api/asr/test 测试连接（ok/模型不在列表/未配置/不可达 502/非管理 401）", async () => {

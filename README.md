@@ -162,7 +162,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 EchoScribe「清空」） |
 | POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿；**P8.81** 合并链 = 全局 ← 智能体 ← 草稿，与提问取值一致）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
-| POST | `/api/admin/protocol-test` | **智能体级测试连接（P8.81）**（管理）。body `{protocol, config?, agent_code?}`（config = 表单草稿，agent_code = 现有智能体）；同一三层合并链（智能体层仅测试协议 = 智能体协议时参与）+ 前置校验 → 200 `{ok, detail}` |
+| POST | `/api/admin/protocol-test` | **智能体级测试连接（P8.81）**（管理）。body `{protocol, config?, agent_code?, mode?}`（config = 表单草稿，agent_code = 现有智能体；**P8.81 续 `mode="global"` = 全局级连接探测**：仅连接级配置，ragflow 测地址+Key、dify 测接口可达性（401/403 = 在线）、openai/generic 完整探测，身份级字段不覆盖——系统设置各卡「测试连接（全局配置）」）；同一三层合并链（智能体层仅测试协议 = 智能体协议时参与）+ 前置校验 → 200 `{ok, detail}` |
 | DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | GET | `/api/events` | SSE 广播（EventSource 自动重连）：连接即推 `sessions` 列表 → `qa_start`/`delta`/`done`（均带 session_id）/`sessions`（列表变更）/`session_reset`/`config`（**P8.33** 带 `?dev=` 设备指纹入在线注册表；踢出冷却期内 403 `evicted`） |
 | GET | `/api/events/check` | **P8.33 踢出探针** `?dev=`：仅回答本端 dev+IP 是否处于踢出冷却（无需主体；冷却期 403 `evicted`） |
@@ -282,7 +282,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 
   | 旧功能 | 新位置 |
   |---|---|
-  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**；**P8.81 仅连接级**——身份字段移智能体级必填，generic 卡片「测试连接」） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
+  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**；**P8.81 仅连接级**——身份字段移智能体级必填，**P8.81 续各卡「测试连接（全局配置）」**= 全局级连接探测（身份字段不覆盖）） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
   | 管理密码首次初始化（/admin 首屏输入即初始化） | `/admin` 控制台首启引导 + `/login` 首启表单（管理密码未设置时两处均显示「设置管理账号」表单，POST /api/admin/login 初始化通道，成功后直接以 admin 登录） |
   | 会话设置抽屉（token/会话ID/EchoScribe 片段/重置） | 工作区会话设置对话框（⋯ → 设置；管理视图含 token 回显/重新生成/toml 片段/重置后端上下文） |
   | 🎤 语音输入 / 🎧 电脑输出音频 / 多浏览器同步 / PWA | 工作区（P5.5 移植，见上条） |
@@ -305,7 +305,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**169 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+
+- `tests/run_tests.js`：**170 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+ **全局级连接探测（mode=global）** +
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、

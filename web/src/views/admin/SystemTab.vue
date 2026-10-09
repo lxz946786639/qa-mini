@@ -10,7 +10,8 @@
 // P8.81 配置体系重构：本页面仅承载「连接级」共享配置（URL/公共认证/通用参数）；
 // 身份级字段（ragflow.chat_id / openai.model / dify.api_key）不再作全局预设——
 // 改由「智能体管理」逐智能体必填（v8 迁移把旧全局值回填到各智能体后已清空全局）。
-// 卡片显示配置完整性徽标；generic 卡提供「测试连接」（全局配置即可完整探测）。
+// 卡片显示配置完整性徽标；各卡提供「测试连接（全局配置）」= 连接级探测
+//（P8.81 续：ragflow 测地址+Key、dify 测接口可达性、openai/generic 完整探测；身份字段全局测试不覆盖）。
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../../api";
@@ -69,7 +70,13 @@ function protoBadges(p: string): { text: string; warn: boolean }[] {
   }
   return out;
 }
-// P8.81: generic 卡「测试连接」（全局配置即可完整探测；身份级字段缺失的协议不做全局测试）
+// P8.81 续: 各卡「测试连接（全局配置）」= 全局级连接探测（mode=global；身份级字段不覆盖）
+const protoTestLabel: Record<string, string> = {
+  ragflow: "地址 + API Key",
+  dify: "接口可达性",
+  openai: "地址 + API Key",
+  generic: "模板探测"
+};
 const protoTest = reactive<Record<string, { running: boolean; text: string; ok: boolean | null }>>({
   openai: { running: false, text: "", ok: null },
   dify: { running: false, text: "", ok: null },
@@ -79,7 +86,7 @@ const protoTest = reactive<Record<string, { running: boolean; text: string; ok: 
 async function testProto(p: string) {
   protoTest[p].running = true; protoTest[p].ok = null; protoTest[p].text = "";
   try {
-    const { data } = await api<any>("/api/admin/protocol-test", { method: "POST", body: { protocol: p, config: protoPayload()[p] } });
+    const { data } = await api<any>("/api/admin/protocol-test", { method: "POST", body: { protocol: p, mode: "global", config: protoPayload()[p] } });
     protoTest[p].ok = !!data.ok;
     protoTest[p].text = data.detail || (data.ok ? "已连接" : "连接失败");
   } catch (e: any) {
@@ -185,11 +192,11 @@ async function testAsr() {
             @update:model-value="(v: string) => setProto(p, f.key, v)"
           ></el-input>
         </div>
-      </div>
-      <div class="sys-row">
-        <label></label>
-        <el-button :loading="protoTest.generic.running" @click="testProto('generic')">测试连接（通用协议·全局配置）</el-button>
-        <span v-if="protoTest.generic.text" :class="protoTest.generic.ok ? 'ss-ok' : 'ss-bad'">{{ protoTest.generic.text }}</span>
+        <div class="sys-row">
+          <label></label>
+          <el-button :loading="protoTest[p].running" @click="testProto(p)">测试连接（{{ protoTestLabel[p] }}·全局配置）</el-button>
+          <span v-if="protoTest[p].text" :class="protoTest[p].ok ? 'ss-ok' : 'ss-bad'">{{ protoTest[p].text }}</span>
+        </div>
       </div>
       <el-button type="primary" :loading="busy === 'proto'" @click="saveProtocols">保存协议全局默认</el-button>
       <span class="tab-note">保存后 ragflow/dify 的 url/api_key 变化（含启用/停用切换）会自动重置「继承全局」会话的后端会话；智能体自有配置的会话不受影响。</span>
