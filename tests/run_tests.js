@@ -1589,7 +1589,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
   await test("security: 管理接口需 token（config / 会话 CRUD / 全局重置）", async () => {
     assert.strictEqual((await api("GET", "/api/config")).status, 401);
-    assert.strictEqual((await api("POST", "/api/sessions", { name: "x" })).status, 401);
+    assert.strictEqual((await api("POST", "/api/sessions?admin=bogus-token", { name: "x" })).status, 401, "显式无效凭证（null 主体）→ 401（P8.82 起无凭证匿名可建共享会话，本断言改用无效凭证保原语义）");
     assert.strictEqual((await api("POST", "/api/session/reset")).status, 401);
     assert.strictEqual((await adminFetch("GET", "/api/config", undefined, adminTok)).status, 200);
     const c = await adminFetch("POST", "/api/sessions", { name: "安全测试" }, adminTok);
@@ -2076,8 +2076,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const lg = await jarFetch(codeJar, "POST", "/api/auth/access-code", { code: "666667" });
     assert.strictEqual(lg.status, 200, lg.data && lg.data.detail);
     // 码主体创建会话 → 码桶
-    const c = await api("POST", "/api/sessions", { name: "码桶会话" });
-    assert.strictEqual(c.status, 401, "无凭证建会话 401");
+    const c = await api("POST", "/api/sessions?admin=bogus-token", { name: "码桶会话" });
+    assert.strictEqual(c.status, 401, "显式无效凭证（null 主体）建会话 401（P8.82 起无凭证匿名可建共享会话，本断言改用无效凭证保原语义）");
     const c2 = await jarFetch(codeJar, "POST", "/api/sessions", { name: "码桶会话" });
     assert.strictEqual(c2.status, 201, c2.data && c2.data.detail);
     const codeSid = c2.data.session.id;
@@ -2196,6 +2196,20 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await jarFetch(carolJar, "POST", "/api/sessions", { agent_code: "sec-a" })).status, 403, "全关 → user 403");
     assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "全关 → anon 404");
     assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
+  });
+
+  await test("p8.82: 匿名可建会话（共享桶；归属智能体未放行 403；无效凭证 401）", async () => {
+    // 无凭证 = 匿名主体（allow_anonymous 默认 true）+ 种子智能体（allow_anon=true）→ 201 共享桶 + 协议继承
+    const c = await api("POST", "/api/sessions", { name: "匿名新建", agent_code: "industry-brain" });
+    assert.strictEqual(c.status, 201, c.data && c.data.detail);
+    assert.strictEqual(c.data.session.access_mode, "shared", "匿名落共享桶（设计口径：匿名创建 = 共享）");
+    assert.strictEqual(c.data.session.protocol, "ragflow", "协议继承归属智能体");
+    // 匿名 + 全关智能体（sec-a，allow_anon=false）→ 403
+    const g = await api("POST", "/api/sessions", { name: "匿名拒建", agent_code: "sec-a" });
+    assert.strictEqual(g.status, 403, "归属智能体未放行 → 403");
+    assert.ok(String(g.data.detail).includes("未允许"), g.data.detail);
+    // 清理
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + c.data.session.id, undefined, adminTok)).status, 200);
   });
 
   await test("p8.40/P8.51: 主体权限范围三态（新建默认最小权限「无」；全部 / 仅指定 / 无；管理员恒全量）", async () => {

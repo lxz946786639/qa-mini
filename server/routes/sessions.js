@@ -51,10 +51,12 @@ function register(router, ctx) {
     return Promise.resolve();
   });
 
-  // POST /api/sessions（管理；P3：登录用户落自身私有桶、访问码落码桶）
+  // POST /api/sessions（管理 / 登录用户 / 访问码 / 匿名；P3：登录用户落自身私有桶、访问码落码桶、
+  // P8.82 匿名落共享桶——principal.js 设计口径「匿名创建 = 共享，维持旧行为」，原实现漏放行匿名）
   router.exact("POST", "/api/sessions", async (req, res, ctx_, urlObj) => {
     const p = ctx.auth.principal(req, urlObj);
-    if (!ctx.auth.isAdmin(req, urlObj) && !(p && (p.kind === "user" || p.kind === "code"))) {
+    if (!ctx.auth.isAdmin(req, urlObj) && !(p && (p.kind === "user" || p.kind === "code" || p.kind === "anon"))) {
+      // null principal（显式携带的无效凭证）→ 401，不匿名回退
       return sendJSON(res, 401, { ok: false, detail: "需要管理权限" });
     }
     let body;
