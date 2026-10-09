@@ -55,15 +55,19 @@ const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret
 function protoVal(p: string, k: string) { return String(form.protocols[p][k as keyof ProtoForm] ?? ""); }
 function setProto(p: string, k: string, v: string) { (form.protocols[p] as Record<string, string>)[k] = v; }
 
-// P8.81: 卡片配置完整性徽标（url 必填；api_key 对 ragflow/dify 必填、openai/generic 可选）
+// P8.81: 卡片配置完整性徽标（仅连接级字段：url 必填；api_key 仅 ragflow/openai/generic 显示——
+// dify.api_key 属身份级字段（智能体级必填、全局不配置），不参与全局徽标，避免「未配置」误导）
 function protoBadges(p: string): { text: string; warn: boolean }[] {
   const urlOk = !!protoVal(p, "url").trim();
-  const keyOk = !!protoVal(p, "api_key").trim();
-  const keyRequired = p === "ragflow" || p === "dify";
-  return [
-    { text: urlOk ? "URL 已配置" : "URL 未配置", warn: !urlOk },
-    { text: keyOk ? "API Key 已配置" : (keyRequired ? "API Key 未配置" : "API Key 留空（可选）"), warn: keyRequired && !keyOk }
+  const out: { text: string; warn: boolean }[] = [
+    { text: urlOk ? "URL 已配置" : "URL 未配置", warn: !urlOk }
   ];
+  if (p !== "dify") {
+    const keyOk = !!protoVal(p, "api_key").trim();
+    const keyRequired = p === "ragflow";
+    out.push({ text: keyOk ? "API Key 已配置" : (keyRequired ? "API Key 未配置" : "API Key 留空（可选）"), warn: keyRequired && !keyOk });
+  }
+  return out;
 }
 // P8.81: generic 卡「测试连接」（全局配置即可完整探测；身份级字段缺失的协议不做全局测试）
 const protoTest = reactive<Record<string, { running: boolean; text: string; ok: boolean | null }>>({
