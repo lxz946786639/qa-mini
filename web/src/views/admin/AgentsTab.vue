@@ -144,13 +144,18 @@ function fieldPlaceholder(f: { key: string; secret?: boolean }): string {
   if (!g.trim()) return "";
   return f.secret ? "•".repeat(g.length) : g;
 }
-// P8.81: 字段配置来源标识（自定义 / 继承全局 / 未配置）
-function fieldTag(f: { key: string }): { text: string; type: "success" | "info" | "danger" } {
+// P8.81 续: 字段配置来源标识（自定义 / 继承全局 / 未配置）——
+// 自有值且上层（全局）存在默认值 = 自定义（掩码现值 = 自定义（已设置））；
+// 自有值但上层无默认（身份字段全局本就不配置）= 无标签（「自定义」暗示存在可偏离的默认，误导）；
+// 留空 = 继承全局（上层有值）/ 未配置（上层亦无）
+function fieldTag(f: { key: string }): { text: string; type: "success" | "info" | "danger" } | null {
   const v = String(form.config[f.key] ?? "");
-  if (v && !v.includes("…")) return { text: STATUS_LABEL.custom, type: "success" };
-  if (v && v.includes("…")) return { text: "自定义（已设置）", type: "success" };
-  const g = protoGlobalCfg.value[form.protocol] && protoGlobalCfg.value[form.protocol][f.key];
-  return g ? { text: STATUS_LABEL.global, type: "info" } : { text: STATUS_LABEL.none, type: "danger" };
+  const g = String((protoGlobalCfg.value[form.protocol] || {})[f.key] || "");
+  if (v) {
+    if (!g.trim()) return null;
+    return v.includes("…") ? { text: "自定义（已设置）", type: "success" } : { text: STATUS_LABEL.custom, type: "success" };
+  }
+  return g.trim() ? { text: STATUS_LABEL.global, type: "info" } : { text: STATUS_LABEL.none, type: "danger" };
 }
 // P8.81: 恢复默认 = 清除本智能体该字段的自有值（回退全局）
 function resetField(f: { key: string }) { form.config[f.key] = ""; }
@@ -346,7 +351,7 @@ onMounted(load);
               <el-form-item :label="f.label">
                 <div style="display: flex; align-items: center; gap: 8px; width: 100%">
                   <el-input v-model="form.config[f.key]" :placeholder="fieldPlaceholder(f)" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" style="flex: 1" />
-                  <el-tag size="small" :type="fieldTag(f).type" effect="plain" style="flex-shrink: 0">{{ fieldTag(f).text }}</el-tag>
+                  <el-tag v-if="fieldTag(f)" size="small" :type="fieldTag(f).type" effect="plain" style="flex-shrink: 0">{{ fieldTag(f).text }}</el-tag>
                   <el-button v-if="canReset(f)" link size="small" style="flex-shrink: 0" @click="resetField(f)">恢复默认</el-button>
                 </div>
                 <div v-if="f.required" style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 2px;">必填：不同智能体应各自配置（留空将与其他智能体共用同一后端资源，无法保存）</div>
