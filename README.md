@@ -134,7 +134,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | `openai` | url（完整地址）/ api_key / model | POST chat completions `{messages, stream:true, model?}`，Bearer 可空；上下文→system 消息「参考上下文（最近识别内容）：…」 | SSE `choices[0].delta.content`（兼容 `choices[0].text`）；`[DONE]` 结束 |
 | `dify` | url（基址）/ api_key（必填）/ user | POST `{基址}/chat-messages`（自动补路径）`{inputs:{}, query, response_mode:"streaming", user, conversation_id?}`；上下文拼进 query | 按 event 分派：`message`→answer 增量+捕获 conversation_id（多轮续接）；`message_end` 结束；`error` 抛错；其余忽略 |
 | `generic` | url（完整地址）/ api_key（可空）/ body（JSON 模板） | 模板中 `{question}`/`{context}` 占位符递归替换 + 顶层注入 question/context；最小模板 `{}` 即可 | 自动识别：SSE / 单 JSON 文档 / 纯文本；答案字段优先级 `choices[0].delta.content` → `choices[0].text` → `data.content/answer/text` → 顶层 `content/answer/text/output` |
-| `ragflow` | url（基址）/ api_key（必填）/ chat_id（必填）/ user（可选，P8.81 续：请求 user 字段，留空 = 不发送） | 新路径 `POST {基址}/chat/completions`（404 回退一次旧路径 `/chats/{chat_id}/completions`）；无会话先 `POST /chats/{chat_id}/sessions` 建会话（RAGFlow ≤v0.24 必需） | 信封 `{code,message,data}`：`data==true` 结束；code≠0 流内报错；session_id 续接；思考区（start/end_to_think）跳过；delta/cumulative 自动识别（LCP 差分）；reference 文档名去重脚注「**参考来源**：…」 |
+| `ragflow` | url（基址）/ api_key（必填）/ chat_id（必填）/ user（可选，P8.81 续：请求 user 字段，留空 = 不发送；显式建会话时兼作 RAGFlow 会话名，留空 = 默认名 echoanswer） | 新路径 `POST {基址}/chat/completions`（404 回退一次旧路径 `/chats/{chat_id}/completions`）；无会话先 `POST /chats/{chat_id}/sessions` 建会话（RAGFlow ≤v0.24 必需） | 信封 `{code,message,data}`：`data==true` 结束；code≠0 流内报错；session_id 续接；思考区（start/end_to_think）跳过；delta/cumulative 自动识别（LCP 差分）；reference 文档名去重脚注「**参考来源**：…」 |
 
 界面显示名对外隐藏：`dify` → 「编排引擎」、`ragflow` → 「知识引擎」（协议 key、
 配置字段、API 参数均不变；错误提示同步使用隐藏名称）。

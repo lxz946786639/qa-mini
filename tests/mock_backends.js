@@ -169,6 +169,7 @@ function ragflowServer() {
         return res.end(JSON.stringify({ code: 102, message: "not found" }));
       }
       m.sessionsCalls = (m.sessionsCalls || 0) + 1;
+      m.lastSessionName = (body && body.name) || ""; // 建会话 name（= user 或默认 echoanswer）
       // 记录会话归属（chat_id → Set<session_id>），/chat/completions 校验归属
       const cid = url.match(/^\/api\/v1\/chats\/([^/]+)\/sessions$/)[1];
       m.created = m.created || {};

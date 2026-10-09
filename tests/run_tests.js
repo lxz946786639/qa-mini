@@ -354,6 +354,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "C9");
     assert.strictEqual(MOCKS.ragflow.last.body.session_id, "sess-1");
     assert.strictEqual(MOCKS.ragflow.last.body.user, "tester", "user 字段透传（RAGFlow 请求 user 标识）");
+    assert.strictEqual(MOCKS.ragflow.lastSessionName, "tester", "显式建会话 name = user（RAGFlow 控制台显示该会话名）");
     assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer ragflow-key");
   });
   await test("ragflow: 会话续接（不再建会话）", async () => {
@@ -361,6 +362,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     await drain(streamRagflow(ragflowCfg, "追问", { sessionId: "sess-1" }));
     assert.strictEqual(MOCKS.ragflow.sessionsCalls, before);
     assert.strictEqual(MOCKS.ragflow.last.body.session_id, "sess-1");
+  });
+  await test("ragflow: user 未配置 → 建会话 name 回退默认 echoanswer", async () => {
+    const noUser = Object.assign({}, ragflowCfg, { user: "" });
+    await drain(streamRagflow(noUser, "无 user 提问", {}));
+    assert.strictEqual(MOCKS.ragflow.last.body.user === undefined, true, "空 user 不发送该字段");
+    assert.strictEqual(MOCKS.ragflow.lastSessionName, "echoanswer", "建会话 name 回退默认名");
   });
   await test("ragflow: stale session（不属于该 chat）纯 JSON 错误 → 报错而非空回答", async () => {
     const e = await firstError(streamRagflow(ragflowCfg, "hi", { sessionId: "stale-xyz" }));
@@ -2367,6 +2374,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "AX", "智能体层 chat_id 生效（新路径 body.chat_id）: " + JSON.stringify(MOCKS.ragflow.last.body));
     assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer ragflow-key", "url/key 继承全局");
     assert.strictEqual(MOCKS.ragflow.last.body.user, "qa-mini", "ragflow user 连接级：智能体层未设 → 继承全局");
+    assert.strictEqual(MOCKS.ragflow.lastSessionName, "qa-mini", "建会话 name = 继承全局的 user（RAGFlow 控制台显示该会话名）");
     // 5) 会话层 > 智能体层：管理 PUT protocol_config 覆盖 chat_id=S1 → 旧后端会话失效重建
     const ov = await adminFetch("PUT", "/api/sessions/" + sx.data.session.id, { protocol_config: { ragflow: { chat_id: "S1" } } }, adminTok);
     assert.strictEqual(ov.status, 200, ov.data && ov.data.detail);
