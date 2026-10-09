@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 7, "user_version（P8.49 起 v7）");
+      eq(v, 8, "user_version（P8.81 起 v8）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -157,11 +157,15 @@ function oldConfig(over) {
       const ac = store.getAgentConfig(a.id);
       eq(ac.protocol, "ragflow", "protocol=push.protocol");
       eq(ac.config.url, "http://127.0.0.1:18705/v1", "config 来自 config.json.protocols.ragflow");
+      eq(ac.config.chat_id, "chat-abc", "P8.81: 身份字段随播种保留在智能体级（v8 清的只是全局）");
     });
     await t("protocol_defaults 四协议（含 generic body 模板）", async () => {
       const d = store.getProtocolDefaults();
       eq(Object.keys(d).sort(), ["dify", "generic", "openai", "ragflow"], "四协议");
-      eq(d.openai.model, "test-model", "openai.model 覆盖");
+      eq(d.openai.model, "", "P8.81: 全局 openai.model 已清（迁至智能体级必填）");
+      eq(d.ragflow.chat_id, "", "P8.81: 全局 ragflow.chat_id 已清");
+      eq(d.dify.api_key, "", "P8.81: 全局 dify.api_key 已清");
+      eq(d.openai.url, "http://127.0.0.1:18701/v1", "连接级字段保留");
       eq(d.generic.body, "{\"question\":\"{question}\"}", "generic.body");
       eq(d.dify.user, "echoanswer", "dify.user 覆盖");
     });
@@ -177,7 +181,7 @@ function oldConfig(over) {
     await t("config.json 明文密码清空 + 备份文件", async () => {
       eq(readConfig(dir).security.admin_password, "", "清空");
       const files = fs.readdirSync(dir).filter((f) => f.startsWith("config.json.bak-"));
-      assert(files.length === 1, "config 备份存在");
+      eq(files.length, 2, "config 备份 = 密码清空 + v8 身份字段清空");
     });
     store.close();
   }
@@ -272,7 +276,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "v7");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "v8");
       eq(store.listSessions({}).length, 1, "会话保留");
     });
     store.close();
@@ -295,7 +299,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v2 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "版本 7");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "版本 8");
       const brain = store.getAgentByCode("industry-brain");
       eq(brain.allow_user, true, "补列默认 = 允许");
       eq(brain.allow_anon, true, "allow_anon 不变");
@@ -330,7 +334,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v3 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "版本 7");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "版本 8");
       eq(store.getSession("0fd50fcc").access_mode, "user", "切换点后管理员新建 → 私有桶");
       eq(store.getSession("8b14dd80").access_mode, "shared", "重构前会话保持共享");
       eq(store.getSession("6402e6ea").access_mode, "shared", "user_id=NULL 新建保持共享（无可归属）");
@@ -640,7 +644,7 @@ function oldConfig(over) {
     const dir = mk();
     const cfgFile = writeConfig(dir, oldConfig({ security: { admin_password: "banpw123", allow_anonymous: true, access_codes: [] } }));
     let store;
-    await t("v6 → v7 迁移（ip_bans 幂等 + user_version 7）", async () => {
+    await t("v6 → v8 迁移（ip_bans 幂等 + user_version 8）", async () => {
       const r1 = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(r1.fresh, "全新安装");
       // 模拟 v6 旧库：回拨版本号（表已在）→ 再迁移应幂等补齐
@@ -650,10 +654,10 @@ function oldConfig(over) {
       const r2 = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(r2.migrated, "触发迁移");
       store = Store.open(r1.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 7, "user_version 7");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "user_version 8");
       assert(!!store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ip_bans'").get(), "ip_bans 表存在");
       const r3 = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(r3.migrated === false, "已是 v7 跳过（幂等）");
+      assert(r3.migrated === false, "已是 v8 跳过（幂等）");
     });
     await t("ip_bans CRUD + hasActiveBan", async () => {
       assert(store.listBans({ includeExpiredDays: 0 }).length === 0, "初始为空");
@@ -698,6 +702,70 @@ function oldConfig(over) {
       assert(row.active === false, "active 标记 false");
       for (const ip of ["10.0.0.1", "10.0.0.2", "10.0.0.3"]) store.removeBan(ip);
     });
+  }
+  // [T8] P8.81：v7 → v8 迁移（身份级字段 全局 → 智能体 回填 + 清全局 + config.json 同步；幂等）
+  {
+    const dir = mk();
+    const cfgFile = writeConfig(dir, oldConfig({ security: { admin_password: "v8pw123", allow_anonymous: true, access_codes: [] } }));
+    let store;
+    await t("v7 存量库 → v8（全局身份值回填智能体 + 全局/文件清空）", async () => {
+      const r1 = initDataDir(dir, { configFile: cfgFile, log: noop }); // 全新安装（已到 v8）
+      assert(r1.fresh, "全新安装");
+      // 模拟 v7 终态：版本拨回 7 + 全局恢复旧形态（身份值在 protocol_defaults / config.json）
+      // + 智能体配置摘掉身份字段（旧版「全局承载身份」形态）
+      const d = new DatabaseSync(r1.dbFile);
+      d.exec("PRAGMA user_version = 7;");
+      d.prepare("UPDATE protocol_defaults SET config_json = ? WHERE name = 'ragflow'")
+        .run(JSON.stringify({ url: "http://127.0.0.1:18705/v1", api_key: "kaasr-test-ragflow", chat_id: "chat-abc", enabled: true }));
+      d.prepare("UPDATE protocol_defaults SET config_json = ? WHERE name = 'openai'")
+        .run(JSON.stringify({ url: "http://127.0.0.1:18701/v1", api_key: "sk-test-openai", model: "test-model", enabled: true }));
+      d.prepare("UPDATE protocol_defaults SET config_json = ? WHERE name = 'dify'")
+        .run(JSON.stringify({ url: "http://127.0.0.1:18703/v1", api_key: "app-test-dify", user: "echoanswer", enabled: true }));
+      const ag = d.prepare("SELECT id FROM agents WHERE code = 'industry-brain'").get();
+      d.prepare("UPDATE agent_configs SET config_json = ? WHERE agent_id = ?")
+        .run(JSON.stringify({ url: "http://127.0.0.1:18705/v1", api_key: "kaasr-test-ragflow" }), ag.id);
+      d.close();
+      writeConfig(dir, oldConfig()); // config.json 也恢复旧形态（含身份值）
+      const r2 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(r2.migrated === true, "触发 v7 → v8 迁移");
+      store = Store.open(r1.dbFile);
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "user_version 8");
+      const ac = store.getAgentConfig(ag.id);
+      eq(ac.config.chat_id, "chat-abc", "chat_id 从旧全局回填智能体");
+      eq(ac.config.url, "http://127.0.0.1:18705/v1", "连接级自有值保留");
+      const pd = store.getProtocolDefaults();
+      eq(pd.ragflow.chat_id, "", "全局 ragflow.chat_id 已清");
+      eq(pd.openai.model, "", "全局 openai.model 已清");
+      eq(pd.dify.api_key, "", "全局 dify.api_key 已清");
+      eq(pd.ragflow.url, "http://127.0.0.1:18705/v1", "连接级字段保留（url）");
+      eq(pd.dify.user, "echoanswer", "连接级字段保留（user）");
+      const cfg = readConfig(dir);
+      eq(cfg.protocols.ragflow.chat_id, "", "config.json ragflow.chat_id 已清");
+      eq(cfg.protocols.openai.model, "", "config.json openai.model 已清");
+      assert(fs.readdirSync(dir).some((f) => f.startsWith("config.json.bak-")), "config.json 备份存在");
+      const r3 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(r3.migrated === false, "已是 v8 跳过（幂等）");
+      eq(store.getAgentConfig(ag.id).config.chat_id, "chat-abc", "幂等二次迁移不覆盖智能体现值");
+    });
+    await t("v8 已有独立身份值的智能体不被全局覆盖", async () => {
+      const dir2 = mk();
+      const cf2 = writeConfig(dir2, oldConfig());
+      const r1 = initDataDir(dir2, { configFile: cf2, log: noop });
+      const d = new DatabaseSync(r1.dbFile);
+      d.exec("PRAGMA user_version = 7;");
+      const ag = d.prepare("SELECT id FROM agents WHERE code = 'industry-brain'").get();
+      d.prepare("UPDATE agent_configs SET config_json = ? WHERE agent_id = ?")
+        .run(JSON.stringify({ chat_id: "my-own-chat" }), ag.id);
+      d.prepare("UPDATE protocol_defaults SET config_json = ? WHERE name = 'ragflow'")
+        .run(JSON.stringify({ url: "http://127.0.0.1:18705/v1", api_key: "kaasr-test-ragflow", chat_id: "chat-abc", enabled: true }));
+      d.close();
+      const r2 = initDataDir(dir2, { configFile: cf2, log: noop });
+      assert(r2.migrated === true, "迁移");
+      const st2 = Store.open(r1.dbFile);
+      eq(st2.getAgentConfig(ag.id).config.chat_id, "my-own-chat", "自有值优先，不被全局回填覆盖");
+      st2.close();
+    });
+    store.close();
   }
   // 清理
   for (const d of tmps) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* 忽略 */ } }

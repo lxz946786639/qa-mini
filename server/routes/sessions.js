@@ -85,9 +85,19 @@ function register(router, ctx) {
       }
       pp = agentId ? Object.assign({}, pp, { agentId }) : pp;
     }
+    // P8.81: 未显式指定协议时继承归属智能体的协议（agent_configs.protocol，
+    // 缺省 ragflow）——工作区新建会话不再是「恒 ragflow」
+    let proto = typeof body.protocol === "string" && body.protocol.trim() ? body.protocol.trim() : null;
+    if (!proto) {
+      const agId = pp && pp.agentId ? pp.agentId : null;
+      const agCfg = agId ? ctx.store.getAgentConfig(agId) : null;
+      proto = agCfg && typeof agCfg.protocol === "string" && PROTOCOLS.includes(agCfg.protocol)
+        ? agCfg.protocol
+        : "ragflow";
+    }
     const s = ctx.manager.create({
       name: typeof body.name === "string" ? body.name : "",
-      protocol: typeof body.protocol === "string" ? body.protocol : "ragflow",
+      protocol: proto,
       continue_session: typeof body.continue_session === "boolean" ? body.continue_session : true
     }, pp);
     return sendJSON(res, 201, { ok: true, session: sessionView(s, 0, true) });
@@ -120,7 +130,17 @@ function register(router, ctx) {
     if (!s) return sendJSON(res, 404, { ok: false, detail: "会话不存在: " + id });
     const proto = typeof body.protocol === "string" ? body.protocol.trim() : s.protocol;
     if (!PROTOCOLS.includes(proto)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + proto });
-    const r = await testProtocol(proto, ctx.config, body.config || {});
+    // P8.81: 测试链含智能体层（全局 ← 智能体 ← 草稿），与运行时解析一致；
+    // 智能体层仅当「测试协议 = 智能体协议」时生效（防跨协议字段泄漏）
+    let agentCfg = null;
+    if (s.agent_id) {
+      const c = ctx.store.getAgentConfig(s.agent_id);
+      if (c && typeof c.config === "object" && c.config !== null &&
+          !(typeof c.protocol === "string" && c.protocol !== proto)) {
+        agentCfg = c.config;
+      }
+    }
+    const r = await testProtocol(proto, ctx.config, body.config || {}, agentCfg);
     return sendJSON(res, 200, { ok: r.ok, detail: r.detail });
   });
 

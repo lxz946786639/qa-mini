@@ -7,7 +7,7 @@
 // 推送token/配置片段/body 值，admin 页签）/ 音频（电脑输出音频接收 + 首选设备）/
 // 管理（重置后端上下文，admin 页签）；底部 = 保存状态 + 删除会话 + 保存。
 // 服务端契约：PUT /api/sessions/:id（admin 或本桶拥有者；protocol_config 按协议分组，
-// 空值丢弃 = 回退全局默认；**P8.53 protocol_config 仅管理生效**，非 admin 静默忽略）；
+// 空值丢弃 = 回退（智能体/全局）默认（P8.81 三层：全局 ← 智能体 ← 会话）；**P8.53 protocol_config 仅管理生效**，非 admin 静默忽略）；
 // POST .../protocol-test（管理）；POST .../reset（管理）。
 // P8.53：协议配置页签仅 admin 可见（普通用户/访问码/匿名只余 基本/音频 等页签）。
 import { computed, reactive, ref, watch } from "vue";
@@ -28,7 +28,8 @@ const CFG_FIELDS: Record<string, { key: string; label: string; secret?: boolean;
   ],
   dify: [
     { key: "url", label: "Dify URL" },
-    { key: "api_key", label: "API Key", secret: true }
+    { key: "api_key", label: "API Key", secret: true },
+    { key: "user", label: "User 标识" }
   ],
   openai: [
     { key: "url", label: "OpenAI 兼容 URL" },
@@ -52,7 +53,7 @@ const emit = defineEmits<{
 const form = reactive({
   name: "", protocol: "ragflow", continue_session: true,
   audio_enabled: false, preferred_device: "",
-  config: { url: "", api_key: "", chat_id: "", model: "", body: "" }
+  config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" }
 });
 const tab = ref("basic");
 const testState = reactive({ running: false, text: "", ok: null as boolean | null });
@@ -94,7 +95,7 @@ function cfgTestedNow(): boolean { return tested.proto === form.protocol && test
 
 watch(() => props.session && props.session.id, () => { fill(); }, { immediate: true });
 watch(() => form.protocol, () => {
-  form.config = { url: "", api_key: "", chat_id: "", model: "", body: "" };
+  form.config = { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" };
   const pc = (props.session && props.session.protocol_config) || {};
   const cur = pc[form.protocol] || {};
   for (const f of fields.value) {
@@ -113,7 +114,7 @@ function fill() {
   const ar = s.audio_remote && typeof s.audio_remote === "object" ? s.audio_remote : {};
   form.audio_enabled = ar.enabled === true;
   form.preferred_device = ar.preferred_device || "";
-  form.config = { url: "", api_key: "", chat_id: "", model: "", body: "" };
+  form.config = { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" };
   const pc = s.protocol_config || {};
   const cur = pc[form.protocol] || {};
   for (const f of CFG_FIELDS[form.protocol] || []) {
@@ -263,7 +264,7 @@ function copyText(t: string, tip?: string) {
         <!-- P8.53：会话级协议配置仅管理可改（普通用户/访问码/匿名不展示该页签） -->
         <el-tab-pane v-if="isAdmin" label="协议配置" name="protocol">
           <el-form label-position="top">
-            <p class="ss-small ss-pane-note">本会话协议配置：留空 = 回退全局默认；修改后需测试通过才能保存（仅管理可改）。</p>
+            <p class="ss-small ss-pane-note">本会话协议配置：留空 = 回退（智能体/全局）默认；修改后需测试通过才能保存（仅管理可改）。</p>
             <template v-for="f in fields" :key="f.key">
               <el-form-item :label="f.label">
                 <el-input
@@ -271,7 +272,7 @@ function copyText(t: string, tip?: string) {
                   :type="f.secret ? 'password' : (f.textarea ? 'textarea' : 'text')"
                   :show-password="f.secret"
                   :autosize="f.textarea ? { minRows: 2, maxRows: 6 } : undefined"
-                  :placeholder="f.secret ? '留空 = 回退全局默认' : ''"
+                  :placeholder="f.secret ? '留空 = 回退（智能体/全局）默认' : ''"
                 />
               </el-form-item>
             </template>

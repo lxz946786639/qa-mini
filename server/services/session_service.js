@@ -27,6 +27,18 @@ class V2SessionManager extends SessionManager {
   constructor(ctx) {
     super({
       getConfig: () => ctx.config,
+      // P8.81: 智能体层协议配置（agent_configs.config）参与运行时解析；
+      // 无 agent_id 的遗留会话 / 无配置的智能体 → null（回退全局）
+      getAgentConfig: (s) => {
+        if (!s || !s.agent_id) return null;
+        const c = this.store.getAgentConfig(s.agent_id);
+        if (!c || typeof c.config !== "object" || c.config === null) return null;
+        // P8.81: 智能体配置仅当「会话协议 = 智能体协议」时参与解析——agent_configs 描述的是
+        // 该智能体自身协议（脑）的连接/身份；会话改用其他协议时回退全局/会话层，
+        // 防止 url/api_key 等同名字段跨协议泄漏（ragflow 智能体配置进 dify/generic/openai 解析）
+        if (typeof c.protocol === "string" && typeof s.protocol === "string" && c.protocol !== s.protocol) return null;
+        return c.config;
+      },
       getSessions: () => ctx.sessions,
       saveAll: () => this.syncAll(),
       broadcast: (event, payload) => ctx.bus.emit(event, payload)

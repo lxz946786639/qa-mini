@@ -2,7 +2,8 @@
 // 管理路由（双轨期）：
 //  访问码生成/延期/清理/失效 + /api/config GET/PUT（深合并 → config.json + v2 库同步）
 const { sendJSON, parseJSONBody, maskConfigForBroadcast, ipOf, uaOf } = require("../middleware");
-const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS, protocolEnabled } = require("../../lib/config");
+const { deepMerge, validateConfig, saveConfig, resolveProtocolConfig, PROTOCOLS, protocolEnabled, PROTOCOL_FIELDS, IDENTITY_FIELDS, AGENT_CFG_KEEP_SENTINEL } = require("../../lib/config");
+const { testProtocol } = require("../../lib/protocol_test");
 const { EventBus } = require("../services/event_bus");
 const { hashPassword } = require("../../lib/auth");
 const { syncConfigToStore } = require("../services/config_sync");
@@ -24,6 +25,16 @@ function register(router, ctx) {
       return true;
     }
     return false;
+  };
+
+  // P8.81: 会话归属智能体的协议配置（无则 null）——运行时三层解析 / 配置保存失效判定共用
+  const agentCfgOf = (s) => {
+    if (!s || !s.agent_id) return null;
+    const c = ctx.store.getAgentConfig(s.agent_id);
+    if (!c || typeof c.config !== "object" || c.config === null) return null;
+    // P8.81: 会话协议 = 智能体协议时才参与（与运行时解析同口径，防跨协议字段泄漏）
+    if (typeof c.protocol === "string" && typeof s.protocol === "string" && c.protocol !== s.protocol) return null;
+    return c.config;
   };
 
   // ---- 访问码（管理）----
@@ -283,8 +294,10 @@ function register(router, ctx) {
     for (const s of ctx.manager.getSessions()) {
       const p = s.protocol;
       if (p !== "ragflow" && p !== "dify") continue;
-      const a = resolveProtocolConfig(s, prev, p);
-      const b = resolveProtocolConfig(s, next, p);
+      // P8.81: 含智能体层——智能体自有身份字段的会话不随全局无关变更失效
+      const ac = agentCfgOf(s);
+      const a = resolveProtocolConfig(s, prev, p, ac);
+      const b = resolveProtocolConfig(s, next, p, ac);
       const sameStr = (x, y) => String(x || "") === String(y || "");
       // P8.43: enabled 状态翻转（停用/恢复）同样清空后端会话 ID
       const enFlip = (a.enabled !== false) !== (b.enabled !== false);
@@ -309,14 +322,96 @@ function register(router, ctx) {
     return sendJSON(res, 200, { ok: true, config: next, invalidated_sessions: invalidated });
   });
 
+  // ---- 协议连接测试（管理 · P8.81）----
+  // POST /api/admin/protocol-test：body { protocol, config?, agent_code? }
+  // 合并链 = 全局 ← 智能体（agent_code 现有配置）← 草稿（config，含空串），与运行时解析一致；
+  // 供智能体创建/编辑对话框「测试连接」、智能体列表「测试」操作使用。
+  router.exact("POST", "/api/admin/protocol-test", async (req, res, ctx_, urlObj) => {
+    if (admin401(req, urlObj, res)) return Promise.resolve();
+    let body;
+    try { body = await parseJSONBody(req); }
+    catch (e) { return sendJSON(res, 400, { ok: false, detail: e.__badBody ? e.message : "请求体必须是 JSON" }); }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return sendJSON(res, 400, { ok: false, detail: "请求体必须是 JSON 对象" });
+    const proto = typeof body.protocol === "string" ? body.protocol.trim() : "";
+    if (!PROTOCOLS.includes(proto)) return sendJSON(res, 400, { ok: false, detail: "未知协议: " + proto });
+    if (body.config !== undefined && (typeof body.config !== "object" || body.config === null || Array.isArray(body.config))) {
+      return sendJSON(res, 400, { ok: false, detail: "config 必须是对象（{ 字段: 值 }）" });
+    }
+    let agentCfg = null;
+    if (typeof body.agent_code === "string" && body.agent_code.trim()) {
+      const ag = ctx.store.getAgentByCode(body.agent_code.trim());
+      if (ag) {
+        const c = ctx.store.getAgentConfig(ag.id);
+        // P8.81: 智能体层仅当「测试协议 = 智能体协议」时生效（防跨协议字段泄漏）
+        agentCfg = c && typeof c.config === "object" && c.config !== null &&
+          !(typeof c.protocol === "string" && c.protocol !== proto) ? c.config : null;
+      }
+    }
+    const r = await testProtocol(proto, ctx.config, body.config || {}, agentCfg);
+    return sendJSON(res, 200, { ok: r.ok, detail: r.detail });
+  });
+
   // ---- 智能体（管理 · P3 多智能体；每智能体一个协议，存 agent_configs）----
   const agentViewFull = (x) => {
     const cfg = ctx.store.getAgentConfig(x.id);
-    const m = JSON.parse(JSON.stringify((cfg && cfg.config) || {}));
+    const raw = (cfg && typeof cfg.config === "object" && cfg.config !== null) ? cfg.config : {};
+    const m = JSON.parse(JSON.stringify(raw));
     if (m && typeof m.api_key === "string" && m.api_key) m.api_key = "…已设置";
     const proto = (cfg && cfg.protocol) || "ragflow";
-    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
+    // P8.81: 身份级字段配置状态（只报告存在性，不回显值）：
+    // custom = 智能体自有值 / global = 继承全局（遗留回退）/ none = 均未配置
+    const g = (ctx.config.protocols && ctx.config.protocols[proto]) || {};
+    const config_status = {};
+    let config_complete = true;
+    for (const f of IDENTITY_FIELDS[proto] || []) {
+      const has = typeof raw[f] === "string" && raw[f].trim() !== "";
+      const ghas = typeof g[f] === "string" && g[f].trim() !== "";
+      config_status[f] = has ? "custom" : (ghas ? "global" : "none");
+      if (!has && !ghas) config_complete = false;
+    }
+    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, config_status, config_complete, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
   };
+
+  // P8.81: 智能体配置逐字段合并（修复「掩码 api_key 保存即丢失」）：
+  //  对 PROTOCOL_FIELDS[protocol] 每个字段——
+  //   提交值 = 哨兵「…已设置」 → 保留现值（前端掩码回传，真实值碰撞概率≈0）；
+  //   提交值 = 字符串（含空串） → 空串 = 删键（回退全局），非空 = 设置；
+  //   字段未提交            → 保留现值（兼容旧客户端）。
+  // 返回干净对象（仅含非空值键）。
+  function mergeAgentConfig(protocol, curCfg, submitted) {
+    const fields = PROTOCOL_FIELDS[protocol] || [];
+    const cur = (curCfg && typeof curCfg === "object" && curCfg !== null) ? curCfg : {};
+    const sub = (submitted && typeof submitted === "object" && submitted !== null) ? submitted : {};
+    const out = {};
+    for (const f of fields) {
+      let v;
+      if (typeof sub[f] === "string") v = sub[f];
+      else if (typeof cur[f] === "string") v = cur[f];
+      else v = "";
+      if (v === AGENT_CFG_KEEP_SENTINEL) v = typeof cur[f] === "string" ? cur[f] : "";
+      if (v.trim() !== "") out[f] = v;
+    }
+    for (const [k, v] of Object.entries(sub)) {
+      if (fields.includes(k) || k === "enabled") continue; // 未知字段透传（前向兼容）
+      if (typeof v === "string" && v.trim() !== "") out[k] = v;
+    }
+    return out;
+  }
+
+  // P8.81: 身份级字段必填校验（合并后为空 → 返回 400 文案；防「隐性共享」）
+  const IDENTITY_REQUIRED_MSG = {
+    "ragflow.chat_id": "知识引擎智能体必须配置 Chat ID（知识库对话）",
+    "openai.model": "OpenAI 兼容智能体必须配置模型",
+    "dify.api_key": "编排引擎智能体必须配置 API Key（应用密钥）"
+  };
+  function agentConfigProblem(protocol, merged) {
+    for (const f of IDENTITY_FIELDS[protocol] || []) {
+      if (!(typeof merged[f] === "string" && merged[f].trim())) {
+        return IDENTITY_REQUIRED_MSG[protocol + "." + f] || (protocol + "." + f + " 必填");
+      }
+    }
+    return null;
+  }
 
   router.exact("GET", "/api/admin/agents", (req, res, ctx_, urlObj) => {
     if (admin401(req, urlObj, res)) return Promise.resolve();
@@ -341,8 +436,12 @@ function register(router, ctx) {
       return sendJSON(res, 400, { ok: false, detail: "config 必须是对象" });
     }
     if (ctx.store.getAgentByCode(code)) return sendJSON(res, 409, { ok: false, detail: "code 已存在" });
+    // P8.81: 身份级字段必填（全局预设不再携带身份值，智能体必须明确自己的后端资源）
+    const newCfg = mergeAgentConfig(protocol, {}, body.config || {});
+    const newCfgProb = agentConfigProblem(protocol, newCfg);
+    if (newCfgProb) return sendJSON(res, 400, { ok: false, detail: newCfgProb });
     const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0, allow_anon: body.allow_anon !== false, allow_code: body.allow_code !== false, allow_user: body.allow_user !== false });
-    ctx.store.setAgentConfig(ag.id, protocol, body.config || {});
+    ctx.store.setAgentConfig(ag.id, protocol, newCfg);
     ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.create", targetType: "agent", targetId: ag.id, detail: { code, name, protocol }, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 201, { ok: true, agent: agentViewFull(ctx.store.getAgent(ag.id)) });
   });
@@ -397,7 +496,15 @@ function register(router, ctx) {
     const updated = Object.keys(patch).length ? ctx.store.updateAgent(ag0.id, patch) : ctx.store.getAgent(ag0.id);
     if (protoChanged) {
       const cur = ctx.store.getAgentConfig(ag0.id);
-      ctx.store.setAgentConfig(ag0.id, typeof body.protocol === "string" ? body.protocol : (cur && cur.protocol) || "ragflow", body.config !== undefined ? body.config : (cur ? cur.config : {}));
+      const nextProto = typeof body.protocol === "string" ? body.protocol : (cur && cur.protocol) || "ragflow";
+      // P8.81: 协议切换 = 旧协议字段作废（不以旧配置为基底），否则 ragflow.url 会泄漏进 dify.url
+      const base = (typeof body.protocol === "string" && body.protocol !== (cur && cur.protocol))
+        ? {}
+        : (cur && typeof cur.config === "object" && cur.config !== null ? cur.config : {});
+      const mergedCfg = mergeAgentConfig(nextProto, base, body.config !== undefined ? body.config : {});
+      const prob = agentConfigProblem(nextProto, mergedCfg);
+      if (prob) return sendJSON(res, 400, { ok: false, detail: prob });
+      ctx.store.setAgentConfig(ag0.id, nextProto, mergedCfg);
       // 协议/配置变更 → 该智能体下会话的后端上下文失效（ragflow/dify 会话 ID 清空）
       let invalidated = 0;
       for (const s of ctx.manager.getSessions()) {

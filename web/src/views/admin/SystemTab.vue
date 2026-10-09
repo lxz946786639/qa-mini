@@ -7,6 +7,10 @@
 // config.security.allow_anonymous 字段保留兼容、不再生效）。
 // P8.43 协议启用状态：每协议卡片「启用协议」开关（config.protocols.<p>.enabled，
 // 缺省 = 启用；停用后该协议智能体提问被拒，智能体管理端同步标注「已停用」）。
+// P8.81 配置体系重构：本页面仅承载「连接级」共享配置（URL/公共认证/通用参数）；
+// 身份级字段（ragflow.chat_id / openai.model / dify.api_key）不再作全局预设——
+// 改由「智能体管理」逐智能体必填（v8 迁移把旧全局值回填到各智能体后已清空全局）。
+// 卡片显示配置完整性徽标；generic 卡提供「测试连接」（全局配置即可完整探测）。
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../../api";
@@ -27,21 +31,19 @@ const PROTO_NAMES: Record<string, string> = {
   generic: "通用",
   ragflow: "知识引擎（RAGFlow）"
 };
-const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret?: boolean; body?: boolean }[]> = {
+// P8.81: 仅连接级字段；身份级字段（chat_id/model/dify.api_key）移入智能体级必填配置
+const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret?: boolean; body?: boolean; hint?: string }[]> = {
   ragflow: [
     { key: "url", label: "服务地址 URL" },
-    { key: "api_key", label: "API Key", secret: true },
-    { key: "chat_id", label: "Chat ID（知识库对话）" }
+    { key: "api_key", label: "API Key", secret: true, hint: "知识库 Chat ID 在「智能体管理」中按智能体必填配置，不再作全局预设" }
   ],
   dify: [
     { key: "url", label: "服务地址 URL" },
-    { key: "api_key", label: "API Key", secret: true },
-    { key: "user", label: "User 标识（请求 user 字段）" }
+    { key: "user", label: "User 标识（请求 user 字段）", hint: "应用 Key（API Key）在「智能体管理」中按智能体必填配置，不再作全局预设" }
   ],
   openai: [
     { key: "url", label: "服务地址 URL（OpenAI 兼容）" },
-    { key: "api_key", label: "API Key", secret: true },
-    { key: "model", label: "模型" }
+    { key: "api_key", label: "API Key", secret: true, hint: "模型在「智能体管理」中按智能体必填配置，不再作全局预设" }
   ],
   generic: [
     { key: "url", label: "服务地址 URL" },
@@ -52,6 +54,35 @@ const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret
 
 function protoVal(p: string, k: string) { return String(form.protocols[p][k as keyof ProtoForm] ?? ""); }
 function setProto(p: string, k: string, v: string) { (form.protocols[p] as Record<string, string>)[k] = v; }
+
+// P8.81: 卡片配置完整性徽标（url 必填；api_key 对 ragflow/dify 必填、openai/generic 可选）
+function protoBadges(p: string): { text: string; warn: boolean }[] {
+  const urlOk = !!protoVal(p, "url").trim();
+  const keyOk = !!protoVal(p, "api_key").trim();
+  const keyRequired = p === "ragflow" || p === "dify";
+  return [
+    { text: urlOk ? "URL 已配置" : "URL 未配置", warn: !urlOk },
+    { text: keyOk ? "API Key 已配置" : (keyRequired ? "API Key 未配置" : "API Key 留空（可选）"), warn: keyRequired && !keyOk }
+  ];
+}
+// P8.81: generic 卡「测试连接」（全局配置即可完整探测；身份级字段缺失的协议不做全局测试）
+const protoTest = reactive<Record<string, { running: boolean; text: string; ok: boolean | null }>>({
+  openai: { running: false, text: "", ok: null },
+  dify: { running: false, text: "", ok: null },
+  generic: { running: false, text: "", ok: null },
+  ragflow: { running: false, text: "", ok: null }
+});
+async function testProto(p: string) {
+  protoTest[p].running = true; protoTest[p].ok = null; protoTest[p].text = "";
+  try {
+    const { data } = await api<any>("/api/admin/protocol-test", { method: "POST", body: { protocol: p, config: protoPayload()[p] } });
+    protoTest[p].ok = !!data.ok;
+    protoTest[p].text = data.detail || (data.ok ? "已连接" : "连接失败");
+  } catch (e: any) {
+    protoTest[p].ok = false;
+    protoTest[p].text = String((e && e.message) || e);
+  } finally { protoTest[p].running = false; }
+}
 
 const tab = ref<"proto" | "asr">("proto");
 const busy = ref<"" | "proto" | "asr">("");
@@ -122,16 +153,19 @@ async function testAsr() {
     <el-tabs v-model="tab" class="sys-tabs">
       <el-tab-pane label="协议全局默认" name="proto">
     <section class="sys-sec">
-      <p class="tab-note">智能体在「智能体管理」中设置了自有配置时优先于全局；此处是全局回退值。</p>
+      <p class="tab-note">此处仅配置「连接级」共享默认（服务地址/公共认证/通用参数）；知识库 Chat ID、模型、Dify 应用 Key 等身份级配置在「智能体管理」中按智能体必填。生效优先级：会话级覆盖 &gt; 智能体配置 &gt; 全局默认。</p>
       <div v-for="(fields, p) in PROTO_FIELDS" :key="p" class="sys-proto">
-        <div class="sys-proto-name">{{ PROTO_NAMES[p] }}</div>
+        <div class="sys-proto-name">
+          {{ PROTO_NAMES[p] }}
+          <span v-for="(b, bi) in protoBadges(p)" :key="bi" :class="b.warn ? 'ss-bad' : 'ss-ok'" style="font-size: 12px; font-weight: normal; margin-left: 8px;">{{ b.text }}</span>
+        </div>
         <div class="sys-row">
           <label>启用协议</label>
           <el-switch v-model="protoEnabled[p]"></el-switch>
         </div>
         <p v-if="protoEnabled[p] === false" class="danger" style="font-size: 12px; margin: 0 0 8px;">该协议已停用：使用该协议的智能体无法提问（智能体管理端同步标注「已停用」，新建/改选该协议被拒）</p>
         <div v-for="f in fields" :key="f.key" class="sys-row">
-          <label>{{ f.label }}</label>
+          <label>{{ f.label }}<span v-if="f.hint" class="tab-note" style="display: block; margin-top: 2px; font-size: 12px;">{{ f.hint }}</span></label>
           <el-input
             v-if="f.body"
             :model-value="protoVal(p, f.key)"
@@ -148,8 +182,13 @@ async function testAsr() {
           ></el-input>
         </div>
       </div>
+      <div class="sys-row">
+        <label></label>
+        <el-button :loading="protoTest.generic.running" @click="testProto('generic')">测试连接（通用协议·全局配置）</el-button>
+        <span v-if="protoTest.generic.text" :class="protoTest.generic.ok ? 'ss-ok' : 'ss-bad'">{{ protoTest.generic.text }}</span>
+      </div>
       <el-button type="primary" :loading="busy === 'proto'" @click="saveProtocols">保存协议全局默认</el-button>
-      <span class="tab-note">保存后 ragflow/dify 的 url/api_key/chat_id 变化（含启用/停用切换）会自动重置回退全局会话的后端会话。</span>
+      <span class="tab-note">保存后 ragflow/dify 的 url/api_key 变化（含启用/停用切换）会自动重置「继承全局」会话的后端会话；智能体自有配置的会话不受影响。</span>
     </section>
       </el-tab-pane>
 

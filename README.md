@@ -161,7 +161,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | PUT | `/api/sessions/:id` | 修改会话。body 可选 `{name?, protocol?, continue_session?, regenerate_token?, protocol_config?, audio_remote?}`（会话级协议覆盖：protocol_config 仅管理生效（P8.53，非 admin 提交被静默忽略） / 电脑输出音频 `{enabled, preferred_device}`） |
 | DELETE | `/api/sessions/:id` | 删除会话（取消在途问答；删光时自动补建「默认会话」）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | POST | `/api/sessions/:id/reset` | 重置该会话后端上下文（先取消在途问答，再清 dify conversation / ragflow session，对应 EchoScribe「清空」） |
-| POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿，留空项回退全局）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
+| POST | `/api/sessions/:id/protocol-test` | 会话级协议配置**测试连接**（管理）。body `{protocol?, config?}`（config = 表单草稿；**P8.81** 合并链 = 全局 ← 智能体 ← 草稿，与提问取值一致）→ 200 `{ok, detail}`（ok=false 时 detail = 失败原因，不回显密钥） |
+| POST | `/api/admin/protocol-test` | **智能体级测试连接（P8.81）**（管理）。body `{protocol, config?, agent_code?}`（config = 表单草稿，agent_code = 现有智能体）；同一三层合并链（智能体层仅测试协议 = 智能体协议时参与）+ 前置校验 → 200 `{ok, detail}` |
 | DELETE | `/api/sessions/:id/history/:qaId` | 删除单条问答记录（广播 `record_removed`，各浏览器同步移除）；无权限 401「您无权限删除（仅会话属主/管理员可删除）」（P8.79） |
 | GET | `/api/events` | SSE 广播（EventSource 自动重连）：连接即推 `sessions` 列表 → `qa_start`/`delta`/`done`（均带 session_id）/`sessions`（列表变更）/`session_reset`/`config`（**P8.33** 带 `?dev=` 设备指纹入在线注册表；踢出冷却期内 403 `evicted`） |
 | GET | `/api/events/check` | **P8.33 踢出探针** `?dev=`：仅回答本端 dev+IP 是否处于踢出冷却（无需主体；冷却期 403 `evicted`） |
@@ -188,8 +189,8 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | GET | `/api/agents/:code` | 智能体详情 + 该主体可见会话 + 协议配置（api_key 脱敏；未放行该智能体的主体 → 404） |
 | GET/POST | `/api/admin/users` | 用户列表 / 创建（**仅管理**；用户名 2-32、密码 4-64、role user/admin；**P8.51 新建用户默认最小权限**：不允许任何智能体，需经 PATCH 放行） |
 | PATCH | `/api/admin/users/:id` | 用户修改 `{display_name?, role?, status?, password?, agent_scope?}`（不能降级/停用最后一个 active 管理员；停用即吊销其 cookie；**P8.40/P8.51** `agent_scope` = 权限范围三态：空数组 = 全部智能体、null = 不允许任何（最小权限）、非空 = 仅列出的智能体；管理员恒全量不受限） |
-| GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行） |
-| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID） |
+| GET/POST | `/api/admin/agents` | 智能体列表（含停用）/ 创建 `{code, name, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（每智能体一个协议，存 agent_configs；P8.8 访问控制三开关，默认全放行；**P8.81 身份字段必填**：ragflow.chat_id / openai.model / dify.api_key 留空 → 400 指明字段，协议切换旧协议字段作废重验；列表返回 `config_status`（逐身份字段 custom/global/none）+ `config_complete`，api_key 掩码「…已设置」，保存回传该值 = 保留原值（哨兵）） |
+| PATCH | `/api/admin/agents/:code` | 智能体修改 `{name?, description?, icon?, enabled?, sort?, protocol?, config?, allow_anon?, allow_code?, allow_user?}`（P8.8 三开关 = 匿名/访问码/普通用户放行，admin 恒可用，允许匿名 = 超集；协议/配置变更清空该智能体会话后端会话 ID；**P8.81** config 哨兵「…已设置」= 保留原值，空串 = 清空回退全局，缺省键 = 保留） |
 | GET | `/api/admin/audit` | 审计日志（管理操作留痕；`?limit=&offset=` 分页，默认 100 上限 500） |
 | GET | `/api/admin/stats?days=7&fresh=1` | **仪表盘统计（P8.48）**：访问/提问/活跃/运行多维聚合（每日×身份提问与成功率、每日登录/新建会话、近 7 天按小时活跃、智能体/协议维度、错误 Top8、总量与实时运行情况；**P8.50** agents 行新增 `icon` 字段（仪表盘智能体排行展示用））；`days` 1–90 缺省 7（非整数或 <1 → 400，>90 截断），`fresh=1` 强制重算（缺省 30s 缓存）；仅 admin |
 | GET | `/api/admin/security?days=7&fresh=1` | **安全监控总览（P8.49）**：24h 登录成功/失败 + 提问分桶 + 逐日聚合 + 风险告警（登录爆破 ≥5 高危 / ≥3 关注、提问高频、错误激增）+ Top IP（近 7 天审计 ∪ 近 24h 提问）+ 封禁（生效 + 近 7 天过期）+ 最近 20 安全事件；`days` 1–90 缺省 7，`fresh=1` 强制重算（缺省 30s 缓存）；仅 admin |
@@ -267,7 +268,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
   官方暗色机制修复浅色残留深色）+ 顶栏右侧统一（P8.4：无描边主题按钮 +「控制台」
   + 用户名下拉「退出」，与官网首页同排版/交互）+ 图标（P7.5：全站 emoji 换 Element Plus
   图标库 @element-plus/icons-vue）+ `/admin` 控制台（P6，Ant Design Admin 风格左侧导航布局：仪表盘（**P8.48 默认页签，P8.50 信息架构重构**：五层结构——五张核心指标卡（今日提问 / 在线访客 / 期间提问 / 成功率 / 平均响应，含环比与 sparkline）+ 提问趋势面积折线（身份切换：全部 / 管理员 / 用户 / 访问码 / 匿名，成功率作头部文字）+ 系统状态（服务正常 + 2×4 网格）+ 智能体使用（单智能体摘要卡 / 多智能体 Top5 排行 + 点击详情）+ 用户活跃（24h 热力图 + 登录 / 新建会话迷你趋势）+ 协议使用（四协议比例条 + 启用状态，停用灰色）+ 系统异常（无错误 = 健康态，否则错误数 / 率 + Top5）+ 智能体明细表；ECharts 三图 + 轻量 HTML、空态设计、统一主题视觉；近 7/14/30 天 + 60s 自动刷新（可关、无全页闪烁）+ 手动刷新）/ 用户 / 智能体 / 访问码 / 审计日志 /
-  系统设置七页签（**P8.39 当前页签写入 URL `?tab=`，刷新保持对应菜单页；默认「仪表盘」不带参数**；**P8.41 系统设置内三类配置分 tab**：协议全局默认 / 语音输入 ASR / 访问控制，各 tab 独立保存；**P8.43 协议启用状态**：协议全局默认各协议卡片「启用协议」开关，停用后该协议智能体提问被拒（400「已停用」）、智能体管理列表加红色「已停用」标签、新建/改选停用协议被拒；**P8.33/P8.35 新增「访问控制」**：在线访问者列表（登录用户 / 访问码用户按会话统计、匿名按长连接；设备指纹 + IP 判定唯一，5 秒自动刷新）+ 一键踢出（会话目标 = 会话吊销、设备目标 = 5 分钟禁入冷却；目标页提示并跳登录页，重新登录后 `?next` 回跳原页），踢出动作审计留痕 `access.kick`）；**P8.49 新增「安全监控」/ P8.61 重构**：访问/提问监测（安全态势 5 卡 + 24h 安全活动趋势图）+ 风险告警（登录爆破 / 提问高频 / 无效码猜测 / 错误激增，高危红/关注橙分级；查看 IP → 详情 → 封禁，一键封禁快捷操作）+ 风险态势（按类型分布）+ IP 安全活动排行（风险等级 / 状态 / 查看·封禁|解封）+ 安全事件留痕（登录/访问码/踢出/封禁/解封/自动封禁筛选 + 时间线，最近 20 + 加载更多）；封禁入口统一「IP 管理」Drawer（搜索 / 全部·生效中·已过期 / 解封）+「封禁 IP」二级弹窗（任意 IP / 时长预设+自定义 / 原因预设+备注 / 提交前风险提示）+「IP 详情」Drawer（状态/活动/风险/封禁信息），`?tab=security`，仅 admin 主体），仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
+  系统设置七页签（**P8.39 当前页签写入 URL `?tab=`，刷新保持对应菜单页；默认「仪表盘」不带参数**；**P8.41 系统设置内三类配置分 tab**：协议全局默认 / 语音输入 ASR / 访问控制，各 tab 独立保存；**P8.43 协议启用状态**：协议全局默认各协议卡片「启用协议」开关，停用后该协议智能体提问被拒（400「已停用」）、智能体管理列表加红色「已停用」标签、新建/改选停用协议被拒；**P8.81 系统预设重构**：协议全局默认仅连接级（身份字段 chat_id/model/api_key 移智能体级必填，表单行改提示文案 + 各卡片 URL/Key 配置状态徽标；generic 卡片「测试连接」）；智能体管理增「配置状态」列 +「测试」操作 + 每字段配置来源标签（自定义/继承全局/未配置）与「恢复默认」+ 保存必填校验；三层解析 全局 ← 智能体（仅会话协议 = 智能体协议时参与）← 会话（逐字段非空胜）；**P8.33/P8.35 新增「访问控制」**：在线访问者列表（登录用户 / 访问码用户按会话统计、匿名按长连接；设备指纹 + IP 判定唯一，5 秒自动刷新）+ 一键踢出（会话目标 = 会话吊销、设备目标 = 5 分钟禁入冷却；目标页提示并跳登录页，重新登录后 `?next` 回跳原页），踢出动作审计留痕 `access.kick`）；**P8.49 新增「安全监控」/ P8.61 重构**：访问/提问监测（安全态势 5 卡 + 24h 安全活动趋势图）+ 风险告警（登录爆破 / 提问高频 / 无效码猜测 / 错误激增，高危红/关注橙分级；查看 IP → 详情 → 封禁，一键封禁快捷操作）+ 风险态势（按类型分布）+ IP 安全活动排行（风险等级 / 状态 / 查看·封禁|解封）+ 安全事件留痕（登录/访问码/踢出/封禁/解封/自动封禁筛选 + 时间线，最近 20 + 加载更多）；封禁入口统一「IP 管理」Drawer（搜索 / 全部·生效中·已过期 / 解封）+「封禁 IP」二级弹窗（任意 IP / 时长预设+自定义 / 原因预设+备注 / 提交前风险提示）+「IP 详情」Drawer（状态/活动/风险/封禁信息），`?tab=security`，仅 admin 主体），仅 admin 主体；**管理密码未初始化时显示首启「设置管理密码」表单**，
   对齐旧版 /admin 首屏；P8.8 智能体新增/编辑对话框分类为 tab（基本/协议/安全），
   安全页 = 访问控制三开关（允许匿名访问 / 允许访问码访问 / 允许普通用户登录访问，
   不同访问方式会话落独立桶互不可见，全关 = 仅管理员）；P8.9 首页智能体卡片随控制台
@@ -281,7 +282,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 
   | 旧功能 | 新位置 |
   |---|---|
-  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
+  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**；**P8.81 仅连接级**——身份字段移智能体级必填，generic 卡片「测试连接」） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
   | 管理密码首次初始化（/admin 首屏输入即初始化） | `/admin` 控制台首启引导 + `/login` 首启表单（管理密码未设置时两处均显示「设置管理账号」表单，POST /api/admin/login 初始化通道，成功后直接以 admin 登录） |
   | 会话设置抽屉（token/会话ID/EchoScribe 片段/重置） | 工作区会话设置对话框（⋯ → 设置；管理视图含 token 回显/重新生成/toml 片段/重置后端上下文） |
   | 🎤 语音输入 / 🎧 电脑输出音频 / 多浏览器同步 / PWA | 工作区（P5.5 移植，见上条） |
@@ -304,7 +305,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**164 项**断言 —— 协议客户端单测（含超时/取消/错误）+
+- `tests/run_tests.js`：**169 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -321,7 +322,7 @@ npm test           # node tests/run_tests.js
   401/403/200 建流/SSE started-data-stopped/capture 全链路（ASR→自动提问
   source=remote_audio）/409-400 边界/双设备隔离/坏帧只断单流/断连清理/
   删会话清流/帧解析器+WAV+环形淘汰单测）。
-- `tests/store_tests.js`：**45 项** v2/v3/v4/v5/v6/v7 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移、P8.10 v3→v4 回填、P8.29 v4→v5 审计设备指纹列、P8.40 v5→v6 权限范围列、P8.49 v6→v7 ip_bans 表）：
+- `tests/store_tests.js`：**47 项** v2/v3/v4/v5/v6/v7/v8 数据层单测（`node tests/store_tests.js`，含 P8.8 v2→v3 迁移、P8.10 v3→v4 回填、P8.29 v4→v5 审计设备指纹列、P8.40 v5→v6 权限范围列、P8.49 v6→v7 ip_bans 表、P8.81 v7→v8 身份字段回填 + 全局清空）：
   会话 CRUD/桶语义/历史 100 上限/访问码状态机/管理员迁移/审计日志 + P8.49 ip_bans CRUD（覆盖语义 / 过期判定 / 永久 / 7 天窗口列表）。
 - 环境变量 `ECHOANSWER_IDLE_TIMEOUT_MS` / `ECHOANSWER_CONNECT_TIMEOUT_MS`
   可在测试中缩短超时（生产默认 60000 / 10000）；`ECHOANSWER_DATA_DIR`

@@ -151,7 +151,8 @@ function ragflowServer() {
     const m = MOCKS.ragflow;
     const auth = req.headers.authorization || "";
     m.last = { path: req.url, headers: req.headers, body, mode: m.mode || "new" };
-    if (auth !== "Bearer ragflow-key") {
+    // P8.81：k-own = 智能体自有 api_key 哨兵测试（p881-k）用的合法 key
+    if (auth !== "Bearer ragflow-key" && auth !== "Bearer k-own") {
       res.writeHead(401, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ code: 109, message: "Unauthorized" }));
     }

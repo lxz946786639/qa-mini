@@ -579,6 +579,14 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(r.data.protocols.includes("ragflow"));
     assert.strictEqual(r.data.sessions, 1);
   });
+  await test("config: P8.81 v8 已清全局身份字段（ragflow.chat_id/openai.model 保持空）+ 恢复 dify.api_key（早期协议客户端测试用，legacy 回退路径仍有效）", async () => {
+    const r = await api("PUT", "/api/config", { protocols: { dify: { api_key: "dify-key" } } });
+    assert.strictEqual(r.status, 200, r.data && r.data.detail);
+    const g = await api("GET", "/api/config");
+    assert.strictEqual(g.data.protocols.dify.api_key, "dify-key", "dify.api_key 恢复（legacy 回退）");
+    assert.strictEqual(g.data.protocols.ragflow.chat_id, "", "v8: 全局 ragflow.chat_id 保持空（身份迁智能体层）");
+    assert.strictEqual(g.data.protocols.openai.model, "", "v8: 全局 openai.model 保持空（身份迁智能体层）");
+  });
   await test("根路径 = 新代前端（P7 切根：Vue 壳 + 构建产物）", async () => {
     const r = await fetch(BASE + "/");
     assert.strictEqual(r.status, 200);
@@ -825,12 +833,14 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(rec.answer, "你好，我是助手。");
     assert.strictEqual(MOCKS.openai.last.body.model, undefined);
   });
-  await test("chat: ragflow 缺 chat_id → 400 前置拦截", async () => {
-    await api("PUT", "/api/config", { protocols: { ragflow: { chat_id: "" } } });
+  await test("chat: P8.81 v8 清全局 chat_id 后提问行为不变（身份迁智能体层：industry-brain 回填 C9）", async () => {
+    const cfg = await api("GET", "/api/config");
+    assert.strictEqual(cfg.data.protocols.ragflow.chat_id, "", "全局 ragflow.chat_id 空（v8 清）");
     const r = await api("POST", "/api/chat", { session_id: defId, question: "hi" });
-    assert.strictEqual(r.status, 400);
-    assert.ok(r.data.detail.includes("未配置知识引擎 Chat ID"));
-    await api("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C9" } } });
+    assert.strictEqual(r.status, 202, r.data && r.data.detail);
+    const rec = await waitDone(r.data.qa_id);
+    assert.strictEqual(rec.ok, true, rec.detail);
+    assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "C9", "身份来自智能体层（industry-brain 回填值）");
   });
   await test("chat: generic 非法模板 → 400 前置拦截", async () => {
     await api("PUT", "/api/config", { protocols: { generic: { body: "{bad json" } } });
@@ -1716,31 +1726,32 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
   });
 
-  await test("sessions: 会话级配置运行时生效（覆盖优于全局；前置校验用合并值）", async () => {
-    // 全局 ragflow 临时改为错误 key + 空 chat_id；本会话用覆盖值（正确 key + C9）
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { api_key: "wrong-key", chat_id: "" } } }, adminTok)).status, 200);
-    const c = await adminFetch("POST", "/api/sessions", { name: "运行时覆盖", protocol: "ragflow" }, adminTok);
-    assert.strictEqual(c.status, 201);
-    const sid = c.data.session.id;
-    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, {
-      protocol_config: { ragflow: { api_key: "ragflow-key", chat_id: "C9" } }
+  await test("sessions: P8.81 三层优先级（会话覆盖 > 智能体层 > 全局；生效值进 mock 可观测）", async () => {
+    // 全局 ragflow 临时改 chat_id=C8（industry-brain 智能体层有回填值 C9）
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C8" } } }, adminTok)).status, 200);
+    // 会话 A（industry-brain 下、无会话覆盖）：生效 = 智能体层 C9（智能体层 > 全局）
+    const cA = await adminFetch("POST", "/api/sessions", { name: "layer-a", agent_code: "industry-brain", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(cA.status, 201, cA.data && cA.data.detail);
+    const rA = await adminFetch("POST", "/api/chat", { session_id: cA.data.session.id, question: "layer a" }, adminTok);
+    assert.strictEqual(rA.status, 202, rA.data && rA.data.detail);
+    const recA = await waitDoneWith(rA.data.qa_id, { "X-Admin-Token": adminTok });
+    assert.strictEqual(recA.ok, true, recA.detail);
+    assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "C9", "无覆盖会话 = 智能体层值（优先于全局 C8）");
+    // 会话 B（会话覆盖 S-RT）：会话层 > 智能体层
+    const cB = await adminFetch("POST", "/api/sessions", { name: "layer-b", agent_code: "industry-brain", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(cB.status, 201, cB.data && cB.data.detail);
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + cB.data.session.id, {
+      protocol_config: { ragflow: { chat_id: "S-RT" } }
     }, adminTok)).status, 200);
-    // 无覆盖会话：合并后 chat_id 仍为空 -> 前置校验 400
-    const list = await api("GET", "/api/sessions");
-    const other = list.data.sessions.find((s) => s.id !== sid && s.protocol === "ragflow");
-    assert.ok(other, "需存在另一个 ragflow 会话");
-    const rBad = await api("POST", "/api/chat", { session_id: other.id, question: "hi" });
-    assert.strictEqual(rBad.status, 400, "无覆盖会话应被前置校验拦截");
-    assert.ok(rBad.data.detail.includes("Chat ID"), rBad.data.detail);
-    // 有覆盖会话：合并后 key/chat_id 齐全 -> 全链路成功
-    const rOk = await adminFetch("POST", "/api/chat", { session_id: sid, question: "覆盖问题" }, adminTok);
-    assert.strictEqual(rOk.status, 202);
-    const rec = await waitDoneWith(rOk.data.qa_id, { "X-Admin-Token": adminTok });
-    assert.strictEqual(rec.ok, true, rec.detail);
-    assert.strictEqual(rec.session_id, sid);
-    // 恢复全局配置 + 清理会话
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { api_key: "ragflow-key", chat_id: "C9" } } }, adminTok)).status, 200);
-    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
+    const rB = await adminFetch("POST", "/api/chat", { session_id: cB.data.session.id, question: "layer b" }, adminTok);
+    assert.strictEqual(rB.status, 202, rB.data && rB.data.detail);
+    const recB = await waitDoneWith(rB.data.qa_id, { "X-Admin-Token": adminTok });
+    assert.strictEqual(recB.ok, true, recB.detail);
+    assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "S-RT", "会话覆盖优先于智能体层");
+    // 恢复全局（v8 后全局 chat_id 本就空）+ 清理会话
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "" } } }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + cA.data.session.id, undefined, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + cB.data.session.id, undefined, adminTok)).status, 200);
   });
 
 
@@ -1840,34 +1851,36 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
   });
 
-  await test("sessions: 全局 ragflow 配置变更重置回退全局会话的后端会话", async () => {
-    const c = await adminFetch("POST", "/api/sessions", { name: "global-reset", protocol: "ragflow" }, adminTok);
+  await test("sessions: P8.81 全局 dify url 变更重置回退全局会话的后端会话（智能体层无 url → 回退全局）", async () => {
+    // dify 会话落在 industry-brain（ragflow 智能体）下：P8.81 协议匹配门控 → 智能体层不参与
+    // dify 解析，url/api_key/user 全部回退全局（dify.api_key 已由启动期恢复）
+    const c = await adminFetch("POST", "/api/sessions", { name: "global-reset-dify", protocol: "dify" }, adminTok);
     assert.strictEqual(c.status, 201);
     const sid = c.data.session.id;
     const r1 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q1" }, adminTok);
     const rec1 = await waitDoneWith(r1.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec1.ok, true, rec1.detail);
     const d1 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
-    assert.ok(d1.data.session.ragflow_session_id, "提问后保存了 ragflow_session_id");
-    // 改全局 chat_id（该会话无覆盖 → 生效值变化）→ 重置
-    const cp = await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C8" } } }, adminTok);
+    assert.ok(d1.data.session.dify_conversation_id, "提问后保存了 dify_conversation_id");
+    // 改全局 dify.url（该会话回退全局 → 生效值变化）→ 重置
+    const cp = await adminFetch("PUT", "/api/config", { protocols: { dify: { url: "http://127.0.0.1:" + PORTS.dify + "/v2" } } }, adminTok);
     assert.strictEqual(cp.status, 200);
     const d2 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
-    assert.strictEqual(d2.data.session.ragflow_session_id, "", "全局 chat_id 变更后被清空");
+    assert.strictEqual(d2.data.session.dify_conversation_id, "", "全局 url 变更后被清空");
     assert.strictEqual(typeof cp.data.invalidated_sessions, "number", "响应带 invalidated_sessions");
-    // 该会话加覆盖（C9）→ 不受全局变更影响
-    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { ragflow: { chat_id: "C9" } } }, adminTok)).status, 200);
+    // 该会话加会话覆盖（正确 url）→ 不受全局变更影响
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + sid, { protocol_config: { dify: { url: "http://127.0.0.1:" + PORTS.dify + "/v1" } } }, adminTok)).status, 200);
     const r2 = await adminFetch("POST", "/api/chat", { session_id: sid, question: "q2" }, adminTok);
     const rec2 = await waitDoneWith(r2.data.qa_id, { "X-Admin-Token": adminTok });
     assert.strictEqual(rec2.ok, true, rec2.detail);
     const d3 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
-    const sid3 = d3.data.session.ragflow_session_id;
-    assert.ok(sid3, "覆盖会话提问正常");
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C7" } } }, adminTok)).status, 200);
+    const cid3 = d3.data.session.dify_conversation_id;
+    assert.ok(cid3, "覆盖会话提问正常");
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { url: "http://127.0.0.1:" + PORTS.dify + "/v3" } } }, adminTok)).status, 200);
     const d4 = await adminFetch("GET", "/api/sessions/" + sid, undefined, adminTok);
-    assert.strictEqual(d4.data.session.ragflow_session_id, sid3, "有覆盖的会话不受全局变更影响");
+    assert.strictEqual(d4.data.session.dify_conversation_id, cid3, "有覆盖的会话不受全局变更影响");
     // 恢复全局 + 清理
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { chat_id: "C9" } } }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { url: "http://127.0.0.1:" + PORTS.dify + "/v1" } } }, adminTok)).status, 200);
     assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sid, undefined, adminTok)).status, 200);
   });
 
@@ -2067,7 +2080,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await api("GET", "/api/agents/nope-xxx")).status, 404, "未知 code 404");
     assert.strictEqual((await api("POST", "/api/admin/agents", { code: "qa", name: "x" })).status, 401, "非管理建智能体 401");
     assert.strictEqual((await adminFetch("POST", "/api/admin/agents", { code: "Bad_Code", name: "x" }, adminTok)).status, 400, "非法 code");
-    const ag1 = await adminFetch("POST", "/api/admin/agents", { code: "qa-assist", name: "测试助理", protocol: "openai", description: "p3" }, adminTok);
+    const ag1 = await adminFetch("POST", "/api/admin/agents", { code: "qa-assist", name: "测试助理", protocol: "openai", description: "p3", config: { model: "m1" } }, adminTok);
     assert.strictEqual(ag1.status, 201, ag1.data && ag1.data.detail);
     assert.strictEqual(ag1.data.agent.protocol, "openai");
     assert.strictEqual((await adminFetch("POST", "/api/admin/agents", { code: "qa-assist", name: "x" }, adminTok)).status, 409, "重复 code 409");
@@ -2091,7 +2104,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(brain.allow_code, true);
     assert.strictEqual(brain.allow_user, true);
     // 新建智能体 + 仅允许访问码
-    const mk = await adminFetch("POST", "/api/admin/agents", { code: "sec-a", name: "安全测试体", protocol: "ragflow" }, adminTok);
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "sec-a", name: "安全测试体", protocol: "ragflow", config: { chat_id: "C-SEC" } }, adminTok);
     assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
     const setc = await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: false, allow_code: true, allow_user: false }, adminTok);
     assert.strictEqual(setc.status, 200, setc.data && setc.data.detail);
@@ -2150,7 +2163,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     // 两个智能体：种子 industry-brain + 新建 p840-b
     const listA = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents;
     const brain = listA.find((a) => a.code === "industry-brain");
-    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p840-b", name: "P8.40 权限范围体", protocol: "ragflow" }, adminTok);
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p840-b", name: "P8.40 权限范围体", protocol: "ragflow", config: { chat_id: "C-P840" } }, adminTok);
     assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
     const b2 = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((a) => a.code === "p840-b");
     assert.ok(brain && b2, "两个智能体齐备");
@@ -2296,6 +2309,86 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p843-a", { enabled: false }, adminTok)).status, 200, "停用测试智能体");
   });
 
+  await test("p8.81: 配置体系重构（智能体级身份字段必填 + 三层解析 + 掩码哨兵 + 智能体级测试端点）", async () => {
+    // 1) 必填校验：ragflow 缺 chat_id / openai 缺 model → 400（文案指明字段）
+    const r1 = await adminFetch("POST", "/api/admin/agents", { code: "p881-a", name: "P8.81 必填体", protocol: "ragflow" }, adminTok);
+    assert.strictEqual(r1.status, 400, "ragflow 缺 chat_id → 400");
+    assert.ok(String(r1.data.detail).includes("Chat ID"), "400 文案指明 Chat ID");
+    const r2 = await adminFetch("POST", "/api/admin/agents", { code: "p881-b", name: "P8.81 必填体B", protocol: "openai" }, adminTok);
+    assert.strictEqual(r2.status, 400, "openai 缺 model → 400");
+    assert.ok(String(r2.data.detail).includes("模型"), "400 文案指明模型");
+    // 2) 智能体层生效：仅配 chat_id（url/key 留空 = 继承全局）
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p881-x", name: "P8.81 智能体层", protocol: "ragflow", config: { chat_id: "AX" } }, adminTok);
+    assert.strictEqual(mk.status, 201, mk.data && mk.data.detail);
+    const lv = await adminFetch("GET", "/api/admin/agents", undefined, adminTok);
+    const xrow = lv.data.agents.find((x) => x.code === "p881-x");
+    assert.strictEqual(xrow.config_status.chat_id, "custom", "config_status = custom");
+    assert.strictEqual(xrow.config_complete, true, "config_complete = true");
+    // 3) 新建会话不带协议 → 继承智能体协议
+    const sx = await adminFetch("POST", "/api/sessions", { name: "p881-x", agent_code: "p881-x" }, adminTok);
+    assert.strictEqual(sx.status, 201, sx.data && sx.data.detail);
+    assert.strictEqual(sx.data.session.protocol, "ragflow", "会话协议 = 智能体协议");
+    // 4) 提问 → mock 收到 /chats/AX/...（智能体层 chat_id 覆盖全局空值；url/key 继承全局）
+    const ask1 = await api("POST", "/api/push?sync=true", { token: sx.data.session.token, text: "p881 智能体层" });
+    assert.strictEqual(ask1.status, 200, ask1.data && ask1.data.detail);
+    assert.ok(ask1.data.ok === true, "智能体层提问成功: " + (ask1.data && ask1.data.detail));
+    assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "AX", "智能体层 chat_id 生效（新路径 body.chat_id）: " + JSON.stringify(MOCKS.ragflow.last.body));
+    assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer ragflow-key", "url/key 继承全局");
+    // 5) 会话层 > 智能体层：管理 PUT protocol_config 覆盖 chat_id=S1 → 旧后端会话失效重建
+    const ov = await adminFetch("PUT", "/api/sessions/" + sx.data.session.id, { protocol_config: { ragflow: { chat_id: "S1" } } }, adminTok);
+    assert.strictEqual(ov.status, 200, ov.data && ov.data.detail);
+    const ask2 = await api("POST", "/api/push?sync=true", { token: sx.data.session.token, text: "p881 会话层" });
+    assert.strictEqual(ask2.status, 200, ask2.data && ask2.data.detail);
+    assert.ok(ask2.data.ok === true, "会话层覆盖后提问成功: " + (ask2.data && ask2.data.detail));
+    assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "S1", "会话层覆盖智能体层（body.chat_id）");
+    // 6) 全局 url 变化 → 继承全局的会话后端上下文失效（智能体自有配置的会话不受影响）
+    const cfg1 = await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1-x" } } }, adminTok);
+    assert.strictEqual(cfg1.status, 200);
+    assert.ok(cfg1.data.invalidated_sessions >= 1, "全局 url 变化 → 继承全局的会话失效: " + cfg1.data.invalidated_sessions);
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1" } } }, adminTok)).status, 200, "恢复全局 url");
+    // 7) 掩码哨兵：自有 key 的智能体，保存回传「…已设置」= 保留真值（不再丢失）
+    const mkK = await adminFetch("POST", "/api/admin/agents", { code: "p881-k", name: "P8.81 哨兵体", protocol: "ragflow", config: { chat_id: "CK", api_key: "k-own" } }, adminTok);
+    assert.strictEqual(mkK.status, 201, mkK.data && mkK.data.detail);
+    const view = await adminFetch("GET", "/api/admin/agents", undefined, adminTok);
+    assert.strictEqual(view.data.agents.find((x) => x.code === "p881-k").config.api_key, "…已设置", "api_key 管理视图掩码");
+    const pk = await adminFetch("PATCH", "/api/admin/agents/p881-k", { config: { url: "", api_key: "…已设置", chat_id: "CK" } }, adminTok);
+    assert.strictEqual(pk.status, 200, pk.data && pk.data.detail);
+    const sk = await adminFetch("POST", "/api/sessions", { name: "p881-k", agent_code: "p881-k" }, adminTok);
+    const askK = await api("POST", "/api/push?sync=true", { token: sk.data.session.token, text: "p881 哨兵" });
+    assert.strictEqual(askK.status, 200, askK.data && askK.data.detail);
+    assert.ok(askK.data.ok === true, "哨兵体提问成功: " + (askK.data && askK.data.detail));
+    assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer k-own", "哨兵保留自有 key（未丢失）");
+    // 8) POST /api/admin/protocol-test：全局 ← 智能体 ← 草稿 合并链
+    const pt1 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "ragflow", agent_code: "p881-x" }, adminTok);
+    assert.strictEqual(pt1.status, 200);
+    assert.strictEqual(pt1.data.ok, true, pt1.data.detail);
+    assert.strictEqual(MOCKS.ragflow.lastChatGetId, "AX", "测试 = 智能体现有配置 + 全局 url/key");
+    const pt2 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "ragflow", agent_code: "p881-x", config: { chat_id: "PT" } }, adminTok);
+    assert.strictEqual(pt2.data.ok, true, pt2.data.detail);
+    assert.strictEqual(MOCKS.ragflow.lastChatGetId, "PT", "草稿 chat_id 优先于智能体现值");
+    // dify 预检：先清全局 dify.api_key（启动期为早期协议测试恢复过；v8 后本为空）→ 模拟三层皆无身份
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { api_key: "" } } }, adminTok)).status, 200, "清全局 dify api_key（预检测试用）");
+    const pt3 = await adminFetch("POST", "/api/admin/protocol-test", { protocol: "dify", config: { url: "http://127.0.0.1:" + PORTS.dify } }, adminTok);
+    assert.strictEqual(pt3.data.ok, false, "dify 缺 api_key 预检失败（不泄漏智能体 ragflow key）");
+    assert.ok(String(pt3.data.detail).includes("API Key"), "预检文案指明 API Key");
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { dify: { api_key: "dify-key" } } }, adminTok)).status, 200, "恢复全局 dify api_key");
+    // 9) 协议切换 = 旧协议字段作废：ragflow → dify 缺必填 → 400
+    const sw = await adminFetch("PATCH", "/api/admin/agents/p881-x", { protocol: "dify" }, adminTok);
+    assert.strictEqual(sw.status, 400, "协议切换缺 dify api_key → 400");
+    assert.ok(String(sw.data.detail).includes("API Key"), "切换文案指明 API Key");
+    const sw2 = await adminFetch("PATCH", "/api/admin/agents/p881-x", { protocol: "dify", config: { api_key: "app-key-x" } }, adminTok);
+    assert.strictEqual(sw2.status, 200, sw2.data && sw2.data.detail);
+    // 10) dify 智能体 → 新建会话继承 dify 协议（不再恒 ragflow）
+    const sd = await adminFetch("POST", "/api/sessions", { name: "p881-d", agent_code: "p881-x" }, adminTok);
+    assert.strictEqual(sd.status, 201, sd.data && sd.data.detail);
+    assert.strictEqual(sd.data.session.protocol, "dify", "切换后新会话协议 = dify");
+    // 清理：删测试会话 + 停用测试智能体
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sx.data.session.id, undefined, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sk.data.session.id, undefined, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("DELETE", "/api/sessions/" + sd.data.session.id, undefined, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p881-x", { enabled: false }, adminTok)).status, 200);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p881-k", { enabled: false }, adminTok)).status, 200);
+  });
 
 
   await test("p8.10: 权限与数据边界（admin 新建 → 管理员私有桶；重构前共享保持共享）", async () => {
@@ -2544,7 +2637,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const before = await adminFetch("GET", "/api/admin/stats?days=30&fresh=1", undefined, adminTok);
     assert.strictEqual(before.status, 200, "admin 200");
     const b = before.data;
-    // 1) 匿名共享桶（默认会话）：成功 1 + 失败 1（把该会话协议的 url 指向死端口 → ok=0 记录，finally 语义：立即恢复）
+    // 1) 匿名共享桶（默认会话）：成功 1 + 失败 1（会话级 url 覆盖 → 死端口 → ok=0 记录，用完即清。
+    //    P8.81：默认会话归 industry-brain（智能体层自有 url），改全局 url 不再影响它 → 失败记录改走会话覆盖）
     const lsA = await api("GET", "/api/sessions");
     assert.strictEqual(lsA.status, 200);
     const shared = (lsA.data.sessions || []).find((x) => x.name === "默认会话") || (lsA.data.sessions || [])[0];
@@ -2553,17 +2647,14 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(a1.status, 202, "匿名提问: " + (a1.data && a1.data.detail));
     const rec1 = await waitDone(a1.data.qa_id);
     assert.strictEqual(rec1.ok, true, "匿名成功记录");
-    const cfgNow = await adminFetch("GET", "/api/config", undefined, adminTok);
     const protoName = shared.protocol || "ragflow";
-    const savedUrl = (cfgNow.data.protocols || {})[protoName] && (cfgNow.data.protocols[protoName]).url;
-    assert.ok(savedUrl, "协议 " + protoName + " 当前 url 存在");
-    await adminFetch("PUT", "/api/config", { protocols: { [protoName]: { url: "http://127.0.0.1:1/dead" } } }, adminTok);
+    await adminFetch("PUT", "/api/sessions/" + shared.id, { protocol_config: { [protoName]: { url: "http://127.0.0.1:1/dead" } } }, adminTok);
     const a2 = await api("POST", "/api/chat", { session_id: shared.id, question: "dash-anon-fail" });
     assert.strictEqual(a2.status, 202);
     const rec2 = await waitDone(a2.data.qa_id);
     assert.strictEqual(rec2.ok, false, "连接拒绝记录 ok=false");
     assert.ok(String(rec2.detail).length > 0, "错误文案非空: " + rec2.detail);
-    assert.strictEqual((await adminFetch("PUT", "/api/config", { protocols: { [protoName]: { url: savedUrl } } }, adminTok)).status, 200, "恢复协议 url");
+    assert.strictEqual((await adminFetch("PUT", "/api/sessions/" + shared.id, { protocol_config: { [protoName]: {} } }, adminTok)).status, 200, "清除会话 url 覆盖");
     // 2) 管理员私有桶（新建专用会话 → 桶归属 admin）
     const ja = makeJar();
     const la = await jarFetch(ja, "POST", "/api/admin/login", { password: "newpw456" });
@@ -2749,7 +2840,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
   });
 
   await test("p8.58: 智能体「系统提示词」字段移除（问答流程未使用，API/UI 不再暴露）", async () => {
-    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p858-a", name: "P8.58 字段移除体", protocol: "openai", prompt: "should-be-ignored" }, adminTok);
+    const mk = await adminFetch("POST", "/api/admin/agents", { code: "p858-a", name: "P8.58 字段移除体", protocol: "openai", prompt: "should-be-ignored", config: { model: "m-858" } }, adminTok);
     assert.strictEqual(mk.status, 201, "创建智能体（prompt 被忽略）");
     const pp = await adminFetch("PATCH", "/api/admin/agents/p858-a", { prompt: "hello" }, adminTok);
     assert.strictEqual(pp.status, 400, "PATCH 仅含 prompt = 无有效字段");

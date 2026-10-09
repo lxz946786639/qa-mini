@@ -33,8 +33,8 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 167 项断言全绿，
-   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v7 数据层 45 项）；
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 169 项断言全绿，
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v8 数据层 47 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
    （Element Plus 图标）或官网首页内联 SVG；智能体图标字段 `agents.icon` 存
@@ -88,8 +88,11 @@ lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI �
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
 lib/auth.js      密码哈希（scrypt s1:）/ 令牌 / 限流器（v2 鉴权基座）
 lib/config.js    配置加载/深合并/校验 + protocolEnabled（P8.43 全局协议启用状态）+ 旧 JSON 会话兼容（存储已迁 store.js）
-lib/migrations.js v1→v2→v3→v4→v5→v6→v7 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围；v7 = P8.49 ip_bans IP 封禁表）
-lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界）
+                 + P8.81 三层解析 resolveProtocolConfig（全局 ← 智能体（仅会话协议 = 智能体协议时
+                 参与，PROTOCOL_FIELDS 过滤）← 会话，逐字段非空胜）+ 身份字段 IDENTITY_FIELDS/
+                 PROTOCOL_FIELDS + 保存哨兵 AGENT_CFG_KEEP_SENTINEL（「…已设置」= 保留原值）
+lib/migrations.js v1→v2→v3→v4→v5→v6→v7→v8 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围；v7 = P8.49 ip_bans IP 封禁表；v8 = P8.81 身份字段回填智能体 + 清全局（DB + config.json，先备份），无 DDL）
+lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界；P8.81 协议配置 = 三层解析 全局 ← 智能体（协议匹配门控）← 会话，前置校验按合并值）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
 lib/store.js     v2 数据层（唯一允许碰 data/ 库文件的模块；node:sqlite：
@@ -137,7 +140,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）+ P8.51 权限范围三态 + 最小权限
                  默认（agent_scope：'' = 全部 / '[]' = 无（最小权限）/ '[ids]' = 仅列出；新建用户/访问码默认
                  「无」，创建后前端自动弹出 AgentScopeDialog（三态单选 + 多选）引导分配；PATCH agent_scope 增
-                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）；
+                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）+ P8.81 智能体协议配置：身份字段必填（ragflow.chat_id / openai.model / dify.api_key，400 指明字段）+ 每字段配置来源标签/「恢复默认」/「测试连接」（POST /api/admin/protocol-test）；
                  P8.41 系统设置布局重构：配置分类（协议全局默认 / 语音输入 ASR）改 el-tabs
                  分类页签切换（各 tab 独立保存；P8.44 后访问控制页签已退役）+ P8.74 移动端表单行（≤720px）标签置顶 / 输入框满宽（.sys-row 原 240px 固定标签致输入框 ~110px，开关行保持横排）+ P8.77 修正：P8.74 覆盖块误置于 .sys-row 基础规则之前被反向覆盖（同特异性后写者胜，标签盒仍 240px 居中）——移至基础规则之后（标签置顶居左生效）；
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，
@@ -149,7 +152,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  回退 + viewerOk 判定，SSE 探针语义保留）；/api/access/login 移除匿名捷径（统一校验码签发）；
                  security.allow_anonymous 字段保留兼容（/api/status 恒 true））；
                  /login 首启表单同源组件)/Login(P7.1 首启引导；P8.46 登录页双页签「访问码/账号登录」：访问码在前（默认显示）、账号登录第二)；
-                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config；P8.67 表单行距统一：注记并入 el-form-item label 槽位、token 警示贴控制项下（4px）、独立指引行不占 form-item 行距（顺带移除提示 emoji，P8.25）、弹窗体 max-height + 内部滚动；全站表单审计其余对话框为标准 el-form 无同类问题)/ProfileDialog(P8.55 个人设置：显示名 + 修改密码，PUT /api/auth/me)/AdminBootstrap(首启管理账号)；
+                 components: AudioPanel/SessionSettings(P8.53 协议配置页签仅 admin 可见 + 保存不提交 protocol_config；服务端 PUT /api/sessions/:id 对非 admin 静默忽略 protocol_config；P8.81 占位口径 = 上层（全局 ← 智能体）是否已配置；P8.67 表单行距统一：注记并入 el-form-item label 槽位、token 警示贴控制项下（4px）、独立指引行不占 form-item 行距（顺带移除提示 emoji，P8.25）、弹窗体 max-height + 内部滚动；全站表单审计其余对话框为标准 el-form 无同类问题)/ProfileDialog(P8.55 个人设置：显示名 + 修改密码，PUT /api/auth/me)/AdminBootstrap(首启管理账号)；
                  stores: auth/sessions；composables: useSse/useMic/useTheme(主题共享)；
                  utils: markdown 先转义后解析 / agentIcon(P8.25 EP 图标名映射) / brandLogo(P8.27) / formatTime(P8.28)；landing.css P8 首页双主题变量）
                  根服务器含 P8 /doc/*.md 文档静态路由（server/routes/static.js）
@@ -168,8 +171,8 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 167 项断言全绿
-node tests/store_tests.js                       # 45 项数据层单测全绿
+npm test                                        # 169 项断言全绿
+node tests/store_tests.js                       # 47 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
