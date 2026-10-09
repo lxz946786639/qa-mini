@@ -140,7 +140,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）+ P8.51 权限范围三态 + 最小权限
                  默认（agent_scope：'' = 全部 / '[]' = 无（最小权限）/ '[ids]' = 仅列出；新建用户/访问码默认
                  「无」，创建后前端自动弹出 AgentScopeDialog（三态单选 + 多选）引导分配；PATCH agent_scope 增
-                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）+ P8.81 智能体协议配置：身份字段必填（ragflow.chat_id / openai.model / dify.api_key，400 指明字段）+ 每字段配置来源标签/「恢复默认」/「测试连接」（POST /api/admin/protocol-test）+ 留空（继承）字段 placeholder 回显上层值（密钥 = 同长度圆点、上层无值 = 无占位）；
+                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）+ P8.81 智能体协议配置：身份字段必填（ragflow.chat_id / openai.model / dify.api_key，400 指明字段）+ 每字段配置来源标签/「恢复默认」（仅上层存在可回退默认值时显示，身份字段无全局默认 = 隐藏）/「测试连接」（POST /api/admin/protocol-test）+ 留空（继承）字段 placeholder 回显上层值（密钥 = 同长度圆点、上层无值 = 无占位）；
                  P8.41 系统设置布局重构：配置分类（协议全局默认 / 语音输入 ASR）改 el-tabs
                  分类页签切换（各 tab 独立保存；P8.44 后访问控制页签已退役）+ P8.74 移动端表单行（≤720px）标签置顶 / 输入框满宽（.sys-row 原 240px 固定标签致输入框 ~110px，开关行保持横排）+ P8.77 修正：P8.74 覆盖块误置于 .sys-row 基础规则之前被反向覆盖（同特异性后写者胜，标签盒仍 240px 居中）——移至基础规则之后（标签置顶居左生效）；
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，

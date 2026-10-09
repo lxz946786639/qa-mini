@@ -154,6 +154,12 @@ function fieldTag(f: { key: string }): { text: string; type: "success" | "info" 
 }
 // P8.81: 恢复默认 = 清除本智能体该字段的自有值（回退全局）
 function resetField(f: { key: string }) { form.config[f.key] = ""; }
+// P8.81 续：仅当字段有自有值且上层（全局）存在可回退的默认值时显示「恢复默认」——
+// 身份字段（如 Dify api_key）无全局默认，「默认」不存在，隐藏按钮避免误导
+function canReset(f: { key: string }): boolean {
+  if (!String(form.config[f.key] ?? "")) return false;
+  return ((protoGlobalCfg.value[form.protocol] || {})[f.key] || "").trim() !== "";
+}
 // P8.81: 对话框「测试连接」（草稿优先；编辑时未填/掩码字段用智能体现有配置）
 async function testConn() {
   testSt.running = true; testSt.ok = null; testSt.text = "";
@@ -341,7 +347,7 @@ onMounted(load);
                 <div style="display: flex; align-items: center; gap: 8px; width: 100%">
                   <el-input v-model="form.config[f.key]" :placeholder="fieldPlaceholder(f)" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" style="flex: 1" />
                   <el-tag size="small" :type="fieldTag(f).type" effect="plain" style="flex-shrink: 0">{{ fieldTag(f).text }}</el-tag>
-                  <el-button v-if="String(form.config[f.key] ?? '')" link size="small" style="flex-shrink: 0" @click="resetField(f)">恢复默认</el-button>
+                  <el-button v-if="canReset(f)" link size="small" style="flex-shrink: 0" @click="resetField(f)">恢复默认</el-button>
                 </div>
                 <div v-if="f.required" style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 2px;">必填：不同智能体应各自配置（留空将与其他智能体共用同一后端资源，无法保存）</div>
               </el-form-item>
