@@ -66,8 +66,10 @@ const form = reactive({
   config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" }
 });
 const fields = computed(() => CFG_FIELDS[form.protocol] || []);
-// P8.81: 全局配置存在性（仅用于「继承全局/未配置」标识，不回显全局值）
-const protoGlobalCfg = ref<Record<string, Record<string, boolean>>>({});
+// P8.81: 全局配置值（admin 专用，GET /api/config 已含真实值）：
+// 用于「继承全局/未配置」标识 + 表单中留空（继承）字段以 placeholder 回显上层值；
+// 密钥字段（API Key 等）只以同长度圆点回显，真实值不进 DOM；上层无值（身份字段无全局默认）= 无占位
+const protoGlobalCfg = ref<Record<string, Record<string, string>>>({});
 // P8.81: 对话框「测试连接」状态
 const testSt = reactive({ running: false, text: "", ok: null as boolean | null });
 
@@ -82,12 +84,12 @@ async function load() {
   const cfg = await api<{ protocols?: Record<string, Record<string, any>> }>("/api/config"); // P8.43
   if (cfg.ok && cfg.data.protocols) {
     const st: Record<string, boolean> = {};
-    const gm: Record<string, Record<string, boolean>> = {};
+    const gm: Record<string, Record<string, string>> = {};
     for (const k of Object.keys(cfg.data.protocols)) {
       st[k] = cfg.data.protocols[k].enabled !== false;
       gm[k] = {};
       for (const f of CFG_FIELDS[k] || []) {
-        gm[k][f.key] = typeof cfg.data.protocols[k][f.key] === "string" && (cfg.data.protocols[k][f.key] as string).trim() !== "";
+        gm[k][f.key] = typeof cfg.data.protocols[k][f.key] === "string" ? (cfg.data.protocols[k][f.key] as string) : "";
       }
     }
     protoState.value = st;
@@ -132,6 +134,15 @@ function cfgPayload(): Record<string, string> {
     out[f.key] = v.includes("…") ? "…已设置" : v;
   }
   return out;
+}
+// P8.81: 留空（继承）字段的占位回显 = 上层（全局）值；
+// 密钥字段（API Key 等）只以同长度圆点回显（真实值不进 DOM）；上层无值（如身份字段无全局默认）= 无占位
+function fieldPlaceholder(f: { key: string; secret?: boolean }): string {
+  const own = String(form.config[f.key] ?? "");
+  if (own) return "";
+  const g = (protoGlobalCfg.value[form.protocol] || {})[f.key] || "";
+  if (!g.trim()) return "";
+  return f.secret ? "•".repeat(g.length) : g;
 }
 // P8.81: 字段配置来源标识（自定义 / 继承全局 / 未配置）
 function fieldTag(f: { key: string }): { text: string; type: "success" | "info" | "danger" } {
@@ -328,7 +339,7 @@ onMounted(load);
             <template v-for="f in fields" :key="f.key">
               <el-form-item :label="f.label">
                 <div style="display: flex; align-items: center; gap: 8px; width: 100%">
-                  <el-input v-model="form.config[f.key]" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" style="flex: 1" />
+                  <el-input v-model="form.config[f.key]" :placeholder="fieldPlaceholder(f)" :type="f.secret ? 'password' : (f.key === 'body' ? 'textarea' : 'text')" :show-password="f.secret" :autosize="f.key === 'body' ? { minRows: 2, maxRows: 6 } : undefined" style="flex: 1" />
                   <el-tag size="small" :type="fieldTag(f).type" effect="plain" style="flex-shrink: 0">{{ fieldTag(f).text }}</el-tag>
                   <el-button v-if="String(form.config[f.key] ?? '')" link size="small" style="flex-shrink: 0" @click="resetField(f)">恢复默认</el-button>
                 </div>
