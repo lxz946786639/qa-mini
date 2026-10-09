@@ -2210,6 +2210,10 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(c.status, 201, c.data && c.data.detail);
     assert.strictEqual(c.data.session.access_mode, "shared", "匿名落共享桶（设计口径：匿名创建 = 共享）");
     assert.strictEqual(c.data.session.protocol, "ragflow", "协议继承归属智能体");
+    // P8.84：智能体归属 = 创建入口智能体（原恒落遗留桶智能体 → 列表不可见 + /api/chat 门控 404）
+    const agentsList = (await api("GET", "/api/agents")).data.agents;
+    const brainId = agentsList.find((a) => a.code === "industry-brain").id;
+    assert.strictEqual(c.data.session.agent_id, brainId, "匿名工作区新建落入口智能体桶（P8.84）");
     // 匿名 + 全关智能体（sec-a，allow_anon=false）→ 403
     const g = await api("POST", "/api/sessions", { name: "匿名拒建", agent_code: "sec-a" });
     assert.strictEqual(g.status, 403, "归属智能体未放行 → 403");

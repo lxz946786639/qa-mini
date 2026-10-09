@@ -10,7 +10,8 @@
 //   null                        // 无凭证（由调用方决定 401/403）
 //
 // 会话桶（sessions.access_mode）：
-//   "shared" —— 共享桶：v1/v2 存量会话（P3 首启一次性回填）+ 匿名新建；
+//   "shared" —— 共享桶：v1/v2 存量会话（P3 首启一次性回填）+ 匿名新建
+//               （P8.84：agent_id = 创建入口的归属智能体，工作区新建不再落遗留桶智能体）；
 //               一切查看级主体可见可问（保留旧「访问码 = 共享会话」语义）
 //   "user"   —— 用户私有桶 (user_id, agent_id)：仅属主用户 + 管理
 //               （P8.10：管理员新建会话也落此桶，user_id = 管理员用户，
@@ -75,8 +76,12 @@ function bucketFor(principal, legacy) {
   if (principal && principal.kind === "admin" && principal.userId) {
     return { access_mode: "user", user_id: principal.userId, agent_id: principal.agentId || (legacy && legacy.agentId), access_code_id: null };
   }
-  // anon / null → 共享桶（双轨期遗留语义：匿名创建 = 共享）
-  return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: legacy ? legacy.agentId : null, access_code_id: null };
+  // anon / null → 共享桶（双轨期遗留语义：匿名创建 = 共享）；
+  // P8.84：智能体归属 = 创建入口的归属智能体（principal.agentId，工作区新建携带）——
+  // 原实现恒落 legacy.agentId（遗留桶智能体），匿名工作区建会话落错智能体：
+  // 该智能体会话列表不可见 + /api/chat 智能体门控 404（「session_id 必填且为有效会话」）
+  const anonAgentId = (principal && principal.agentId) || (legacy ? legacy.agentId : null);
+  return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: anonAgentId, access_code_id: null };
 }
 
 module.exports = { canView, canCreate, bucketFor, agentAllows, scopeAllows };
