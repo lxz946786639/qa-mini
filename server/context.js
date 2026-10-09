@@ -16,6 +16,7 @@ const { createSecurityService } = require("./services/security");
 const { createAccessCodeService } = require("./services/access_codes");
 const { createAudioListenService } = require("./services/audio_listen");
 const { AudioStreamManager } = require("../lib/audio_stream");
+const { setTrustedProxiesGetter } = require("./middleware");
 
 // 库 → 内存配置：protocol_defaults → config.protocols；system_configs → asr/audio_stream/
 // allow_anonymous；access_codes 表 → config.security.access_codes（ANON 特殊码不进旧形态镜像）
@@ -74,6 +75,11 @@ function buildContext() {
   ctx.manager = new V2SessionManager(ctx);
   ctx.bus.setManager(ctx.manager); // P3：sessions 事件逐连接作用域载荷
   ctx.bus.setSessionLookup((id) => ctx.manager.sessionById(id)); // P3：session_id 事件投递过滤 + agent_id 补齐
+  // P8.85：客户端 IP 解析注册可信反代集（config.security.trusted_proxies，实时读取）
+  setTrustedProxiesGetter(() => {
+    const c = ctx.config;
+    return (c && c.security && Array.isArray(c.security.trusted_proxies)) ? c.security.trusted_proxies : [];
+  });
   ctx.audioStreams = new AudioStreamManager({
     getConfig: () => ctx.config,
     broadcast: (event, payload) => ctx.bus.emit(event, payload)

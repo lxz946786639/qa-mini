@@ -2822,6 +2822,8 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(pBad2.status, 400, "负 minutes 400");
     const pDup = await adminFetch("POST", "/api/admin/security/bans", { ip: "203.0.113.7", minutes: 5 }, adminTok);
     assert.strictEqual(pDup.status, 409, "重复封禁 409");
+    // P8.85：XFF 假 IP 语义须可信对端（e2e 客户端 127.0.0.1 = 可信跳；块末恢复 []）
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { trusted_proxies: ["127.0.0.1"] } }, adminTok)).status, 200, "可信集 127.0.0.1");
     const b1 = await rawReq("GET", "/api/agents", undefined, { "x-forwarded-for": "203.0.113.7" });
     assert.strictEqual(b1.status, 403, "被封 IP 403");
     assert.ok(String(b1.data.detail).includes("限制"), "403 文案: " + (b1.data && b1.data.detail));
@@ -2838,9 +2840,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const bl = await adminFetch("GET", "/api/admin/security/bans", undefined, adminTok);
     assert.strictEqual(bl.status, 200);
     assert.ok(Array.isArray(bl.data.bans), "bans 数组");
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { trusted_proxies: [] } }, adminTok)).status, 200, "恢复可信集 []");
   });
   await test("p8.49: 登录爆破自动封禁（10 次失败 → auto: 封禁 + 审计）", async () => {
     // 场景内把阈值调回 10（爆破源 = XFF 假 IP，与 127.0.0.1 隔离；测试末恢复）
+    // P8.85：假 IP 计数/封禁语义须可信对端（e2e 客户端 127.0.0.1 = 可信跳）
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { trusted_proxies: ["127.0.0.1"] } }, adminTok)).status, 200, "可信集 127.0.0.1");
     const cfgSet = await adminFetch("PUT", "/api/config", { security: { auto_ban: { login_fails: 10 } } }, adminTok);
     assert.strictEqual(cfgSet.status, 200, "阈值 10: " + (cfgSet.data && cfgSet.data.detail));
     const victim = "203.0.113.9";
@@ -2850,6 +2855,9 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
       const r = await rawReq("POST", "/api/auth/login", { username: "nosuchuser" + i, password: "bad-pass-" + i }, { "x-forwarded-for": victim });
       codes.push(r.status);
     }
+    // 先恢复阈值（防中途断言中止遗留 10 次阈值，误封后续块的 127.0.0.1）；
+    // 可信集须保持到「再登录 403」断言完成后才恢复（再登录依赖 XFF 语义）
+    await adminFetch("PUT", "/api/config", { security: { auto_ban: { login_fails: 100000 } } }, adminTok);
     assert.ok(codes.every((s) => s === 401 || s === 429), "均为登录失败: " + codes.join(","));
     assert.ok(codes.filter((s) => s === 401).length >= 9, "前 N 次 401: " + codes.join(","));
     const bl = await adminFetch("GET", "/api/admin/security/bans", undefined, adminTok);
@@ -2864,7 +2872,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(ev.data.events.some((e) => e.action === "security.auto_ban" && e.target_id === victim), "审计 security.auto_ban");
     assert.ok(ev.data.events.some((e) => e.action === "auth.login_failed"), "审计 auth.login_failed");
     assert.strictEqual((await adminFetch("DELETE", "/api/admin/security/bans/" + victim, undefined, adminTok)).status, 200, "清理自动封禁");
-    await adminFetch("PUT", "/api/config", { security: { auto_ban: { login_fails: 100000 } } }, adminTok);
+    assert.strictEqual((await adminFetch("PUT", "/api/config", { security: { trusted_proxies: [] } }, adminTok)).status, 200, "恢复可信集 []");
   });
   await test("p8.49: 安全事件流（动作集合 + 分页形状 + 总览内嵌）", async () => {
     const ev = await adminFetch("GET", "/api/admin/security/events?limit=100", undefined, adminTok);
@@ -2913,6 +2921,44 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     const view = (await adminFetch("GET", "/api/admin/agents", undefined, adminTok)).data.agents.find((a) => a.code === "p858-a");
     assert.ok(view && !("prompt" in view), "智能体视图不再含 prompt 字段");
     assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/p858-a", { enabled: false }, adminTok)).status, 200, "清理");
+  });
+
+  // ================= P8.85：可信反向代理客户端 IP 解析（X-Forwarded-For） =================
+  // e2e 客户端自 127.0.0.1 直连 → 信任 127.0.0.1 = 模拟「TLS 侧车」可信跳
+  // 置于全量测试末尾：块内 2 次 127.0.0.1 失败登录计入限流计数，避免污染前置块
+  await test("p8.85: 可信反代客户端 IP（可信对端采信 XFF / 多跳跳过可信 / 非信任忽略 XFF / 非法值拒绝）", async () => {
+    const setT = (v) => adminFetch("PUT", "/api/config", { security: { trusted_proxies: v } }, adminTok);
+    assert.strictEqual((await setT(["127.0.0.1"])).status, 200, "config 更新 trusted_proxies");
+    assert.deepStrictEqual(((await adminFetch("GET", "/api/config", undefined, adminTok)).data.security.trusted_proxies), ["127.0.0.1"], "实时生效");
+    const lastAudit = async () => ((await adminFetch("GET", "/api/admin/audit?limit=1", undefined, adminTok)).data.items)[0];
+    const badLogin = async (xff) => {
+      const h = { "Content-Type": "application/json" };
+      if (xff) h["X-Forwarded-For"] = xff;
+      const r = await fetch(BASE + "/api/access/login", { method: "POST", headers: h, body: JSON.stringify({ code: "999999" }) });
+      return { status: r.status, data: await r.json() };
+    };
+    // 1) 可信对端 + 单跳 XFF → 审计记录 XFF 客户端 IP（独立 IP 段 .71-73，避开其他块的假 IP）
+    let r = await badLogin("203.0.113.71");
+    assert.strictEqual(r.status, 401, "无效访问码 401");
+    let a = await lastAudit();
+    assert.strictEqual(a.action, "access.login_failed");
+    assert.strictEqual(a.ip, "203.0.113.71", "可信对端：审计 IP = XFF 第一个不可信跳");
+    // 2) 可信对端 + 无 XFF → 回落 remoteAddress
+    await badLogin();
+    a = await lastAudit();
+    assert.strictEqual(a.ip, "127.0.0.1", "无 XFF：回落 remoteAddress");
+    // 3) 可信对端 + 多跳 XFF（右端可信跳跳过）→ 左端客户端 IP
+    await badLogin("203.0.113.72, 127.0.0.1");
+    a = await lastAudit();
+    assert.strictEqual(a.ip, "203.0.113.72", "多跳：自右向左跳过可信跳");
+    // 4) 清空可信集 → XFF 不采信（防伪造）
+    assert.strictEqual((await setT([])).status, 200, "清空可信集");
+    await badLogin("203.0.113.73");
+    a = await lastAudit();
+    assert.strictEqual(a.ip, "127.0.0.1", "非可信对端：XFF 不采信");
+    // 5) 非法值拒绝
+    assert.strictEqual((await setT(["999.999.1.1"])).status, 400, "非法 IPv4 拒绝");
+    assert.strictEqual((await setT("127.0.0.1")).status, 400, "非数组拒绝");
   });
 
   // 收尾

@@ -305,7 +305,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**172 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+ **全局级连接探测（mode=global）** +
+- `tests/run_tests.js`：**173 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+ **全局级连接探测（mode=global）** +
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
@@ -316,6 +316,7 @@ npm test           # node tests/run_tests.js
   **P8.33/P8.35 访问控制**（在线列表设备 + IP 分组 / 踢出 evicted + 断流 / 冷却期探针 + 重建长连接 403 / 码会话吊销 / 管理员不可踢 / 离线 404 / 审计 access.kick / **P8.35** 访问码·用户会话无长连接在线 / 会话踢出吊销 cookie 无冷却 / 管理员会话 400 / 已吊销 404）、
   **P8.48 仪表盘统计**（GET /api/admin/stats 鉴权 401 / days 缺省 7·999 截断 90·0→400 / 四主体分桶聚合差值法 + 协议·智能体维度 + 错误注入）、
   **P8.49 安全监控**（/api/admin/security 鉴权 401 / days 边界 / 手动封禁 XFF 假 IP → 公开 API 403 拦截 + admin 豁免 + 非法 400 / 重复 409 / 解封 200→404 幂等 / 10 次登录爆破自动封禁 + 再登录 403 + 审计 security.auto_ban / 安全事件流动作集合与分页）、
+  **P8.85 可信反代客户端 IP**（trusted_proxies：可信对端采信 XFF / 多跳自右向左跳过可信跳 / 无 XFF 回落 remoteAddress / 非可信对端忽略 XFF 防伪造 / 非法值 400）、
   **ASR 语音输入**：全链路/未配置/非 WAV/404 回退/上游 500/10MB 413/
   测试连接含鉴权/SSE 广播脱敏/客户端断开中止上游（lib 级 + E2E）、
   **电脑输出音频流**：node 模拟推流端（chunked POST + Deflate 帧）覆盖
