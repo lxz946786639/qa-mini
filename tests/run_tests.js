@@ -342,7 +342,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(u.newUrl, "http://h:9380/api/v1/chat/completions");
     assert.strictEqual(u.legacyUrl, "http://h:9380/api/v1/chats/C1/completions");
   });
-  const ragflowCfg = { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" };
+  const ragflowCfg = { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9", user: "tester" };
   MOCKS.ragflow.mode = "new";
   await test("ragflow: delta 流 + 两步建会话 + 引用脚注", async () => {
     const meta = {};
@@ -353,6 +353,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual(MOCKS.ragflow.last.path, "/api/v1/chat/completions");
     assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "C9");
     assert.strictEqual(MOCKS.ragflow.last.body.session_id, "sess-1");
+    assert.strictEqual(MOCKS.ragflow.last.body.user, "tester", "user 字段透传（RAGFlow 请求 user 标识）");
     assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer ragflow-key");
   });
   await test("ragflow: 会话续接（不再建会话）", async () => {
@@ -543,7 +544,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
       openai: { url: "http://127.0.0.1:" + PORTS.openai + "/v1/chat/completions", api_key: "k1", model: "" },
       dify: { url: "http://127.0.0.1:" + PORTS.dify + "/v1", api_key: "dify-key", user: "tester" },
       generic: { url: "http://127.0.0.1:" + PORTS.generic + "/ask", api_key: "", body: JSON.stringify({ token: "kaasr_x", input: "{question}" }) },
-      ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9" }
+      ragflow: { url: "http://127.0.0.1:" + PORTS.ragflow + "/api/v1", api_key: "ragflow-key", chat_id: "C9", user: "qa-mini" }
     }
   }, null, 2));
 
@@ -2365,6 +2366,7 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(ask1.data.ok === true, "智能体层提问成功: " + (ask1.data && ask1.data.detail));
     assert.strictEqual(MOCKS.ragflow.last.body.chat_id, "AX", "智能体层 chat_id 生效（新路径 body.chat_id）: " + JSON.stringify(MOCKS.ragflow.last.body));
     assert.strictEqual(MOCKS.ragflow.last.headers.authorization, "Bearer ragflow-key", "url/key 继承全局");
+    assert.strictEqual(MOCKS.ragflow.last.body.user, "qa-mini", "ragflow user 连接级：智能体层未设 → 继承全局");
     // 5) 会话层 > 智能体层：管理 PUT protocol_config 覆盖 chat_id=S1 → 旧后端会话失效重建
     const ov = await adminFetch("PUT", "/api/sessions/" + sx.data.session.id, { protocol_config: { ragflow: { chat_id: "S1" } } }, adminTok);
     assert.strictEqual(ov.status, 200, ov.data && ov.data.detail);

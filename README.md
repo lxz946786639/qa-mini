@@ -134,7 +134,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 | `openai` | url（完整地址）/ api_key / model | POST chat completions `{messages, stream:true, model?}`，Bearer 可空；上下文→system 消息「参考上下文（最近识别内容）：…」 | SSE `choices[0].delta.content`（兼容 `choices[0].text`）；`[DONE]` 结束 |
 | `dify` | url（基址）/ api_key（必填）/ user | POST `{基址}/chat-messages`（自动补路径）`{inputs:{}, query, response_mode:"streaming", user, conversation_id?}`；上下文拼进 query | 按 event 分派：`message`→answer 增量+捕获 conversation_id（多轮续接）；`message_end` 结束；`error` 抛错；其余忽略 |
 | `generic` | url（完整地址）/ api_key（可空）/ body（JSON 模板） | 模板中 `{question}`/`{context}` 占位符递归替换 + 顶层注入 question/context；最小模板 `{}` 即可 | 自动识别：SSE / 单 JSON 文档 / 纯文本；答案字段优先级 `choices[0].delta.content` → `choices[0].text` → `data.content/answer/text` → 顶层 `content/answer/text/output` |
-| `ragflow` | url（基址）/ api_key（必填）/ chat_id（必填） | 新路径 `POST {基址}/chat/completions`（404 回退一次旧路径 `/chats/{chat_id}/completions`）；无会话先 `POST /chats/{chat_id}/sessions` 建会话（RAGFlow ≤v0.24 必需） | 信封 `{code,message,data}`：`data==true` 结束；code≠0 流内报错；session_id 续接；思考区（start/end_to_think）跳过；delta/cumulative 自动识别（LCP 差分）；reference 文档名去重脚注「**参考来源**：…」 |
+| `ragflow` | url（基址）/ api_key（必填）/ chat_id（必填）/ user（可选，P8.81 续：请求 user 字段，留空 = 不发送） | 新路径 `POST {基址}/chat/completions`（404 回退一次旧路径 `/chats/{chat_id}/completions`）；无会话先 `POST /chats/{chat_id}/sessions` 建会话（RAGFlow ≤v0.24 必需） | 信封 `{code,message,data}`：`data==true` 结束；code≠0 流内报错；session_id 续接；思考区（start/end_to_think）跳过；delta/cumulative 自动识别（LCP 差分）；reference 文档名去重脚注「**参考来源**：…」 |
 
 界面显示名对外隐藏：`dify` → 「编排引擎」、`ragflow` → 「知识引擎」（协议 key、
 配置字段、API 参数均不变；错误提示同步使用隐藏名称）。
@@ -221,7 +221,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
     "openai":  { "url": "", "api_key": "", "model": "" },
     "dify":    { "url": "", "api_key": "", "user": "EchoAnswer" },
     "generic": { "url": "", "api_key": "", "body": "{\"question\":\"{question}\"}" },
-    "ragflow": { "url": "", "api_key": "", "chat_id": "" }
+    "ragflow": { "url": "", "api_key": "", "chat_id": "", "user": "" }
   },
   "asr": { "url": "", "api_key": "", "model": "", "language": "", "timeout": 60 },  // 网页语音输入所用 ASR 服务（OpenAI 兼容；空 url = 未启用）
   "audio_stream": { "max_buffer_s": 120, "min_capture_s": 5, "default_capture_s": 30, "max_capture_s": 60 }  // 电脑输出音频流（推流缓冲/截取秒数，见 doc/02 §1）
@@ -282,7 +282,7 @@ EchoScribe：「开始识别」实时显示中间识别 →「停止识别」定
 
   | 旧功能 | 新位置 |
   |---|---|
-  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**；**P8.81 仅连接级**——身份字段移智能体级必填，**P8.81 续各卡「测试连接（全局配置）」**= 全局级连接探测（身份字段不覆盖）） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
+  | ⚙ 设置抽屉（协议全局配置 / 语音输入 ASR / 安全配置） | 控制台「系统设置」模块（协议全局默认 protocols（**P8.43 含各协议「启用协议」开关**；**P8.81 仅连接级**——身份字段移智能体级必填（**P8.81 续 RAGFlow 卡增连接级 User 标识**，同 Dify），**P8.81 续各卡「测试连接（全局配置）」**= 全局级连接探测（身份字段不覆盖）） / ASR + 测试连接；**P8.44 移除匿名访问开关**） |
   | 管理密码首次初始化（/admin 首屏输入即初始化） | `/admin` 控制台首启引导 + `/login` 首启表单（管理密码未设置时两处均显示「设置管理账号」表单，POST /api/admin/login 初始化通道，成功后直接以 admin 登录） |
   | 会话设置抽屉（token/会话ID/EchoScribe 片段/重置） | 工作区会话设置对话框（⋯ → 设置；管理视图含 token 回显/重新生成/toml 片段/重置后端上下文） |
   | 🎤 语音输入 / 🎧 电脑输出音频 / 多浏览器同步 / PWA | 工作区（P5.5 移植，见上条） |

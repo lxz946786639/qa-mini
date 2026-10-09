@@ -24,7 +24,8 @@ const CFG_FIELDS: Record<string, { key: string; label: string; secret?: boolean;
   ragflow: [
     { key: "url", label: "RAGFlow URL" },
     { key: "api_key", label: "API Key", secret: true },
-    { key: "chat_id", label: "Chat ID（知识库）" }
+    { key: "chat_id", label: "Chat ID（知识库）" },
+    { key: "user", label: "User 标识" }
   ],
   dify: [
     { key: "url", label: "Dify URL" },

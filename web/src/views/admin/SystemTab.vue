@@ -36,7 +36,8 @@ const PROTO_NAMES: Record<string, string> = {
 const PROTO_FIELDS: Record<string, { key: keyof ProtoForm; label: string; secret?: boolean; body?: boolean; hint?: string }[]> = {
   ragflow: [
     { key: "url", label: "服务地址 URL" },
-    { key: "api_key", label: "API Key", secret: true, hint: "知识库 Chat ID 在「智能体管理」中按智能体必填配置，不再作全局预设" }
+    { key: "api_key", label: "API Key", secret: true, hint: "知识库 Chat ID 在「智能体管理」中按智能体必填配置，不再作全局预设" },
+    { key: "user", label: "User 标识（请求 user 字段）", hint: "RAGFlow 请求的 user 字段（可选；留空 = 不发送，智能体/会话可各自覆盖）" }
   ],
   dify: [
     { key: "url", label: "服务地址 URL" },
