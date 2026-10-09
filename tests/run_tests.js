@@ -632,6 +632,12 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     for (const ff of ["sw.js", "registerSW.js", "manifest.webmanifest", "icons/icon-192.png"]) {
       assert.ok(fs2.existsSync(path.join(dist, ff)), "dist 含 " + ff);
     }
+    // P8.83：工作区发送门控（「请先登录或输入访问码」→ 跳登录）已移除（匿名问答恒公开，提问鉴权 = 会话 token）
+    const chunks = fs2.readdirSync(path.join(dist, "assets")).filter((f) => f.endsWith(".js"));
+    assert.ok(chunks.length > 0, "dist 含 js chunk");
+    for (const f of chunks) {
+      assert.ok(!fs2.readFileSync(path.join(dist, "assets", f), "utf8").includes("请先登录或输入访问码"), f + " 不得含匿名发送门控文案（P8.83）");
+    }
   });
   await test("PWA: 图标均为有效 PNG", async () => {
     for (const p of ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png"]) {

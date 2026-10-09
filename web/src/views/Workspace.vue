@@ -430,7 +430,7 @@ async function initSessions() {
   const qSid = typeof route.query.sid === "string" ? route.query.sid : "";
   const target = (qSid && mine.find((v) => v.id === qSid)) || mine[0];
   if (target) await openSession(target.id);
-  else if (auth.isAuthed) await createSession();
+  else await createSession(); // P8.83：匿名同享（该智能体允许匿名时）首次访问无会话 → 新建提示（落共享桶）
 }
 
 async function openSession(sid: string) {
@@ -481,7 +481,8 @@ async function send() {
   const q = input.value.trim();
   const sid = sess.currentSid;
   if (!q || !sid || sending.value) return;
-  if (!auth.isAuthed) { ElMessage.warning("请先登录或输入访问码"); router.push("/login"); return; }
+  // P8.83：移除 P3 遗留的发送前鉴权门控——匿名问答恒公开（P8.44 口径）；提问鉴权 =
+  // 会话推送 token（/api/push 兼容性红线），匿名仅能打开共享会话（私有会话 404 不可见）
   sending.value = true;
   input.value = "";
   try {
@@ -784,8 +785,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-else-if="!sess.currentSid" class="ws-empty-main">
           <p>左侧选择或新建一个会话开始问答</p>
-          <el-button v-if="auth.isAuthed" type="primary" @click="createSession">新建会话</el-button>
-          <router-link v-else to="/login" class="login-back">先登录 →</router-link>
+          <el-button type="primary" @click="createSession">新建会话</el-button><!-- P8.83：匿名可建（共享桶）；原「先登录 →」链接废弃 -->
         </div>
         <template v-else>
           <!-- P8.54：空会话提示通俗化，专业对接信息折叠「查看更多」 -->

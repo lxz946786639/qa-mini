@@ -305,7 +305,7 @@ npm test           # node tests/run_tests.js
   覆盖 SSE 全事件流 / 思考区 / 引用 / cumulative + ##0$$ / 404 回退 / 建会话 /
   error 事件 / 401 / 空回答 / 慢速流 / 静默流 等形态，及 ASR 的
   `/health` / `/v1/models` / transcriptions / chat 回退路径。
-- `tests/run_tests.js`：**170 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+ **全局级连接探测（mode=global）** +
+- `tests/run_tests.js`：**172 项**断言 —— 协议客户端单测（含超时/取消/错误）+ **P8.81 配置体系重构**（三层优先级 / 身份字段必填 400 / 智能体级测试端点 / v8 回填行为保持）+ **全局级连接探测（mode=global）** +
   真实 server 全链路（会话迁移/创建/CRUD/token 重生成/删除保护、push
   token+session_id 校验与兼容、chat session_id 必填、四协议链路、双客户端
   广播含 session_id、配置深合并落盘、跨会话历史合并、stall/黑洞/拒绝、
