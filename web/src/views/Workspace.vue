@@ -250,28 +250,43 @@ function scheduleRender(card: Card) {
 }
 const showToLatest = ref(false); // P8.12：上滑阅读时显示「↓ 最新」浮钮（对齐旧版）
 
-// P8.87：会话重置分隔线——每会话记最近一次重置时间戳（localStorage 持久化），
-// 在「重置前的最后一条对话」之后渲染分隔线，区隔重置前历史与重置后新上下文
+// P8.87：会话重置分隔线——每会话记重置时间戳（localStorage 持久化），
+// 在「重置前的最后一条对话」之后渲染分隔线，区隔重置前历史与重置后新上下文；
+// P8.92：多次重置各留一条分隔线（时间戳数组追加；旧单值格式自动迁移为数组）
 const RESET_MARK_KEY = "echoanswer-reset-mark";
-function loadResetMarks(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem(RESET_MARK_KEY) || "{}"); } catch { return {}; }
+function loadResetMarks(): Record<string, number[]> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RESET_MARK_KEY) || "{}") as Record<string, unknown>;
+    const out: Record<string, number[]> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      out[k] = Array.isArray(v) ? v.filter((n) => typeof n === "number") : typeof v === "number" ? [v] : [];
+    }
+    return out;
+  } catch { return {}; }
 }
-const resetMarks = ref<Record<string, number>>(loadResetMarks());
+const resetMarks = ref<Record<string, number[]>>(loadResetMarks());
 function setResetMark(sid: string) {
-  resetMarks.value[sid] = Date.now();
+  const list = resetMarks.value[sid] ? [...resetMarks.value[sid]] : [];
+  list.push(Date.now());
+  resetMarks.value[sid] = list;
   try { localStorage.setItem(RESET_MARK_KEY, JSON.stringify(resetMarks.value)); } catch { /* 忽略 */ }
 }
 // P8.88：重置对话框成功即落标记（会话设置组件直连，覆盖 SSE 未达/页面旧缓存窗口）
 function onSettingsReset() { if (sess.currentSid) setResetMark(sess.currentSid); }
-const resetDividerIdx = computed(() => {
-  const mark = resetMarks.value[sess.currentSid] || 0;
-  if (!mark || !cards.value.length) return -1;
-  let idx = -1;
-  cards.value.forEach((c, i) => {
-    const t = new Date(c.started_at).getTime();
-    if (!Number.isNaN(t) && t <= mark) idx = i; // 重置前的最后一条（含重置前在途）
-  });
-  return idx;
+// P8.92：每次重置各渲染一条分隔线（两次重置落在同一卡片位置时去重只显一条）
+const resetDividerIdxs = computed(() => {
+  const marks = resetMarks.value[sess.currentSid] || [];
+  const out = new Set<number>();
+  if (!marks.length || !cards.value.length) return out;
+  for (const mark of marks) {
+    let idx = -1;
+    cards.value.forEach((c, i) => {
+      const t = new Date(c.started_at).getTime();
+      if (!Number.isNaN(t) && t <= mark) idx = i; // 该次重置前的最后一条（含在途）
+    });
+    if (idx >= 0) out.add(idx);
+  }
+  return out;
 });
 function isNearBottom(): boolean {
   const el = chatEl.value;
@@ -873,7 +888,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <div v-if="ci === resetDividerIdx" class="ws-reset-divider">
+          <div v-if="resetDividerIdxs.has(ci)" class="ws-reset-divider">
             <span class="ws-reset-line"></span>
             <span class="ws-reset-label">会话已重置 · 以下为新的上下文</span>
             <span class="ws-reset-line"></span>
