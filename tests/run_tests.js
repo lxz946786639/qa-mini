@@ -2227,6 +2227,42 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "全关 → admin 仍可打开");
   });
 
+  await test("p8.93: 匿名开放时段（永久 / 日期+时段限时；时段外匿名通道关闭）", async () => {
+    // 参数校验
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { start: "2026-01-02", end: "2026-01-01" } }, adminTok)).status, 400, "start > end → 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { dayStart: "08:00" } }, adminTok)).status, 400, "dayStart 缺 dayEnd → 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { dayStart: "18:00", dayEnd: "08:00" } }, adminTok)).status, 400, "时段倒挂 → 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { start: "bad" } }, adminTok)).status, 400, "日期格式错误 → 400");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: [] }, adminTok)).status, 400, "数组 → 400");
+    // 已过时段（过去）：匿名通道关闭（404），code 超集通道同步关闭，admin 不受影响
+    const gen2 = await adminFetch("POST", "/api/admin/access-codes", { code: "777777", hours: 1 }, adminTok);
+    assert.strictEqual(gen2.status, 201, gen2.data && gen2.data.detail);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/access-codes/777777", { agent_scope: [] }, adminTok)).status, 200);
+    const code3 = makeJar();
+    const cl3 = await jarFetch(code3, "POST", "/api/auth/access-code", { code: "777777" });
+    assert.strictEqual(cl3.status, 200, cl3.data && cl3.data.detail);
+    const past = { start: "2020-01-01", end: "2020-01-02" };
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: true, anon_window: past }, adminTok)).status, 200, "过去时段 + allow_anon");
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "时段外 → anon 404");
+    assert.strictEqual((await jarFetch(code3, "GET", "/api/agents/sec-a")).status, 404, "时段外 → code 超集通道同步关闭");
+    assert.strictEqual((await adminFetch("GET", "/api/agents/sec-a", undefined, adminTok)).status, 200, "时段外 → admin 不受影响");
+    // 未开始时段（未来）：匿名同样拒绝
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { start: "2030-01-01", end: "2030-12-31" } }, adminTok)).status, 200);
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "未开始 → anon 404");
+    // 当前时段（横跨今日、全天）：匿名放行
+    const day = (off) => new Date(Date.now() + off * 864e5).toISOString().slice(0, 10);
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { start: day(-1), end: day(1) } }, adminTok)).status, 200);
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 200, "时段横跨今日 + 全天 → anon 200");
+    // 清空时段（null = 永久）
+    const clr = await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: null }, adminTok);
+    assert.strictEqual(clr.status, 200);
+    assert.ok(!clr.data.agent.anon_window, "null = 永久");
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 200, "清空后 → anon 200");
+    // 还原 p8.8 终态（全关）+ 清理测试码，避免污染后续块
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: false, allow_code: false, allow_user: false }, adminTok)).status, 200, "还原全关");
+    assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/777777", undefined, adminTok)).status, 200, "清理测试码");
+  });
+
   await test("p8.82: 匿名可建会话（共享桶；归属智能体未放行 403；无效凭证 401）", async () => {
     // 无凭证 = 匿名主体（allow_anonymous 默认 true）+ 种子智能体（allow_anon=true）→ 201 共享桶 + 协议继承
     const c = await api("POST", "/api/sessions", { name: "匿名新建", agent_code: "industry-brain" });

@@ -53,13 +53,31 @@ function scopeAllows(scope, agentId) {
   if (scope === null || scope === undefined) return true;
   return scope.indexOf(agentId) !== -1;
 }
+// P8.93 匿名开放时段判定：win = null|{start,end,dayStart,dayEnd}
+// （start/end 本地日期 YYYY-MM-DD、dayStart/dayEnd 本地时间 HH:MM；缺省 = 永久/全天）
+function anonWindowOpen(win, now) {
+  if (!win || typeof win !== "object") return true;
+  now = now || new Date();
+  const p2 = (n) => String(n).padStart(2, "0");
+  const d = now.getFullYear() + "-" + p2(now.getMonth() + 1) + "-" + p2(now.getDate());
+  if (typeof win.start === "string" && win.start && d < win.start) return false;
+  if (typeof win.end === "string" && win.end && d > win.end) return false;
+  if (typeof win.dayStart === "string" && win.dayStart && typeof win.dayEnd === "string" && win.dayEnd) {
+    const t = p2(now.getHours()) + ":" + p2(now.getMinutes());
+    if (t < win.dayStart || t >= win.dayEnd) return false;
+  }
+  return true;
+}
 function agentAllows(principal, agent) {
   if (!agent) return false;
-  if (!principal) return agent.allow_anon === true;
-  if (principal.kind === "admin") return true;
-  if (principal.kind === "anon") return agent.allow_anon === true;
-  if (principal.kind === "user") return (agent.allow_anon === true || agent.allow_user === true) && scopeAllows(principal.agentScope, agent.id);
-  if (principal.kind === "code") return (agent.allow_anon === true || agent.allow_code === true) && scopeAllows(principal.agentScope, agent.id);
+  if (principal && principal.kind === "admin") return true;
+  // P8.93：匿名通道受开放时段约束（时段外 anonOk = false——user/code 经匿名通道
+  // 的超集放行同步关闭，但 allow_user/allow_code 开关自身的通道不受影响）
+  const anonOk = agent.allow_anon === true && anonWindowOpen(agent.anon_window);
+  if (!principal) return anonOk;
+  if (principal.kind === "anon") return anonOk;
+  if (principal.kind === "user") return (anonOk || agent.allow_user === true) && scopeAllows(principal.agentScope, agent.id);
+  if (principal.kind === "code") return (anonOk || agent.allow_code === true) && scopeAllows(principal.agentScope, agent.id);
   return false;
 }
 
@@ -84,4 +102,4 @@ function bucketFor(principal, legacy) {
   return { access_mode: "shared", user_id: legacy ? legacy.userId : null, agent_id: anonAgentId, access_code_id: null };
 }
 
-module.exports = { canView, canCreate, bucketFor, agentAllows, scopeAllows };
+module.exports = { canView, canCreate, bucketFor, agentAllows, scopeAllows, anonWindowOpen };

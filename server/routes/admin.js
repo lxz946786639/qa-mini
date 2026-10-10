@@ -372,7 +372,7 @@ function register(router, ctx) {
       config_status[f] = has ? "custom" : (ghas ? "global" : "none");
       if (!has && !ghas) config_complete = false;
     }
-    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, config_status, config_complete, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user };
+    return { id: x.id, code: x.code, name: x.name, description: x.description || "", icon: x.icon || "", enabled: x.enabled, sort: x.sort, protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), config: m, config_status, config_complete, allow_anon: x.allow_anon, allow_code: x.allow_code, allow_user: x.allow_user, anon_window: x.anon_window || null };
   };
 
   // P8.81: 智能体配置逐字段合并（修复「掩码 api_key 保存即丢失」）：
@@ -399,6 +399,28 @@ function register(router, ctx) {
       if (typeof v === "string" && v.trim() !== "") out[k] = v;
     }
     return out;
+  }
+
+  // P8.93 匿名开放时段校验/归一（输入：null = 永久开放；object{start,end,dayStart,dayEnd}；
+  // undefined = 不变更）。日期本地 YYYY-MM-DD；时间本地 HH:MM；缺省 = 永久/全天。
+  // 返回 { skip }（不变更）/ { value }（归一后的对象或 null）/ { err }（400 文案）
+  function normalizeAnonWindow(v) {
+    if (v === undefined) return { skip: true };
+    if (v === null) return { value: null };
+    if (typeof v !== "object" || Array.isArray(v)) return { err: "anon_window 必须是对象或 null（null = 永久开放）" };
+    const out = {};
+    for (const k of ["start", "end", "dayStart", "dayEnd"]) {
+      if (v[k] === undefined || v[k] === null || v[k] === "") continue;
+      if (typeof v[k] !== "string") return { err: "anon_window." + k + " 必须是字符串" };
+      if ((k === "start" || k === "end") && !/^\d{4}-\d{2}-\d{2}$/.test(v[k])) return { err: "anon_window." + k + " 格式应为 YYYY-MM-DD" };
+      if ((k === "dayStart" || k === "dayEnd") && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v[k])) return { err: "anon_window." + k + " 格式应为 HH:MM" };
+      out[k] = v[k];
+    }
+    if (out.start && out.end && out.start > out.end) return { err: "开放开始日期不能晚于结束日期" };
+    const ds = "dayStart" in out, de = "dayEnd" in out;
+    if (ds !== de) return { err: "开放时段 dayStart/dayEnd 须同时指定（均留空 = 全天）" };
+    if (ds && out.dayStart >= out.dayEnd) return { err: "开放时段无效（开始时间须早于结束时间）" };
+    return { value: Object.keys(out).length ? out : null };
   }
 
   // P8.81: 身份级字段必填校验（合并后为空 → 返回 400 文案；防「隐性共享」）
@@ -443,7 +465,9 @@ function register(router, ctx) {
     const newCfg = mergeAgentConfig(protocol, {}, body.config || {});
     const newCfgProb = agentConfigProblem(protocol, newCfg);
     if (newCfgProb) return sendJSON(res, 400, { ok: false, detail: newCfgProb });
-    const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0, allow_anon: body.allow_anon !== false, allow_code: body.allow_code !== false, allow_user: body.allow_user !== false });
+    const aw = normalizeAnonWindow(body.anon_window);
+    if (!aw.skip && aw.err) return sendJSON(res, 400, { ok: false, detail: aw.err });
+    const ag = ctx.store.createAgent({ code, name, description: typeof body.description === "string" ? body.description.trim().slice(0, 200) : "", icon: typeof body.icon === "string" ? body.icon.trim().slice(0, 64) : "", enabled: body.enabled !== false, sort: typeof body.sort === "number" ? body.sort : 0, allow_anon: body.allow_anon !== false, allow_code: body.allow_code !== false, allow_user: body.allow_user !== false, anon_window: aw.skip ? null : aw.value });
     ctx.store.setAgentConfig(ag.id, protocol, newCfg);
     ctx.store.insertAudit({ actorType: "admin", actorId: actorId(req, urlObj), action: "agents.create", targetType: "agent", targetId: ag.id, detail: { code, name, protocol }, ip: ipOf(req), userAgent: uaOf(req) });
     return sendJSON(res, 201, { ok: true, agent: agentViewFull(ctx.store.getAgent(ag.id)) });
@@ -484,6 +508,11 @@ function register(router, ctx) {
         if (typeof body[k] !== "boolean") return sendJSON(res, 400, { ok: false, detail: k + " 必须是布尔" });
         patch[k] = body[k]; changed[k] = body[k];
       }
+    }
+    if (body.anon_window !== undefined) {
+      const aw = normalizeAnonWindow(body.anon_window);
+      if (aw.err) return sendJSON(res, 400, { ok: false, detail: aw.err });
+      patch.anon_window = aw.value; changed.anon_window = aw.value ? "限时开放" : "永久开放";
     }
     let protoChanged = false;
     if (body.protocol !== undefined) {

@@ -141,7 +141,7 @@ function oldConfig(over) {
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
       const v = Number(store.db.prepare("PRAGMA user_version").get().user_version);
-      eq(v, 8, "user_version（P8.81 起 v8）");
+      eq(v, 9, "user_version（P8.93 起 v9）");
       assert(res.admin.created === true, "admin.created");
     });
     await t("管理员播种 + 密码可验证", async () => {
@@ -276,7 +276,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "v8");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "v9");
       eq(store.listSessions({}).length, 1, "会话保留");
     });
     store.close();
@@ -299,7 +299,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v2 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "版本 8");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "版本 9");
       const brain = store.getAgentByCode("industry-brain");
       eq(brain.allow_user, true, "补列默认 = 允许");
       eq(brain.allow_anon, true, "allow_anon 不变");
@@ -334,7 +334,7 @@ function oldConfig(over) {
       const res = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(res.migrated === true, "v3 → v5 migrated");
       store = Store.open(res.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "版本 8");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "版本 9");
       eq(store.getSession("0fd50fcc").access_mode, "user", "切换点后管理员新建 → 私有桶");
       eq(store.getSession("8b14dd80").access_mode, "shared", "重构前会话保持共享");
       eq(store.getSession("6402e6ea").access_mode, "shared", "user_id=NULL 新建保持共享（无可归属）");
@@ -644,7 +644,7 @@ function oldConfig(over) {
     const dir = mk();
     const cfgFile = writeConfig(dir, oldConfig({ security: { admin_password: "banpw123", allow_anonymous: true, access_codes: [] } }));
     let store;
-    await t("v6 → v8 迁移（ip_bans 幂等 + user_version 8）", async () => {
+    await t("v6 → v8 迁移（ip_bans 幂等 + user_version 9）", async () => {
       const r1 = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(r1.fresh, "全新安装");
       // 模拟 v6 旧库：回拨版本号（表已在）→ 再迁移应幂等补齐
@@ -654,10 +654,10 @@ function oldConfig(over) {
       const r2 = initDataDir(dir, { configFile: cfgFile, log: noop });
       assert(r2.migrated, "触发迁移");
       store = Store.open(r1.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "user_version 8");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "user_version 9");
       assert(!!store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ip_bans'").get(), "ip_bans 表存在");
       const r3 = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(r3.migrated === false, "已是 v8 跳过（幂等）");
+      assert(r3.migrated === false, "已是 v9 跳过（幂等）");
     });
     await t("ip_bans CRUD + hasActiveBan", async () => {
       assert(store.listBans({ includeExpiredDays: 0 }).length === 0, "初始为空");
@@ -708,8 +708,8 @@ function oldConfig(over) {
     const dir = mk();
     const cfgFile = writeConfig(dir, oldConfig({ security: { admin_password: "v8pw123", allow_anonymous: true, access_codes: [] } }));
     let store;
-    await t("v7 存量库 → v8（全局身份值回填智能体 + 全局/文件清空）", async () => {
-      const r1 = initDataDir(dir, { configFile: cfgFile, log: noop }); // 全新安装（已到 v8）
+    await t("v7 存量库 → v9（v8 全局身份值回填智能体 + 全局/文件清空 + v9 补列）", async () => {
+      const r1 = initDataDir(dir, { configFile: cfgFile, log: noop }); // 全新安装（已到 v9）
       assert(r1.fresh, "全新安装");
       // 模拟 v7 终态：版本拨回 7 + 全局恢复旧形态（身份值在 protocol_defaults / config.json）
       // + 智能体配置摘掉身份字段（旧版「全局承载身份」形态）
@@ -727,9 +727,9 @@ function oldConfig(over) {
       d.close();
       writeConfig(dir, oldConfig()); // config.json 也恢复旧形态（含身份值）
       const r2 = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(r2.migrated === true, "触发 v7 → v8 迁移");
+      assert(r2.migrated === true, "触发 v7 → v9 迁移");
       store = Store.open(r1.dbFile);
-      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 8, "user_version 8");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "user_version 9");
       const ac = store.getAgentConfig(ag.id);
       eq(ac.config.chat_id, "chat-abc", "chat_id 从旧全局回填智能体");
       eq(ac.config.url, "http://127.0.0.1:18705/v1", "连接级自有值保留");
@@ -744,7 +744,7 @@ function oldConfig(over) {
       eq(cfg.protocols.openai.model, "", "config.json openai.model 已清");
       assert(fs.readdirSync(dir).some((f) => f.startsWith("config.json.bak-")), "config.json 备份存在");
       const r3 = initDataDir(dir, { configFile: cfgFile, log: noop });
-      assert(r3.migrated === false, "已是 v8 跳过（幂等）");
+      assert(r3.migrated === false, "已是 v9 跳过（幂等）");
       eq(store.getAgentConfig(ag.id).config.chat_id, "chat-abc", "幂等二次迁移不覆盖智能体现值");
     });
     await t("v8 已有独立身份值的智能体不被全局覆盖", async () => {
@@ -766,6 +766,44 @@ function oldConfig(over) {
       st2.close();
     });
     store.close();
+  }
+  // [T9] P8.93：v8 → v9 迁移（agents.anon_window 匿名开放时段；幂等）
+  {
+    const dir = mk();
+    const cfgFile = writeConfig(dir, oldConfig());
+    let store;
+    await t("全新安装：anon_window 列 + 版本 9", async () => {
+      const res = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(res.fresh, "全新安装");
+      store = Store.open(res.dbFile);
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "版本 9");
+      assert(!!store.db.prepare("SELECT name FROM pragma_table_info('agents') WHERE name = 'anon_window'").get(), "anon_window 列存在");
+      eq(store.getAgentByCode("industry-brain").anon_window, null, "全新安装默认 = null（永久开放）");
+    });
+    await t("v8 存量库升级补列 + 二次启动跳过（幂等）", async () => {
+      const d = new DatabaseSync(store.dbFile);
+      d.exec("PRAGMA user_version = 8;");
+      d.exec("ALTER TABLE agents DROP COLUMN anon_window;");
+      d.close();
+      const res = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(res.migrated === true, "触发 v8 → v9 迁移");
+      eq(Number(store.db.prepare("PRAGMA user_version").get().user_version), 9, "版本 9");
+      eq(store.getAgentByCode("industry-brain").anon_window, null, "补列后默认 = null（永久开放）");
+      const res2 = initDataDir(dir, { configFile: cfgFile, log: noop });
+      assert(res2.migrated === false, "已是 v9 跳过（幂等）");
+      store.close();
+    });
+    await t("store anon_window 往返（限时对象 / null 清空）", async () => {
+      const dir3 = mk();
+      const cf3 = writeConfig(dir3, oldConfig());
+      const r1 = initDataDir(dir3, { configFile: cf3, log: noop });
+      const st3 = Store.open(r1.dbFile);
+      const win = { start: "2026-10-01", end: "2026-10-30", dayStart: "08:00", dayEnd: "18:00" };
+      const ag = st3.createAgent({ code: "win-a", name: "时段测试", allow_anon: true, anon_window: win });
+      eq(ag.anon_window, win, "建时带时段");
+      eq(st3.updateAgent(ag.id, { anon_window: null }).anon_window, null, "null = 清空（永久开放）");
+      st3.close();
+    });
   }
   // 清理
   for (const d of tmps) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* 忽略 */ } }

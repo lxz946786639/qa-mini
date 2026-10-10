@@ -704,6 +704,12 @@ P8.75 修正：本块必须位于上方基础规则之后（P8.74 误置于前�
 .at-sec-title { font-weight: 600; font-size: 14px; }
 .at-sec-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
 .at-sec-note { margin: 12px 0 0; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+/* P8.93 匿名开放时段子配置（允许匿名访问行下方缩进块） */
+.at-sec-row-sub { padding-left: 28px; }
+.at-win { flex: 1; min-width: 0; }
+.at-win .at-sec-title { margin-bottom: 8px; }
+.at-win-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.at-win-sep { font-size: 12px; color: var(--text-dim); }
 /* P8.11 图标点选器；P8.25：选项为 Element Plus 图标（项目禁止 emoji） */
 .at-icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
 .at-icon-opt { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center;

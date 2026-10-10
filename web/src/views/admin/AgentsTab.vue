@@ -16,6 +16,7 @@ interface Agent {
   id: string; code: string; name: string; description: string; icon: string;
   enabled: boolean; sort: number; protocol: string; config: Record<string, any>;
   allow_anon: boolean; allow_code: boolean; allow_user: boolean; // P8.8 访问控制
+  anon_window?: { start?: string; end?: string; dayStart?: string; dayEnd?: string } | null; // P8.93 匿名开放时段（null = 永久）
   protocol_enabled?: boolean; // P8.43 该智能体协议是否全局启用
   config_status?: Record<string, "custom" | "global" | "none">; // P8.81 身份字段来源
   config_complete?: boolean; // P8.81 身份字段是否全部就绪
@@ -64,7 +65,17 @@ const form = reactive({
   code: "", name: "", description: "", icon: "", sort: 0,
   enabled: true, protocol: "ragflow",
   allow_anon: true, allow_code: true, allow_user: true, // P8.8 访问控制
+  anon_mode: "always" as "always" | "period", // P8.93 匿名开放时段：永久 / 限时
+  anon_range: [] as string[], // P8.93 daterange（YYYY-MM-DD）
+  anon_day_start: "", // P8.93 每日时段起（HH:MM，空 = 全天）
+  anon_day_end: "", // P8.93 每日时段止（HH:MM，空 = 全天）
   config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" }
+});
+// P8.93 每日时段选项（00:00–23:30，30 分钟步长）
+const winHours = computed(() => {
+  const a: string[] = [];
+  for (let h = 0; h < 24; h++) for (const m of [0, 30]) a.push(String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0"));
+  return a;
 });
 const fields = computed(() => CFG_FIELDS[form.protocol] || []);
 // P8.81: 全局配置值（admin 专用，GET /api/config 已含真实值）：
@@ -101,7 +112,7 @@ async function load() {
 function openCreate() {
   editing.value = null;
   atTab.value = "basic";
-  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", allow_anon: true, allow_code: true, allow_user: true, config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" } });
+  Object.assign(form, { code: "", name: "", description: "", icon: "", sort: 0, enabled: true, protocol: "ragflow", allow_anon: true, allow_code: true, allow_user: true, anon_mode: "always", anon_range: [], anon_day_start: "", anon_day_end: "", config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "" } });
   testSt.running = false; testSt.text = ""; testSt.ok = null;
   dialog.value = true;
 }
@@ -112,6 +123,8 @@ function openEdit(a: Agent) {
     code: a.code, name: a.name, description: a.description, icon: normalizeAgentIcon(a.icon), sort: a.sort,
     enabled: a.enabled, protocol: a.protocol,
     allow_anon: a.allow_anon !== false, allow_code: a.allow_code !== false, allow_user: a.allow_user !== false,
+    anon_mode: a.anon_window ? "period" : "always", anon_range: a.anon_window ? [a.anon_window.start || "", a.anon_window.end || ""] : [],
+    anon_day_start: a.anon_window?.dayStart || "", anon_day_end: a.anon_window?.dayEnd || "",
     config: { url: "", api_key: "", chat_id: "", model: "", body: "", user: "", ...a.config }
   });
   testSt.running = false; testSt.text = ""; testSt.ok = null;
@@ -212,6 +225,18 @@ async function save() {
     enabled: form.enabled, protocol: form.protocol, config: cfgPayload(),
     allow_anon: form.allow_anon, allow_code: form.allow_code, allow_user: form.allow_user // P8.8
   };
+  // P8.93 匿名开放时段（未开启匿名 = null 永久口径；限时 = 日期区间 + 可选每日时段）
+  if (!form.allow_anon) body.anon_window = null;
+  else if (form.anon_mode === "period") {
+    if (!form.anon_range || form.anon_range.length !== 2 || !form.anon_range[0] || !form.anon_range[1]) {
+      ElMessage.warning("请选择开放开始/结束日期"); atTab.value = "security"; return;
+    }
+    if (form.anon_range[0] > form.anon_range[1]) { ElMessage.warning("开放开始日期不能晚于结束日期"); atTab.value = "security"; return; }
+    const ds = form.anon_day_start, de = form.anon_day_end;
+    if (!!ds !== !!de) { ElMessage.warning("每日时段开始/结束须同时填写（均留空 = 全天开放）"); atTab.value = "security"; return; }
+    if (ds && ds >= de) { ElMessage.warning("每日时段开始时间须早于结束时间"); atTab.value = "security"; return; }
+    body.anon_window = ds ? { start: form.anon_range[0], end: form.anon_range[1], dayStart: ds, dayEnd: de } : { start: form.anon_range[0], end: form.anon_range[1] };
+  } else body.anon_window = null;
   let r;
   if (editing.value) r = await api("/api/admin/agents/" + encodeURIComponent(editing.value), { method: "PATCH", body });
   else r = await api("/api/admin/agents", { body: Object.assign({ code: form.code }, body) });
@@ -273,6 +298,7 @@ onMounted(load);
       <el-table-column label="访问" min-width="130">
         <template #default="{ row }">
           <el-tag size="small" :type="row.allow_anon ? 'success' : (accessLabel(row) === '仅管理员' ? 'danger' : 'warning')" effect="plain">{{ accessLabel(row) }}</el-tag>
+          <el-tag v-if="row.anon_window" size="small" type="warning" effect="plain">匿名限时</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="排序" prop="sort" min-width="90" />
@@ -372,6 +398,25 @@ onMounted(load);
               <div>
                 <div class="at-sec-title">允许匿名访问</div>
                 <div class="at-sec-sub">未登录访客可直接查看并使用该智能体；开启后下方两种访问方式天然放行（超集语义）</div>
+              </div>
+            </div>
+            <div v-if="form.allow_anon" class="at-sec-row at-sec-row-sub">
+              <div class="at-win">
+                <div class="at-sec-title">匿名开放时段</div>
+                <div class="at-win-row">
+                  <el-radio-group v-model="form.anon_mode" size="small">
+                    <el-radio-button value="always">永久开放</el-radio-button>
+                    <el-radio-button value="period">限时开放</el-radio-button>
+                  </el-radio-group>
+                  <template v-if="form.anon_mode === 'period'">
+                    <el-date-picker v-model="form.anon_range" type="daterange" value-format="YYYY-MM-DD"
+                      start-placeholder="开始日期" end-placeholder="结束日期" size="small" style="width: 250px" />
+                    <el-time-select v-model="form.anon_day_start" :items="winHours" placeholder="全天（开始）" size="small" clearable style="width: 128px" />
+                    <span class="at-win-sep">至</span>
+                    <el-time-select v-model="form.anon_day_end" :items="winHours" placeholder="全天（结束）" size="small" clearable style="width: 128px" />
+                  </template>
+                </div>
+                <p class="at-sec-note">开放时段之外的匿名访客无法查看/使用该智能体；访问码与登录用户按各自开关不受时段影响。日期与时间均按服务器本地时区。</p>
               </div>
             </div>
             <div class="at-sec-row">

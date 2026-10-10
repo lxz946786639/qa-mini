@@ -33,8 +33,8 @@ EchoAnswer（回响答）：零依赖 Node.js + Vue3 前端（构建产物随仓
    语义见 doc/01 §4）。修改协议解析必须补充/更新 `tests/mock_backends.js`
    对应形态。
 7. **前端渲染先转义后解析**（防 XSS）：改 Markdown 渲染器不得破坏该顺序。
-8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 174 项断言全绿，
-   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v8 数据层 47 项）；
+8. 提交前必须跑 `npm test`（tests/run_tests.js，当前 175 项断言全绿，
+   含前端构建产物完整性护栏）+ `node tests/store_tests.js`（v2–v9 数据层 50 项）；
    测试用 `ECHOANSWER_DATA_DIR` 临时目录隔离，**不得写真实 data/ 目录**。
 9. **禁止使用 emoji 图标（P8.25）**：界面图标字形一律使用 UI 框架图标集
    （Element Plus 图标）或官网首页内联 SVG；智能体图标字段 `agents.icon` 存
@@ -82,7 +82,7 @@ server.js        根入口（薄）：require server/app.js 启动（唯一入�
 server/          服务端模块化（P2）：app.js 启动装配 / context.js 启动上下文 /
                  router.js 首中路由 / middleware.js 公共件 / services/（会话增量
                  持久化 · SSE 总线（P3 按主体作用域投递）· 鉴权（P3 主体解析 +
-                 ea_sid cookie）· principal 桶可见性 · 访问码 · 音频监听 · 配置同步 · 安全监控（P8.49 封禁守卫 / 自动封禁 / 总览聚合））
+                 ea_sid cookie）· principal 桶可见性（P8.93 匿名开放时段判定）· 访问码 · 音频监听 · 配置同步 · 安全监控（P8.49 封禁守卫 / 自动封禁 / 总览聚合））
                  / routes/（按端点分组的路由模块；P3 会话级端点 IDOR 校验；P8.49 routes/security.js 安全监控 5 端点）
 lib/asr.js       ASR 语音识别转发客户端（网页语音输入；OpenAI 兼容，与 EchoScribe 同源）
 lib/audio_stream.js 电脑输出音频流（EchoScribe 持续推流）：帧解析 + 会话×设备环形缓冲
@@ -91,7 +91,7 @@ lib/config.js    配置加载/深合并/校验 + protocolEnabled（P8.43 全局�
                  + P8.81 三层解析 resolveProtocolConfig（全局 ← 智能体（仅会话协议 = 智能体协议时
                  参与，PROTOCOL_FIELDS 过滤）← 会话，逐字段非空胜）+ 身份字段 IDENTITY_FIELDS/
                  PROTOCOL_FIELDS + 保存哨兵 AGENT_CFG_KEEP_SENTINEL（「…已设置」= 保留原值）
-lib/migrations.js v1→v2→v3→v4→v5→v6→v7→v8 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围；v7 = P8.49 ip_bans IP 封禁表；v8 = P8.81 身份字段回填智能体 + 清全局（DB + config.json，先备份），无 DDL）
+lib/migrations.js v1→v2→v3→v4→v5→v6→v7→v8→v9 数据迁移（重命名/备份/播种/归属回填，user_version；v3 = agents 访问控制列；v4 = P8.10 管理员新建会话回填管理员私有桶，无 DDL；v5 = P8.29 audit_logs.user_agent；v6 = P8.40 users/access_codes.agent_scope 权限范围；v7 = P8.49 ip_bans IP 封禁表；v8 = P8.81 身份字段回填智能体 + 清全局（DB + config.json，先备份），无 DDL；v9 = P8.93 agents.anon_window 匿名开放时段列（JSON：start/end 本地日期 + dayStart/dayEnd 本地时间，NULL = 永久开放））
 lib/qa_runner.js 会话管理（SessionManager + QaRunner，会话隔离边界；P8.81 协议配置 = 三层解析 全局 ← 智能体（协议匹配门控）← 会话，前置校验按合并值）
 lib/protocols/   四协议客户端（openai/dify/generic/ragflow），行为与 EchoScribe 对齐
 lib/sse.js       QaError（协议错误载体）
@@ -140,7 +140,7 @@ web/             新代前端（v59 P4 起，独立 package；P7 起即站点根
                  与新增 PATCH /api/admin/access-codes/:code 承载 agent_scope）+ P8.51 权限范围三态 + 最小权限
                  默认（agent_scope：'' = 全部 / '[]' = 无（最小权限）/ '[ids]' = 仅列出；新建用户/访问码默认
                  「无」，创建后前端自动弹出 AgentScopeDialog（三态单选 + 多选）引导分配；PATCH agent_scope 增
-                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）+ P8.81 智能体协议配置：身份字段必填（ragflow.chat_id / openai.model / dify.api_key，400 指明字段）+ 每字段配置来源标签（自有值但上层无默认 = 不标记「自定义」）/「恢复默认」（仅上层存在可回退默认值时显示，身份字段无全局默认 = 隐藏）/「测试连接」（POST /api/admin/protocol-test）+ 留空（继承）字段 placeholder 回显上层值（密钥 = 同长度圆点、上层无值 = 无占位）；
+                 null = 不允许任何；非数组/未知 id 400；门控 scopeAllows 三态，admin 恒全量）+ P8.58 智能体编辑对话框移除「系统提示词 Prompt」字段（从未被问答流程使用；agents.prompt 保留为 DB 遗留列，不再经 API/UI 暴露）+ P8.81 智能体协议配置：身份字段必填（ragflow.chat_id / openai.model / dify.api_key，400 指明字段）+ 每字段配置来源标签（自有值但上层无默认 = 不标记「自定义」）/「恢复默认」（仅上层存在可回退默认值时显示，身份字段无全局默认 = 隐藏）/「测试连接」（POST /api/admin/protocol-test）+ 留空（继承）字段 placeholder 回显上层值（密钥 = 同长度圆点、上层无值 = 无占位）+ P8.93 匿名开放时段（「安全」页签允许匿名访问下：永久/限时，限时 = 日期区间 + 可选每日时段起「至」止（本地时区）；agents.anon_window（v9 列）+ 管理 API 校验 400 + principal 门控时段判定；列表「访问」列「匿名限时」徽标）；
                  P8.41 系统设置布局重构：配置分类（协议全局默认 / 语音输入 ASR）改 el-tabs
                  分类页签切换（各 tab 独立保存；P8.44 后访问控制页签已退役）+ P8.74 移动端表单行（≤720px）标签置顶 / 输入框满宽（.sys-row 原 240px 固定标签致输入框 ~110px，开关行保持横排）+ P8.77 修正：P8.74 覆盖块误置于 .sys-row 基础规则之前被反向覆盖（同特异性后写者胜，标签盒仍 240px 居中）——移至基础规则之后（标签置顶居左生效）；
                  P8.43 协议启用状态：协议全局默认各卡片「启用协议」开关（config.protocols.<p>.enabled，
@@ -171,8 +171,8 @@ data/ config.json 运行时生成，不手工维护、不提交公开仓库（�
 
 ```bash
 node --check server.js server/*.js server/services/*.js server/routes/*.js lib/*.js   # 语法
-npm test                                        # 174 项断言全绿
-node tests/store_tests.js                       # 47 项数据层单测全绿
+npm test                                        # 175 项断言全绿
+node tests/store_tests.js                       # 50 项数据层单测全绿
 # 前端改动：cd web && npm run build（产物 dist/ 随仓库提交）后浏览器刷新；
 # 前端版本号：web/src/version.ts（APP_VERSION，首页页脚显示 EchoAnswer vNN）每次用户可见更新 +1；
 # server.js/lib 改动：重启 node server.js 后 curl /api/health
