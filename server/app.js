@@ -51,6 +51,16 @@ function start() {
     }
   });
 
+  // P8.91：禁用请求体超时（requestTimeout = 0 = 不启用）。
+  // Node v18+ http server 默认 requestTimeout = 300s，计时起点 = 请求行开始
+  // （on_message_begin），请求体数据不刷新计时 → /api/audio/stream 持续推流
+  // POST（体长可达数十分钟）超过 300s 即被判「请求超时」：内核直接断开连接并回
+  // 裸 408（不经过请求 handler、无应用日志），EchoScribe 被迫重连（101 实测
+  // 每 330s 一断）。requestTimeout = 0 后仅保留默认 headersTimeout = 60s
+  // （请求行须 60s 内到达）与默认 keepAliveTimeout = 5s（空闲 keep-alive 回收），
+  // 其余语义不变。
+  server.requestTimeout = 0;
+
   const port = Number(process.env.PORT) || Number(ctx.config.port) || 8787;
   const host = process.env.HOST || ctx.config.host || "0.0.0.0";
   server.listen(port, host, () => {
