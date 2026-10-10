@@ -828,9 +828,8 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+          <template v-for="(c, ci) in cards" :key="c.id">
           <div
-            v-for="(c, ci) in cards"
-            :key="c.id"
             class="qcard"
             :class="{ running: c.status === 'running' }"
           >
@@ -879,6 +878,7 @@ onBeforeUnmount(() => {
             <span class="ws-reset-label">会话已重置 · 以下为新的上下文</span>
             <span class="ws-reset-line"></span>
           </div>
+          </template>
         </template>
       </main>
 
