@@ -88,10 +88,11 @@ interface Card {
   icon: string;
   href: string;
   isDefault: boolean;
-  // P8.94：访问徽标（开放 / 未开放 / 内部）+ 开放周期文案（P8.93 时段）
+  // P8.94/P8.95：访问徽标（开放 / 限时开放 / 内部）+ 开放周期文案（P8.93 时段）+ 悬停说明
   access: string;
   accessCls: string;
   accessPeriod: string;
+  accessTitle: string;
   // P8.25：控制台配置的 Element Plus 图标名（P8.11 遗留 emoji 自动映射）；空 = 按协议取默认 SVG
   iconName: string;
 }
@@ -121,15 +122,15 @@ function anonPeriodText(w: AgentItem["anon_window"]): string {
 }
 
 // P8.94：访问徽标（开放 = 匿名可用；内部 = 需登录/访问码/仅管理）+ 开放周期（P8.93）
-function accessBadge(a: AgentItem): { label: string; cls: string; period: string } {
+function accessBadge(a: AgentItem): { label: string; cls: string; period: string; title: string } {
   if (a.allow_anon) {
     const period = anonPeriodText(a.anon_window || null);
-    if (!a.anon_window) return { label: "开放", cls: "lp-access-open", period };
+    if (!a.anon_window) return { label: "开放", cls: "lp-access-open", period, title: "匿名可直接使用" };
     return anonOpenNow(a.anon_window)
-      ? { label: "开放", cls: "lp-access-open", period }
-      : { label: "未开放", cls: "lp-access-closed", period };
+      ? { label: "开放", cls: "lp-access-open", period, title: "匿名开放时段：" + period + "（登录用户 / 访问码不受时段限制）" }
+      : { label: "限时开放", cls: "lp-access-window", period, title: "当前不在匿名开放时段（" + period + "）；登录用户 / 访问码仍可使用" };
   }
-  return { label: "内部", cls: "lp-access-internal", period: "" };
+  return { label: "内部", cls: "lp-access-internal", period: "", title: "需登录或访问码" };
 }
 
 // P8.9：当前主体是否可进入该智能体（与服务端 agentAllows 同矩阵；P8.94 含开放时段）
@@ -151,7 +152,7 @@ const cards = computed<Card[]>(() => agents.value.slice(0, 4).map((a, i) => {
     key: a.id, name: a.name, desc: a.description || "（暂无描述）",
     tag: p.label, tagCls: p.cls, icon: p.icon,
     href: "/agents/" + a.code, isDefault: i === 0,
-    access: ab.label, accessCls: ab.cls, accessPeriod: ab.period,
+    access: ab.label, accessCls: ab.cls, accessPeriod: ab.period, accessTitle: ab.title,
     iconName: normalizeAgentIcon(a.icon)
   };
 }));
@@ -563,7 +564,7 @@ onBeforeUnmount(() => {
               <span v-else class="lp-agent-ic" v-html="ICONS[c.icon] || ICONS.mic"></span>
               <span class="lp-tags">
                 <span class="lp-tag" :class="c.tagCls">{{ c.tag }}</span>
-                <span v-if="c.access" class="lp-access" :class="c.accessCls">{{ c.access }}</span>
+                <span v-if="c.access" class="lp-access" :class="c.accessCls" :title="c.accessTitle">{{ c.access }}</span>
                 <span v-if="c.accessPeriod" class="lp-access-period">{{ c.accessPeriod }}</span>
               </span>
             </div>

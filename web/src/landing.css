@@ -32,8 +32,8 @@
   --lp-tag-gen: #FBBF24;    --lp-tag-gen-bg: rgba(251, 191, 36, 0.13);
   /* P8.9 访问徽标（P8.94 起：开放 / 未开放 / 内部 + 开放周期） */
   --lp-access-open: #34D399;   --lp-access-open-bg: rgba(52, 211, 153, 0.14);
-  --lp-access-internal: #FBBF24; --lp-access-internal-bg: rgba(251, 191, 36, 0.13);
-  --lp-access-closed: #9CA3AF;  --lp-access-closed-bg: rgba(156, 163, 175, 0.14);
+  --lp-access-window: #FBBF24;  --lp-access-window-bg: rgba(251, 191, 36, 0.13);
+  --lp-access-internal: #9CA3AF; --lp-access-internal-bg: rgba(156, 163, 175, 0.14);
 }
 :root[data-theme="light"] {
   --lp-bg: #FFFFFF;
@@ -56,8 +56,8 @@
   --lp-tag-orch: #6D28D9;   --lp-tag-orch-bg: rgba(109, 40, 217, 0.08);
   --lp-tag-gen: #B45309;    --lp-tag-gen-bg: rgba(180, 83, 9, 0.10);
   --lp-access-open: #059669;   --lp-access-open-bg: rgba(5, 150, 105, 0.12);
-  --lp-access-internal: #B45309; --lp-access-internal-bg: rgba(180, 83, 9, 0.10);
-  --lp-access-closed: #6B7280;  --lp-access-closed-bg: rgba(107, 114, 128, 0.12);
+  --lp-access-window: #B45309;  --lp-access-window-bg: rgba(180, 83, 9, 0.10);
+  --lp-access-internal: #6B7280; --lp-access-internal-bg: rgba(107, 114, 128, 0.12);
 }
 
 /* ---------- 页面壳 ---------- */
@@ -347,7 +347,7 @@
 .lp-agent-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .lp-agent-ic { display: inline-flex; color: var(--lp-accent); }
 .lp-agent-ic svg { width: 30px; height: 30px; }
-.lp-tags { display: flex; align-items: center; gap: 6px; }
+.lp-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 38px); }
 .lp-tag { font-size: 12px; line-height: 18px; padding: 0 10px; border-radius: 999px; white-space: nowrap; }
 .lp-tag.t-kn   { color: var(--lp-tag-kn);   background: var(--lp-tag-kn-bg); }
 .lp-tag.t-orch { color: var(--lp-tag-orch); background: var(--lp-tag-orch-bg); }
@@ -356,9 +356,9 @@
 .lp-access { font-size: 12px; line-height: 18px; padding: 0 10px; border-radius: 999px; white-space: nowrap; }
 .lp-access.lp-access-open     { color: var(--lp-access-open);     background: var(--lp-access-open-bg); }
 .lp-access.lp-access-internal { color: var(--lp-access-internal); background: var(--lp-access-internal-bg); }
-.lp-access.lp-access-closed   { color: var(--lp-access-closed);   background: var(--lp-access-closed-bg); }
-/* P8.94 开放周期文案（徽标右侧） */
-.lp-access-period { font-size: 12px; line-height: 18px; color: var(--lp-dim); white-space: nowrap; }
+.lp-access.lp-access-window   { color: var(--lp-access-window);   background: var(--lp-access-window-bg); }
+/* P8.94 开放周期文案（P8.95：独占一行右对齐，防穿透卡片） */
+.lp-access-period { font-size: 12px; line-height: 18px; color: var(--lp-dim); flex-basis: 100%; text-align: right; }
 .lp-agent-name { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; flex-wrap: wrap; }
 .lp-def-mark {
   font-size: 11px; font-weight: 500; color: var(--lp-accent);
