@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { ApiNetworkError } from "../api";
 import { LOGO_SVG } from "../utils/brandLogo";
 import { Back } from "@element-plus/icons-vue";
 import AdminBootstrap from "../components/AdminBootstrap.vue";
@@ -52,6 +53,13 @@ async function submitUser() {
       return;
     }
     await afterLogin();
+  } catch (e) {
+    // P8.86：网络层失败/超时（fetch reject 原无人捕获 → iOS 上「点了没反应」）
+    if (e instanceof ApiNetworkError) {
+      error.value = "网络异常，登录请求未能送达服务器：请检查网络后重试；若仍失败请刷新页面再试";
+      return;
+    }
+    throw e;
   } finally {
     busy.value = false;
   }
@@ -71,6 +79,13 @@ async function submitCode() {
       return;
     }
     await afterLogin();
+  } catch (e) {
+    // P8.86：网络层失败/超时（fetch reject 原无人捕获 → iOS 上「点了没反应」）
+    if (e instanceof ApiNetworkError) {
+      error.value = "网络异常，登录请求未能送达服务器：请检查网络后重试；若仍失败请刷新页面再试";
+      return;
+    }
+    throw e;
   } finally {
     busy.value = false;
   }
