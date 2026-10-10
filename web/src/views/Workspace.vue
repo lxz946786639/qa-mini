@@ -249,6 +249,28 @@ function scheduleRender(card: Card) {
   });
 }
 const showToLatest = ref(false); // P8.12：上滑阅读时显示「↓ 最新」浮钮（对齐旧版）
+
+// P8.87：会话重置分隔线——每会话记最近一次重置时间戳（localStorage 持久化），
+// 在「重置前的最后一条对话」之后渲染分隔线，区隔重置前历史与重置后新上下文
+const RESET_MARK_KEY = "echoanswer-reset-mark";
+function loadResetMarks(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(RESET_MARK_KEY) || "{}"); } catch { return {}; }
+}
+const resetMarks = ref<Record<string, number>>(loadResetMarks());
+function setResetMark(sid: string) {
+  resetMarks.value[sid] = Date.now();
+  try { localStorage.setItem(RESET_MARK_KEY, JSON.stringify(resetMarks.value)); } catch { /* 忽略 */ }
+}
+const resetDividerIdx = computed(() => {
+  const mark = resetMarks.value[sess.currentSid] || 0;
+  if (!mark || !cards.value.length) return -1;
+  let idx = -1;
+  cards.value.forEach((c, i) => {
+    const t = new Date(c.started_at).getTime();
+    if (!Number.isNaN(t) && t <= mark) idx = i; // 重置前的最后一条（含重置前在途）
+  });
+  return idx;
+});
 function isNearBottom(): boolean {
   const el = chatEl.value;
   return !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 140;
@@ -356,7 +378,7 @@ const sse = useSse({
   delta: onDelta,
   done: onDone,
   record_removed: (d: any) => { if (String(d.session_id) === sess.currentSid) { sess.open(sess.currentSid).then(rebuildCards); } },
-  session_reset: (d: any) => { if (String(d.session_id) === sess.currentSid) { sess.open(sess.currentSid).then(rebuildCards); } },
+  session_reset: (d: any) => { if (String(d.session_id) === sess.currentSid) { setResetMark(String(d.session_id)); sess.open(sess.currentSid).then(rebuildCards); } },
   audio_stream: onAudioStreamEvent,
   audio_listen: onAudioListenEvent
 });
@@ -849,6 +871,11 @@ onBeforeUnmount(() => {
                 </template>
               </div>
             </div>
+          </div>
+          <div v-if="ci === resetDividerIdx" class="ws-reset-divider">
+            <span class="ws-reset-line"></span>
+            <span class="ws-reset-label">会话已重置 · 以下为新的上下文</span>
+            <span class="ws-reset-line"></span>
           </div>
         </template>
       </main>
