@@ -1404,6 +1404,29 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.ok(!mgr.hasStream("s1", "d1"));
     mgr.close();
   });
+  await test("audio_stream: idle_clean_s 可配（sweepIdle 阈值跟随配置 / 非法值回退 60s）", async () => {
+    const am = require(path.join(ROOT, "lib/audio_stream.js"));
+    const mk = (cleanS) => {
+      const m = new am.AudioStreamManager({
+        getConfig: () => ({ audio_stream: cleanS === undefined ? {} : { idle_clean_s: cleanS } }),
+        broadcast: null
+      });
+      m.startStream("s1", "d1");
+      m.feed("s1", "d1", Buffer.alloc(6400, 1));
+      m.streams.get("s1").get("d1").last_frame_at = Date.now() - 30 * 1000;
+      return m;
+    };
+    const m1 = mk(undefined);
+    m1.sweepIdle();
+    assert.ok(m1.hasStream("s1", "d1"), "默认 60s：30s 无帧不清理");
+    const m2 = mk(20);
+    m2.sweepIdle();
+    assert.ok(!m2.hasStream("s1", "d1"), "配置 20s：30s 无帧应清理");
+    const m3 = mk(0);
+    m3.sweepIdle();
+    assert.ok(m3.hasStream("s1", "d1"), "非法值 0 回退默认 60s");
+    m1.close(); m2.close(); m3.close();
+  });
   await test("config PUT 非法值 → 400", async () => {
     const r = await api("PUT", "/api/config", { port: "abc" });
     assert.strictEqual(r.status, 400);
