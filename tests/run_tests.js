@@ -2263,6 +2263,23 @@ const REF_FOOTER = "\n\n---\n**参考来源**：文档A.pdf";
     assert.strictEqual((await adminFetch("DELETE", "/api/admin/access-codes/777777", undefined, adminTok)).status, 200, "清理测试码");
   });
 
+  await test("p8.94: 首屏徽标数据（公开视图含开放时段 anon_window；时段外列表仍带时段供徽标）", async () => {
+    const day = (off) => new Date(Date.now() + off * 864e5).toISOString().slice(0, 10);
+    // 开放中：公开视图含 anon_window
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: true, anon_window: { start: day(-1), end: day(1) } }, adminTok)).status, 200);
+    const pub = await api("GET", "/api/agents/sec-a");
+    assert.strictEqual(pub.status, 200);
+    assert.deepStrictEqual(pub.data.agent.anon_window, { start: day(-1), end: day(1) }, "公开视图含开放时段（仅字符串字段）");
+    const list = (await api("GET", "/api/agents")).data.agents.find((x) => x.code === "sec-a");
+    assert.ok(list && list.anon_window && list.anon_window.start === day(-1), "公开列表含开放时段");
+    // 时段外：匿名详情 404，但列表仍展示（首屏按列表渲染徽标 + 周期）
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { anon_window: { start: "2030-01-01", end: "2030-12-31" } }, adminTok)).status, 200);
+    assert.strictEqual((await api("GET", "/api/agents/sec-a")).status, 404, "时段外 → anon 404");
+    const list2 = (await api("GET", "/api/agents")).data.agents.find((x) => x.code === "sec-a");
+    assert.ok(list2 && list2.anon_window && list2.anon_window.start === "2030-01-01", "时段外 → 列表仍带时段");
+    assert.strictEqual((await adminFetch("PATCH", "/api/admin/agents/sec-a", { allow_anon: false, anon_window: null }, adminTok)).status, 200, "还原全关");
+  });
+
   await test("p8.82: 匿名可建会话（共享桶；归属智能体未放行 403；无效凭证 401）", async () => {
     // 无凭证 = 匿名主体（allow_anonymous 默认 true）+ 种子智能体（allow_anon=true）→ 201 共享桶 + 协议继承
     const c = await api("POST", "/api/sessions", { name: "匿名新建", agent_code: "industry-brain" });

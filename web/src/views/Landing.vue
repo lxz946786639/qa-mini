@@ -28,6 +28,8 @@ interface AgentItem {
   allow_anon: boolean;
   allow_code: boolean;
   allow_user: boolean;
+  // P8.94：匿名开放时段（P8.93；null = 永久开放；首屏显示开放周期）
+  anon_window?: { start?: string; end?: string; dayStart?: string; dayEnd?: string } | null;
 }
 
 // ---------- 内联 SVG 图标（2px 描边，currentColor） ----------
@@ -86,28 +88,58 @@ interface Card {
   icon: string;
   href: string;
   isDefault: boolean;
-  // P8.9：访问徽标（无需登录 / 需登录 / 需访问码 / 仅管理员）
+  // P8.94：访问徽标（开放 / 未开放 / 内部）+ 开放周期文案（P8.93 时段）
   access: string;
   accessCls: string;
+  accessPeriod: string;
   // P8.25：控制台配置的 Element Plus 图标名（P8.11 遗留 emoji 自动映射）；空 = 按协议取默认 SVG
   iconName: string;
 }
 
-// P8.9：访问方式徽标（优先级 匿名 > 用户登录 > 访问码）
-function accessBadge(a: AgentItem): { label: string; cls: string } {
-  if (a.allow_anon) return { label: "无需登录", cls: "lp-access-anon" };
-  if (a.allow_user) return { label: "需登录", cls: "lp-access-login" };
-  if (a.allow_code) return { label: "需访问码", cls: "lp-access-code" };
-  return { label: "仅管理员", cls: "lp-access-admin" };
+// P8.93/P8.94：匿名开放时段判定（与服务端 principal.anonWindowOpen 同口径，本地日期/时间）
+function anonOpenNow(w: AgentItem["anon_window"]): boolean {
+  if (!w) return true;
+  const d = new Date();
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  const ds = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  if (w.start && ds < w.start) return false;
+  if (w.end && ds > w.end) return false;
+  if (w.dayStart && w.dayEnd) {
+    const t = p2(d.getHours()) + ":" + p2(d.getMinutes());
+    if (t < w.dayStart || t >= w.dayEnd) return false;
+  }
+  return true;
+}
+// P8.94：开放周期文案（10/01 至 10/30 · 8:00–18:00；缺省段 = 永久/全天不显示）
+function anonPeriodText(w: AgentItem["anon_window"]): string {
+  if (!w) return "";
+  const fmt = (s: string) => s.slice(5).replace("-", "/");
+  let t = "";
+  if (w.start || w.end) t += fmt(w.start || "…") + " 至 " + fmt(w.end || "…");
+  if (w.dayStart && w.dayEnd) t += (t ? " · " : "") + w.dayStart + "–" + w.dayEnd;
+  return t;
 }
 
-// P8.9：当前主体是否可进入该智能体（与服务端 agentAllows 同矩阵）
+// P8.94：访问徽标（开放 = 匿名可用；内部 = 需登录/访问码/仅管理）+ 开放周期（P8.93）
+function accessBadge(a: AgentItem): { label: string; cls: string; period: string } {
+  if (a.allow_anon) {
+    const period = anonPeriodText(a.anon_window || null);
+    if (!a.anon_window) return { label: "开放", cls: "lp-access-open", period };
+    return anonOpenNow(a.anon_window)
+      ? { label: "开放", cls: "lp-access-open", period }
+      : { label: "未开放", cls: "lp-access-closed", period };
+  }
+  return { label: "内部", cls: "lp-access-internal", period: "" };
+}
+
+// P8.9：当前主体是否可进入该智能体（与服务端 agentAllows 同矩阵；P8.94 含开放时段）
 function allowedFor(a: AgentItem): boolean {
   const p = auth.principal;
-  if (!p) return !!a.allow_anon;
+  const anonOk = !!a.allow_anon && anonOpenNow(a.anon_window || null);
+  if (!p) return anonOk;
   if (p.kind === "admin") return true;
-  if (p.kind === "user") return !!(a.allow_anon || a.allow_user);
-  return !!(a.allow_anon || a.allow_code); // code
+  if (p.kind === "user") return !!(anonOk || a.allow_user);
+  return !!(anonOk || a.allow_code); // code
 }
 
 // P8.11：卡片全部来自控制台智能体配置（GET /api/agents，sort 序，前 4；
@@ -119,7 +151,7 @@ const cards = computed<Card[]>(() => agents.value.slice(0, 4).map((a, i) => {
     key: a.id, name: a.name, desc: a.description || "（暂无描述）",
     tag: p.label, tagCls: p.cls, icon: p.icon,
     href: "/agents/" + a.code, isDefault: i === 0,
-    access: ab.label, accessCls: ab.cls,
+    access: ab.label, accessCls: ab.cls, accessPeriod: ab.period,
     iconName: normalizeAgentIcon(a.icon)
   };
 }));
@@ -532,6 +564,7 @@ onBeforeUnmount(() => {
               <span class="lp-tags">
                 <span class="lp-tag" :class="c.tagCls">{{ c.tag }}</span>
                 <span v-if="c.access" class="lp-access" :class="c.accessCls">{{ c.access }}</span>
+                <span v-if="c.accessPeriod" class="lp-access-period">{{ c.accessPeriod }}</span>
               </span>
             </div>
             <div class="lp-agent-name">

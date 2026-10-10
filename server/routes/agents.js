@@ -20,7 +20,9 @@ function agentView(ctx, a) {
     id: a.id, code: a.code, name: a.name, description: a.description || "",
     icon: a.icon || "", protocol: proto, protocol_enabled: protocolEnabled(proto, ctx.config), sort: a.sort,
     // P8.9：访问控制标志随公开视图下发（落地页「访问」徽标；门控仍在入口端点）
-    allow_anon: a.allow_anon === true, allow_code: a.allow_code === true, allow_user: a.allow_user === true
+    allow_anon: a.allow_anon === true, allow_code: a.allow_code === true, allow_user: a.allow_user === true,
+    // P8.94：匿名开放时段随公开视图下发（首屏「开放 + 周期」徽标；非敏感 = 日期/时间）
+    anon_window: a.anon_window || null
   };
 }
 
