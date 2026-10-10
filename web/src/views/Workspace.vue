@@ -261,6 +261,8 @@ function setResetMark(sid: string) {
   resetMarks.value[sid] = Date.now();
   try { localStorage.setItem(RESET_MARK_KEY, JSON.stringify(resetMarks.value)); } catch { /* 忽略 */ }
 }
+// P8.88：重置对话框成功即落标记（会话设置组件直连，覆盖 SSE 未达/页面旧缓存窗口）
+function onSettingsReset() { if (sess.currentSid) setResetMark(sess.currentSid); }
 const resetDividerIdx = computed(() => {
   const mark = resetMarks.value[sess.currentSid] || 0;
   if (!mark || !cards.value.length) return -1;
@@ -938,6 +940,7 @@ onBeforeUnmount(() => {
       @close="settingsOpen = false"
       @saved="onSettingsSaved"
       @delete="onSettingsDelete"
+      @reset="onSettingsReset"
     />
     <ProfileDialog :open="profileOpen" @update:open="profileOpen = $event" @saved="() => {}" />
   </div>

@@ -49,6 +49,7 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "saved"): void;
   (e: "delete"): void;
+  (e: "reset"): void; // P8.88：重置成功即通知工作区落分隔线标记（不依赖 SSE 往返）
 }>();
 
 const form = reactive({
@@ -202,7 +203,7 @@ async function resetSession() {
     });
   } catch { return; }
   const { ok, data } = await api<{ ok: boolean; detail?: string }>("/api/sessions/" + encodeURIComponent(s.id) + "/reset", { method: "POST", body: {} });
-  if (ok) ElMessage.success(data.detail || "会话已重置");
+  if (ok) { ElMessage.success(data.detail || "会话已重置"); emit("reset"); }
   else ElMessage.error(data.detail || "重置失败");
 }
 function removeSession() {
